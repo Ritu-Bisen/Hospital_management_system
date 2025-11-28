@@ -1,0 +1,705 @@
+import React, { useState, useEffect } from 'react';
+import { X, Eye, FileText, Upload, Check } from 'lucide-react';
+
+const Pathology = () => {
+  const [activeTab, setActiveTab] = useState('pending');
+  const [pendingRecords, setPendingRecords] = useState([]);
+  const [historyRecords, setHistoryRecords] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState(null);
+  const [viewingRecord, setViewingRecord] = useState(null);
+  const [modalError, setModalError] = useState('');
+  const [reportPreview, setReportPreview] = useState(null);
+  
+  const [formData, setFormData] = useState({
+    report: null,
+    remarks: ''
+  });
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = () => {
+    try {
+      // Load from Payment History (where paymentStatus exists)
+      const paymentHistory = localStorage.getItem('paymentHistory');
+      const pathologyHistory = localStorage.getItem('pathologyHistory');
+      
+      if (paymentHistory) {
+        const allPayments = JSON.parse(paymentHistory);
+        
+        // Filter only Pathology records
+        const pathologyPayments = allPayments.filter(r => r.category === 'Pathology');
+        
+        // Get IDs of records already processed in pathology history
+        const existingHistory = pathologyHistory ? JSON.parse(pathologyHistory) : [];
+        const processedIds = existingHistory.map(r => r.paymentId || r.adviceId);
+        
+        // Pending: Records from payment history not yet in pathology history
+        const pending = pathologyPayments.filter(r => 
+          !processedIds.includes(r.paymentId || r.adviceId)
+        );
+        
+        setPendingRecords(pending);
+        setHistoryRecords(existingHistory);
+      }
+    } catch (error) {
+      console.error('Failed to load data:', error);
+    }
+  };
+
+  const handleActionClick = (record) => {
+    setSelectedRecord(record);
+    setShowModal(true);
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleReportChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setModalError('File size should be less than 5MB');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({
+          ...prev,
+          report: reader.result
+        }));
+        setReportPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = () => {
+    if (!formData.report) {
+      setModalError('Please upload report');
+      return;
+    }
+
+    if (!formData.remarks.trim()) {
+      setModalError('Please enter remarks');
+      return;
+    }
+
+    const pathologyRecord = {
+      ...selectedRecord,
+      report: formData.report,
+      remarks: formData.remarks,
+      completedDate: new Date().toISOString()
+    };
+
+    const existingHistory = localStorage.getItem('pathologyHistory');
+    const updatedHistory = existingHistory ? JSON.parse(existingHistory) : [];
+    updatedHistory.unshift(pathologyRecord);
+    
+    localStorage.setItem('pathologyHistory', JSON.stringify(updatedHistory));
+    
+    setShowModal(false);
+    resetForm();
+    loadData();
+  };
+
+  const resetForm = () => {
+    setFormData({
+      report: null,
+      remarks: ''
+    });
+    setReportPreview(null);
+    setModalError('');
+    setSelectedRecord(null);
+  };
+
+  const handleViewClick = (record) => {
+    setViewingRecord(record);
+    setShowViewModal(true);
+  };
+
+  const handleViewReport = (reportData) => {
+    const newWindow = window.open();
+    newWindow.document.write(`
+      <html>
+        <head><title>Report</title></head>
+        <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;">
+          <img src="${reportData}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
+        </body>
+      </html>
+    `);
+  };
+
+  return (
+    <div className="p-3 space-y-4 md:p-6 bg-gray-50 min-h-screen">
+      <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Pathology Department</h1>
+          <p className="mt-1 text-sm text-gray-600">Manage pathology test reports and records</p>
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="p-4 bg-white rounded-lg border border-green-200 shadow-sm">
+          <div className="flex flex-col">
+            <span className="text-xs font-medium text-gray-600 uppercase">Total Records</span>
+            <span className="text-2xl font-bold text-green-600 mt-1">{pendingRecords.length + historyRecords.length}</span>
+          </div>
+        </div>
+
+        <div className="p-4 bg-white rounded-lg border border-orange-200 shadow-sm">
+          <div className="flex flex-col">
+            <span className="text-xs font-medium text-gray-600 uppercase">Pending</span>
+            <span className="text-2xl font-bold text-orange-600 mt-1">{pendingRecords.length}</span>
+          </div>
+        </div>
+
+        <div className="p-4 bg-white rounded-lg border border-green-200 shadow-sm">
+          <div className="flex flex-col">
+            <span className="text-xs font-medium text-gray-600 uppercase">Completed</span>
+            <span className="text-2xl font-bold text-green-600 mt-1">{historyRecords.length}</span>
+          </div>
+        </div>
+
+        <div className="p-4 bg-white rounded-lg border border-purple-200 shadow-sm">
+          <div className="flex flex-col">
+            <span className="text-xs font-medium text-gray-600 uppercase">High Priority</span>
+            <span className="text-2xl font-bold text-purple-600 mt-1">
+              {[...pendingRecords, ...historyRecords].filter(r => r.priority === 'High').length}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 p-1 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            activeTab === 'pending'
+              ? 'bg-green-600 text-white'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          Pending ({pendingRecords.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+            activeTab === 'history'
+              ? 'bg-green-600 text-white'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          History ({historyRecords.length})
+        </button>
+      </div>
+
+      {/* Pending Section */}
+      {activeTab === 'pending' && (
+        <>
+          {/* Desktop Table */}
+          <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Unique Number</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Advice No</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone Number</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Reason For Visit</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Age</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Bed No.</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Location</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Ward Type</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Room</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Priority</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Category</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Tests</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {pendingRecords.length > 0 ? (
+                  pendingRecords.map((record) => (
+                    <tr key={record.paymentId || record.adviceId} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        <button
+                          onClick={() => handleActionClick(record)}
+                          className="px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700"
+                        >
+                          Process
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.uniqueNumber}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.wardType}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.room}</td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                          record.priority === 'High' ? 'bg-red-100 text-red-700' :
+                          record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          {record.priority}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                        {record.pathologyTests?.slice(0, 2).join(', ') + (record.pathologyTests?.length > 2 ? '...' : '')}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
+                      <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                      <p className="text-lg font-medium text-gray-900">No pending records</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="space-y-3 md:hidden">
+            {pendingRecords.length > 0 ? (
+              pendingRecords.map((record) => (
+                <div key={record.paymentId || record.adviceId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="text-xs font-medium text-green-600 mb-1">{record.uniqueNumber}</div>
+                      <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo || 'N/A'}</div>
+                      <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
+                    </div>
+                    <button
+                      onClick={() => handleActionClick(record)}
+                      className="flex-shrink-0 px-3 py-1.5 text-xs text-white bg-green-600 rounded-lg shadow-sm"
+                    >
+                      Process
+                    </button>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Phone:</span>
+                      <span className="font-medium text-gray-900">{record.phoneNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Age:</span>
+                      <span className="font-medium text-gray-900">{record.age}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Priority:</span>
+                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                        record.priority === 'High' ? 'bg-red-100 text-red-700' :
+                        record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                        {record.priority}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
+                <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                <p className="text-sm font-medium text-gray-900">No pending records</p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* History Section */}
+      {activeTab === 'history' && (
+        <>
+          {/* Desktop Table */}
+          <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Unique Number</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Advice No</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Reason For Visit</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Age</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Bed No.</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Location</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Ward Type</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Room</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Priority</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Category</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Tests</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Report</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Remarks</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {historyRecords.length > 0 ? (
+                  historyRecords.map((record) => (
+                    <tr key={record.paymentId || record.adviceId} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.uniqueNumber}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.wardType}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.room}</td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                          record.priority === 'High' ? 'bg-red-100 text-red-700' :
+                          record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          {record.priority}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                        {record.pathologyTests?.slice(0, 2).join(', ') + (record.pathologyTests?.length > 2 ? '...' : '')}
+                      </td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        <button
+                          onClick={() => handleViewClick(record)}
+                          className="flex gap-1 items-center px-3 py-1.5 text-green-600 bg-green-50 rounded-lg shadow-sm hover:bg-green-100"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.remarks}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="15" className="px-4 py-8 text-center text-gray-500">
+                      <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                      <p className="text-lg font-medium text-gray-900">No history records</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="space-y-3 md:hidden">
+            {historyRecords.length > 0 ? (
+              historyRecords.map((record) => (
+                <div key={record.paymentId || record.adviceId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="text-xs font-medium text-green-600 mb-1">{record.uniqueNumber}</div>
+                      <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo || 'N/A'}</div>
+                      <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
+                    </div>
+                    <button
+                      onClick={() => handleViewClick(record)}
+                      className="flex-shrink-0 px-3 py-1.5 text-xs text-green-600 bg-green-50 rounded-lg"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Phone:</span>
+                      <span className="font-medium text-gray-900">{record.phoneNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Age:</span>
+                      <span className="font-medium text-gray-900">{record.age}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Remarks:</span>
+                      <span className="font-medium text-gray-900 truncate max-w-[150px]">{record.remarks}</span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
+                <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                <p className="text-sm font-medium text-gray-900">No history records</p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Process Modal */}
+      {showModal && selectedRecord && (
+        <div className="overflow-y-auto fixed inset-0 z-50 flex justify-center items-center p-4 bg-black bg-opacity-50">
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-xl">
+            <div className="sticky top-0 z-10 flex justify-between items-center p-4 bg-white border-b border-gray-200 md:p-6">
+              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Process Pathology Report</h2>
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  resetForm();
+                }}
+                className="p-1 text-gray-400 rounded-full hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-4 md:p-6">
+              <div className="p-4 mb-6 bg-green-50 rounded-lg border border-green-200">
+                <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
+                  <div>
+                    <span className="text-gray-600">Unique No:</span>
+                    <div className="font-medium text-gray-900">{selectedRecord.uniqueNumber}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Advice No:</span>
+                    <div className="font-medium text-green-600">{selectedRecord.adviceNo || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Name:</span>
+                    <div className="font-medium text-gray-900">{selectedRecord.patientName}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Phone:</span>
+                    <div className="font-medium text-gray-900">{selectedRecord.phoneNumber}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Age:</span>
+                    <div className="font-medium text-gray-900">{selectedRecord.age}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Bed No:</span>
+                    <div className="font-medium text-gray-900">{selectedRecord.bedNo}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Location:</span>
+                    <div className="font-medium text-gray-900">{selectedRecord.location}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Ward Type:</span>
+                    <div className="font-medium text-gray-900">{selectedRecord.wardType}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Room:</span>
+                    <div className="font-medium text-gray-900">{selectedRecord.room}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Category:</span>
+                    <div className="font-medium text-gray-900">{selectedRecord.category}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block mb-1 text-sm font-medium text-gray-700">Upload Report *</label>
+                  <div className="mt-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleReportChange}
+                      className="hidden"
+                      id="report-upload"
+                    />
+                    <label
+                      htmlFor="report-upload"
+                      className="flex flex-col items-center justify-center px-4 py-6 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:border-green-500 hover:bg-green-50 transition-colors"
+                    >
+                      {reportPreview ? (
+                        <div className="text-center">
+                          <img
+                            src={reportPreview}
+                            alt="Report preview"
+                            className="max-h-40 mb-2 rounded"
+                          />
+                          <p className="text-sm text-green-600 font-medium flex items-center justify-center gap-1">
+                            <Check className="w-4 h-4" />
+                            Report uploaded successfully
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">Click to change</p>
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <Upload className="mx-auto w-12 h-12 text-gray-400 mb-2" />
+                          <p className="text-sm text-gray-600">Click to upload report</p>
+                          <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block mb-1 text-sm font-medium text-gray-700">Remarks *</label>
+                  <textarea
+                    name="remarks"
+                    value={formData.remarks}
+                    onChange={handleInputChange}
+                    rows="4"
+                    placeholder="Enter your remarks here..."
+                    className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  ></textarea>
+                </div>
+              </div>
+
+              {modalError && (
+                <div className="p-3 mt-4 text-sm text-red-700 bg-red-100 rounded-lg">
+                  {modalError}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 justify-end mt-6 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowModal(false);
+                    resetForm();
+                  }}
+                  className="px-6 py-2 w-full font-medium text-gray-700 bg-gray-100 rounded-lg transition-colors hover:bg-gray-200 sm:w-auto"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className="px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 sm:w-auto"
+                >
+                  Save Report
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Details Modal */}
+      {showViewModal && viewingRecord && (
+        <div className="overflow-y-auto fixed inset-0 z-50 flex justify-center items-center p-4 bg-black bg-opacity-50">
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-xl">
+            <div className="sticky top-0 z-10 flex justify-between items-center p-4 bg-white border-b border-gray-200 md:p-6">
+              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Pathology Report Details</h2>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="p-1 text-gray-400 rounded-full hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-4 md:p-6 space-y-6">
+              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
+                  <div>
+                    <span className="text-gray-600">Unique No:</span>
+                    <div className="font-medium text-gray-900">{viewingRecord.uniqueNumber}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Advice No:</span>
+                    <div className="font-medium text-green-600">{viewingRecord.adviceNo || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Name:</span>
+                    <div className="font-medium text-gray-900">{viewingRecord.patientName}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Phone:</span>
+                    <div className="font-medium text-gray-900">{viewingRecord.phoneNumber}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Age:</span>
+                    <div className="font-medium text-gray-900">{viewingRecord.age}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Bed No:</span>
+                    <div className="font-medium text-gray-900">{viewingRecord.bedNo}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Room:</span>
+                    <div className="font-medium text-gray-900">{viewingRecord.room}</div>
+                  </div>
+                  <div className="col-span-2 md:col-span-3">
+                    <span className="text-gray-600">Tests:</span>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {viewingRecord.pathologyTests?.map((test, index) => (
+                        <span key={index} className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
+                          {test}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                <h3 className="mb-3 text-sm font-semibold text-gray-900">Report Details</h3>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Remarks:</span>
+                    <div className="font-medium text-gray-900 mt-1 whitespace-pre-wrap">{viewingRecord.remarks}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Completed Date:</span>
+                    <div className="font-medium text-gray-900 mt-1">
+                      {new Date(viewingRecord.completedDate).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 className="mb-3 text-sm font-semibold text-gray-900">Report Image</h3>
+                <div className="space-y-3">
+                  <img
+                    src={viewingRecord.report}
+                    alt="Report"
+                    className="w-full max-h-96 object-contain rounded-lg border border-gray-300"
+                  />
+                  <button
+                    onClick={() => handleViewReport(viewingRecord.report)}
+                    className="w-full px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                  >
+                    Open in Full Screen
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="px-6 py-2 font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Pathology;
