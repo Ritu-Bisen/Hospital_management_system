@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Eye, FileText } from 'lucide-react';
+import supabase from '../../../SupabaseClient'; // Adjust import path
 
 const LabAdvice = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -10,6 +11,8 @@ const LabAdvice = () => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [viewingRecord, setViewingRecord] = useState(null);
   const [modalError, setModalError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [availableTests, setAvailableTests] = useState([]);
   
   const [formData, setFormData] = useState({
     priority: 'Medium',
@@ -20,112 +23,242 @@ const LabAdvice = () => {
     remarks: ''
   });
 
-  // Pathology tests list
-  const pathologyTests = [
-    'LFT', 'RFT', 'Lipid Profile', 'CBC', 'HBA1C', 'Electrolyte', 'PT/INR', 'Blood Group', 
-    'ESR', 'CRP', 'Sugar', 'Urine R/M', 'Viral Marker', 'Malaria', 'Dengue', 'Widal', 
-    'Troponin-I', 'Troponin-T', 'SGOT', 'SGPT', 'Serum Urea', 'Serum Creatinine', 'CT-BT', 
-    'ABG', 'Urine C/S', 'Thyroid Profile', 'UPT', 'HB', 'PPD', 'Sickling', 'Peripheral Smear', 
-    'ASO Titre', 'DS-DNA', 'Serum Amylase', 'TSH', 'D-Dimer', 'Serum Lipase', 'SR Cortisol', 
-    'Serum Magnesium', 'Serum Calcium', 'Urine Culture & Sensitivity', 'Blood Culture & Sensitivity', 
-    'Pus Culture & Sensitivity', 'Pleural Fluid R/M', 'Pleural Fluid Culture & Sensitivity', 
-    'Pleural Fluid ADA', 'Vitamin D3', 'Vitamin B12', 'HIV', 'HBsAg', 'HCV', 'VDRL', 
-    'Ascitic Fluid R/M', 'Ascitic Culture & Sensitivity', 'Ascitic Fluid ADA', 'Urine Sugar Ketone', 
-    'Serum Platelets', 'Serum Potassium', 'Serum Sodium', 'Sputum R/M', 'Sputum AFB', 'Sputum C/S', 
-    'CBNAAT', 'CKMB', 'Cardiac SOB', 'Pro-BNP', 'Serum Uric Acid', 'Platelet Count', 'TB Gold', 
-    'PCT', 'COVID IGG Antibodies', 'ANA Profile', 'Stool R/M', 'eGFR', '24 Hour Urine Protein Ratio', 
-    'IGF-1', 'PTH', 'Serum FSH', 'Serum LH', 'Serum Prolactin', 'APTT', 'HB %', 'Biopsy Small', 
-    'Biopsy Medium', 'Biopsy Large', 'Serum Homocysteine'
-  ];
-
-  // X-Ray tests list
-  const xrayTests = [
-    'X-Ray', 'Barium Enema', 'Barium Swallow', 'Cologram', 'Nephrostrogram', 'R.G.P.', 
-    'Retrograde Urethrogram', 'Urethogram', 'X Ray Abdomen Upright', 'X Ray Cystogram', 
-    'X Ray Hand Both', 'X Ray LS Spine Extension Flexion', 'X Ray Thoracic Spine', 
-    'X Ray Tibia Fibula AP/Lat (Left/Right)', 'X-Ray Abdomen Erect/Standing/Upright', 
-    'X-Ray Abdomen Flat Plate', 'X-Ray Abdomen KUB', 'X-Ray Ankle Joint AP And Lat (Left/Right)', 
-    'X-Ray Chest PA', 'X-Ray Chest AP', 'X-Ray Chest Lateral View', 'X-Ray KUB', 
-    'X-Ray LS Spine AP/Lat', 'X-Ray Pelvis AP', 'X-Ray Skull AP/Lat'
-  ];
-
-  // CT Scan tests list
-  const ctScanTests = [
-    'CT Scan', '3D CT Ankle', '3D CT Face', '3D CT Head', 'CECT Abdomen', 'CECT Chest', 
-    'CECT Head', 'CECT Neck', 'CT Brain', 'CT Chest', 'HRCT Chest', 'NCCT Head', 
-    'CT Scan Brain Plain', 'CT Angiography', 'CT-Scan - Brain With Contrast', 
-    'CT-Scan - Brain Without Contrast', 'HRCT Chest (COVID)'
-  ];
-
-  // USG tests list
-  const usgTests = [
-    'USG', 'USG Whole Abdomen Male', 'USG Whole Abdomen Female', 'USG KUB Male', 'USG KUB Female', 
-    'USG Pelvis Female', 'TVS', 'USG Upper Abdomen', 'USG Breast', 'USG Thyroid', 'USG Scrotum', 
-    'Fetal Doppler USG', 'Carotid Doppler', 'USG OBS', 'Anomaly Scan', 'Growth Scan', 
-    'USG Guided Biopsy', 'USG Abdomen With Pelvis'
-  ];
-
-  // Load data from localStorage
+  // Load data from Supabase
   useEffect(() => {
     loadData();
+    
+    // Set up real-time subscription for lab table
+    const setupRealtimeSubscription = () => {
+      const channel = supabase
+        .channel('lab_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'lab'
+          },
+          () => {
+            loadHistoryData();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    };
+
+    const cleanup = setupRealtimeSubscription();
+    
+    return () => {
+      cleanup();
+    };
   }, []);
 
-  const loadData = () => {
+  // Fetch tests from investigation table based on category and type
+  const fetchTestsFromDatabase = async (category, type = null) => {
     try {
-      const storedPending = localStorage.getItem('labAdvicePending');
-      const storedHistory = localStorage.getItem('labAdviceHistory');
-      const storedPatients = localStorage.getItem('admissionPatients');
-      
-      if (storedPending) setPendingAdvices(JSON.parse(storedPending));
-      if (storedHistory) setHistoryAdvices(JSON.parse(storedHistory));
-      
-      // Load sample patients if no data exists
-      if (storedPatients) {
-        const patients = JSON.parse(storedPatients);
-        if (patients.length > 0 && !storedPending) {
-          // Create sample pending advices from admission data
-          const sampleAdvices = patients.slice(0, 3).map((patient, index) => ({
-            id: Date.now() + index,
-            uniqueNumber: patient.admissionNo || `ADM-${Date.now()}-${index}`,
-            patientName: patient.patientName,
-            phoneNumber: patient.phoneNumber,
-            attenderName: patient.attenderName || 'N/A',
-            attenderMobile: patient.attenderMobile || 'N/A',
-            reasonForVisit: patient.reasonForVisit,
-            age: patient.age,
-            gender: patient.gender,
-            bedNo: `B-${101 + index}`,
-            location: 'General Ward',
-            wardType: 'General',
-            room: `R-${201 + index}`,
-            timestamp: new Date().toISOString()
-          }));
-          setPendingAdvices(sampleAdvices);
-          localStorage.setItem('labAdvicePending', JSON.stringify(sampleAdvices));
-        }
+      let query = supabase
+        .from('investigation')
+        .select('name, type')
+        .order('name', { ascending: true });
+
+      if (category === 'Pathology') {
+        query = query.eq('type', 'Pathology');
+      } else if (category === 'Radiology' && type) {
+        // Map UI types to database types if needed
+        const dbTypeMap = {
+          'X-ray': 'X-ray',
+          'CT-scan': 'CT Scan',
+          'USG': 'USG'
+        };
+        query = query.eq('type', dbTypeMap[type] || type);
       }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error fetching tests:', error);
+        return [];
+      }
+
+      return data.map(item => item.name);
+    } catch (error) {
+      console.error('Failed to fetch tests:', error);
+      return [];
+    }
+  };
+
+  // Update available tests when category or radiology type changes
+  useEffect(() => {
+    const loadTests = async () => {
+      if (formData.category === 'Pathology') {
+        const tests = await fetchTestsFromDatabase('Pathology');
+        setAvailableTests(tests);
+      } else if (formData.category === 'Radiology' && formData.radiologyType) {
+        const tests = await fetchTestsFromDatabase('Radiology', formData.radiologyType);
+        setAvailableTests(tests);
+      } else {
+        setAvailableTests([]);
+      }
+    };
+
+    loadTests();
+  }, [formData.category, formData.radiologyType]);
+
+  // Load pending data from ipd_admissions table
+  const loadPendingData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Fetch from ipd_admissions where planned1 is not null and actual1 is null
+      const { data: pendingPatients, error } = await supabase
+        .from('ipd_admissions')
+        .select('*')
+        .not('planned1', 'is', null)  // planned1 is not null
+        .is('actual1', null)          // actual1 is null
+        .order('timestamp', { ascending: false });
+
+      if (error) {
+        console.error('Error loading pending lab advices:', error);
+        return [];
+      }
+
+      // Transform data for the component
+      const transformedData = pendingPatients.map(patient => ({
+        id: patient.id,
+        admission_no: patient.admission_no,
+        uniqueNumber: patient.admission_no,
+        patientName: patient.patient_name,
+         consultantDr: patient.consultant_dr,
+          referByDr: patient.refer_by_dr,
+        phoneNumber: patient.phone_no || patient.whatsapp_no,
+        fatherHusband: patient.father_husband_name,
+        age: patient.age,
+        gender: patient.gender,
+        reasonForVisit: patient.adm_purpose || 'N/A',
+        bedNo: patient.bed_no || 'Not assigned',
+        location: patient.location_status || 'General Ward',
+        wardType: patient.ward_type || 'General',
+        room: patient.room || 'Not assigned',
+        department: patient.department,
+        timestamp: patient.timestamp
+      }));
+
+      return transformedData;
+    } catch (error) {
+      console.error('Failed to load pending data:', error);
+      return [];
+    }
+  };
+
+  // Load history data from lab table
+  const loadHistoryData = async () => {
+    try {
+      const { data: labRecords, error } = await supabase
+        .from('lab')
+        .select('*')
+        .order('timestamp', { ascending: false });
+
+      if (error) {
+        console.error('Error loading lab history:', error);
+        return [];
+      }
+
+      // Transform data for the component
+      const transformedData = labRecords.map(record => ({
+        id: record.id,
+        adviceId: record.id,
+        adviceNo: record.lab_no,
+        admission_no: record.admission_no,
+        uniqueNumber: record.admission_no,
+        patientName: record.patient_name,
+        phoneNumber: record.phone_no,
+        fatherHusband: record.father_husband_name,
+        age: record.age,
+        gender: record.gender,
+        reasonForVisit: record.reason_for_visit,
+        bedNo: record.bed_no,
+        location: record.location,
+        wardType: record.ward_type,
+        room: record.room,
+        department: record.department,
+        priority: record.priority,
+        category: record.category,
+        pathologyTests: record.pathology_tests || [],
+        radiologyType: record.radiology_type || '',
+        radiologyTests: record.radiology_tests || [],
+        remarks: record.remarks || '',
+        completedDate: record.timestamp
+      }));
+
+      return transformedData;
+    } catch (error) {
+      console.error('Failed to load history data:', error);
+      return [];
+    }
+  };
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const pendingData = await loadPendingData();
+      const historyData = await loadHistoryData();
+      
+      setPendingAdvices(pendingData);
+      setHistoryAdvices(historyData);
     } catch (error) {
       console.error('Failed to load data:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const saveToStorage = (pending, history) => {
+  // Generate lab number based on latest record
+  const generateLabNumber = async () => {
     try {
-      localStorage.setItem('labAdvicePending', JSON.stringify(pending));
-      localStorage.setItem('labAdviceHistory', JSON.stringify(history));
-    } catch (error) {
-      console.error('Failed to save data:', error);
-    }
-  };
+      const { data, error } = await supabase
+        .from('lab')
+        .select('lab_no')
+        .order('timestamp', { ascending: false })
+        .limit(1);
 
-  const generateAdviceNo = () => {
-    const nextNumber = historyAdvices.length + 1;
-    return `AD-${String(nextNumber).padStart(3, '0')}`;
+      if (error) {
+        console.error('Error fetching lab number:', error);
+        return 'LAB-001';
+      }
+
+      if (data && data.length > 0) {
+        const lastLabNo = data[0].lab_no;
+        if (lastLabNo && lastLabNo.startsWith('LAB-')) {
+          const lastNumber = parseInt(lastLabNo.replace('LAB-', ''), 10);
+          if (!isNaN(lastNumber)) {
+            return `LAB-${String(lastNumber + 1).padStart(3, '0')}`;
+          }
+        }
+      }
+      
+      return 'LAB-001';
+    } catch (error) {
+      console.error('Error generating lab number:', error);
+      return 'LAB-001';
+    }
   };
 
   const handleActionClick = (patient) => {
     setSelectedPatient(patient);
     setShowModal(true);
+    // Reset form when opening modal
+    setFormData({
+      priority: 'Medium',
+      category: '',
+      pathologyTests: [],
+      radiologyType: '',
+      radiologyTests: [],
+      remarks: ''
+    });
+    setAvailableTests([]);
   };
 
   const handleInputChange = (e) => {
@@ -133,32 +266,30 @@ const LabAdvice = () => {
     setFormData(prev => ({
       ...prev,
       [name]: value,
-      // Reset dependent fields when category changes
       ...(name === 'category' && { 
         pathologyTests: [], 
         radiologyType: '', 
         radiologyTests: [] 
       }),
-      // Reset radiology tests when type changes
       ...(name === 'radiologyType' && { radiologyTests: [] })
     }));
   };
 
-  const handleCheckboxChange = (testName, category) => {
+  const handleCheckboxChange = (testName) => {
     setFormData(prev => {
-      const currentTests = category === 'pathology' ? prev.pathologyTests : prev.radiologyTests;
+      const currentTests = prev.category === 'Pathology' ? prev.pathologyTests : prev.radiologyTests;
       const newTests = currentTests.includes(testName)
         ? currentTests.filter(t => t !== testName)
         : [...currentTests, testName];
       
       return {
         ...prev,
-        [category === 'pathology' ? 'pathologyTests' : 'radiologyTests']: newTests
+        [prev.category === 'Pathology' ? 'pathologyTests' : 'radiologyTests']: newTests
       };
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.category) {
       setModalError('Please select Pathology or Radiology');
       return;
@@ -174,22 +305,86 @@ const LabAdvice = () => {
       return;
     }
 
-    // Add to history WITHOUT removing from pending
-    const adviceRecord = {
-      ...selectedPatient,
-      ...formData,
-      adviceNo: generateAdviceNo(),
-      adviceId: Date.now(),
-      completedDate: new Date().toISOString()
-    };
+    try {
+      setIsLoading(true);
+      
+      // Generate lab number
+      const labNumber = await generateLabNumber();
+      
+      // Prepare data for lab table
+      const labData = {
+        lab_no: labNumber,
+        admission_no: selectedPatient.admission_no,
+        patient_name: selectedPatient.patientName,
+        phone_no: selectedPatient.phoneNumber,
+        father_husband_name: selectedPatient.fatherHusband,
+        age: selectedPatient.age,
+        consultant_dr: selectedPatient.consultant_dr,
+        refer_by_dr: selectedPatient.refer_by_dr,
+        gender: selectedPatient.gender,
+        reason_for_visit: selectedPatient.reasonForVisit,
+        bed_no: selectedPatient.bedNo,
+        location: selectedPatient.location,
+        ward_type: selectedPatient.wardType,
+        room: selectedPatient.room,
+        department: selectedPatient.department,
+        priority: formData.priority,
+        category: formData.category,
+        pathology_tests: formData.category === 'Pathology' ? formData.pathologyTests : null,
+        radiology_type: formData.category === 'Radiology' ? formData.radiologyType : null,
+        radiology_tests: formData.category === 'Radiology' ? formData.radiologyTests : null,
+        remarks: formData.remarks || '',
+        status: 'completed',
+         planned1: new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
+        timestamp: new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', '')
+      };
 
-    const updatedHistory = [adviceRecord, ...historyAdvices];
+      // Insert into lab table
+      const { data: labResult, error: labError } = await supabase
+        .from('lab')
+        .insert(labData)
+        .select();
 
-    setHistoryAdvices(updatedHistory);
-    saveToStorage(pendingAdvices, updatedHistory);
+      if (labError) {
+        throw new Error(`Failed to save lab record: ${labError.message}`);
+      }
 
-    setShowModal(false);
-    resetForm();
+      // // Update actual1 in ipd_admissions table
+      // const { error: updateError } = await supabase
+      //   .from('ipd_admissions')
+      //   .update({ 
+      //     actual1: new Date().toLocaleString("en-CA", { 
+      //       timeZone: "Asia/Kolkata", 
+      //       hour12: false 
+      //     }).replace(',', '')
+      //   })
+      //   .eq('admission_no', selectedPatient.admission_no);
+
+      // if (updateError) {
+      //   console.error('Failed to update actual1:', updateError);
+      //   // Continue anyway since lab record is saved
+      // }
+
+      // Reload data
+      await loadData();
+      
+      setShowModal(false);
+      resetForm();
+      
+      alert(`Lab advice submitted successfully! Lab Number: ${labNumber}`);
+      
+    } catch (error) {
+      console.error('Error submitting lab advice:', error);
+      setModalError(`Failed to submit: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const resetForm = () => {
@@ -203,6 +398,7 @@ const LabAdvice = () => {
     });
     setModalError('');
     setSelectedPatient(null);
+    setAvailableTests([]);
   };
 
   const handleViewClick = (record) => {
@@ -210,17 +406,18 @@ const LabAdvice = () => {
     setShowViewModal(true);
   };
 
-  const getRadiologyTests = () => {
-    switch(formData.radiologyType) {
-      case 'X-ray': return xrayTests;
-      case 'CT-scan': return ctScanTests;
-      case 'USG': return usgTests;
-      default: return [];
-    }
-  };
-
   return (
     <div className="p-3 space-y-4 md:p-6 bg-gray-50 min-h-screen">
+      {/* Loading Overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+            <p className="text-gray-700">Loading data...</p>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Lab Advice</h1>
@@ -261,11 +458,12 @@ const LabAdvice = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Unique Number</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Admission No</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone Number</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Attender Name</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Attender Mobile</th>
+                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Consultant Dr.</th>
+                 <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Refer By Dr.</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Father/Husband</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Reason For Visit</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Age</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Gender</th>
@@ -273,6 +471,7 @@ const LabAdvice = () => {
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Location</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Ward Type</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Room</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Department</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -282,16 +481,20 @@ const LabAdvice = () => {
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <button
                           onClick={() => handleActionClick(patient)}
-                          className="px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700"
+                          disabled={isLoading}
+                          className="px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700 disabled:bg-gray-400"
                         >
                           Process
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{patient.uniqueNumber}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{patient.admission_no}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.patientName}</td>
+                    
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.phoneNumber}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.attenderName}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.attenderMobile}</td>
+                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.consultantDr}</td>
+                      
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.referByDr}</td>
+                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.fatherHusband || 'N/A'}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{patient.reasonForVisit}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.age}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.gender}</td>
@@ -299,13 +502,15 @@ const LabAdvice = () => {
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.location}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.wardType}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.room}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.department || 'N/A'}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
                     <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
                       <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                      <p className="text-lg font-medium text-gray-900">No pending advices</p>
+                      <p className="text-lg font-medium text-gray-900">No pending lab advices</p>
+                      <p className="text-sm text-gray-600">Patients with planned1 not null and actual1 null will appear here</p>
                     </td>
                   </tr>
                 )}
@@ -320,12 +525,13 @@ const LabAdvice = () => {
                 <div key={patient.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{patient.uniqueNumber}</div>
+                      <div className="text-xs font-medium text-green-600 mb-1">{patient.admission_no}</div>
                       <h3 className="text-sm font-semibold text-gray-900">{patient.patientName}</h3>
                     </div>
                     <button
                       onClick={() => handleActionClick(patient)}
-                      className="flex-shrink-0 px-3 py-1.5 text-xs text-white bg-green-600 rounded-lg shadow-sm"
+                      disabled={isLoading}
+                      className="flex-shrink-0 px-3 py-1.5 text-xs text-white bg-green-600 rounded-lg shadow-sm disabled:bg-gray-400"
                     >
                       Process
                     </button>
@@ -340,8 +546,8 @@ const LabAdvice = () => {
                       <span className="font-medium text-gray-900">{patient.age} / {patient.gender}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Bed/Room:</span>
-                      <span className="font-medium text-gray-900">{patient.bedNo} / {patient.room}</span>
+                      <span className="text-gray-600">Bed/Location:</span>
+                      <span className="font-medium text-gray-900">{patient.bedNo} / {patient.location}</span>
                     </div>
                     <div className="pt-2 mt-2 border-t border-gray-100">
                       <span className="text-gray-600">Reason:</span>
@@ -353,151 +559,145 @@ const LabAdvice = () => {
             ) : (
               <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
                 <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                <p className="text-sm font-medium text-gray-900">No pending advices</p>
+                <p className="text-sm font-medium text-gray-900">No pending lab advices</p>
+                <p className="text-xs text-gray-600 mt-1">Patients with planned1 not null and actual1 null will appear here</p>
               </div>
             )}
           </div>
         </>
       )}
 
-      
       {/* History Section */}
-{activeTab === 'history' && (
-  <>
-    {/* Desktop Table */}
-    <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Unique Number</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Advice No</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Reason For Visit</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Age</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Bed No.</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Location</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Ward Type</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Room</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Priority</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Category</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Pathology Tests</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Radiology Tests</th>
-            <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Action</th>
-          </tr>
-        </thead>
+      {activeTab === 'history' && (
+        <>
+          {/* Desktop Table */}
+          <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Lab No</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Reason For Visit</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Age</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Bed No.</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Location</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Priority</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Category</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Pathology Tests</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Radiology Tests</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Action</th>
+                </tr>
+              </thead>
 
-        <tbody className="bg-white divide-y divide-gray-200">
-          {historyAdvices.length > 0 ? (
-            historyAdvices.map((record) => (
-              <tr key={record.adviceId} className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.uniqueNumber}</td>
-                <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo}</td>
-                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
-                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
-                <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
-                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td>
-                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td>
-                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td>
-                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.wardType}</td>
-                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.room}</td>
-                <td className="px-4 py-3 text-sm whitespace-nowrap">
-                  <span
-                    className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      record.priority === 'High'
-                        ? 'bg-red-100 text-red-700'
-                        : record.priority === 'Medium'
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : 'bg-green-100 text-green-700'
-                    }`}
-                  >
-                    {record.priority}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
-                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                  {record.category === 'Pathology'
-                    ? record.pathologyTests?.slice(0, 2).join(', ') +
-                      (record.pathologyTests?.length > 2 ? '...' : '')
-                    : '-'}
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                  {record.category === 'Radiology'
-                    ? record.radiologyTests?.slice(0, 2).join(', ') +
-                      (record.radiologyTests?.length > 2 ? '...' : '')
-                    : '-'}
-                </td>
-                <td className="px-4 py-3 text-sm whitespace-nowrap">
-                  <button
-                    onClick={() => handleViewClick(record)}
-                    className="flex gap-1 items-center px-3 py-1.5 text-green-600 bg-green-50 rounded-lg shadow-sm hover:bg-green-100"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View
-                  </button>
-                </td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan="15" className="px-4 py-8 text-center text-gray-500">
-                <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                <p className="text-lg font-medium text-gray-900">No history records</p>
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-
-    {/* Mobile Card View */}
-    <div className="space-y-3 md:hidden">
-      {historyAdvices.length > 0 ? (
-        historyAdvices.map((record) => (
-          <div key={record.adviceId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <div className="text-xs font-medium text-green-600 mb-1">{record.uniqueNumber}</div>
-                <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo}</div>
-                <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
-                <div className="text-xs text-gray-500 mt-1">{record.phoneNumber}</div>
-              </div>
-              <button
-                onClick={() => handleViewClick(record)}
-                className="flex-shrink-0 px-3 py-1.5 text-xs text-green-600 bg-green-50 rounded-lg"
-              >
-                <Eye className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="text-xs space-y-1">
-              <div><span className="text-gray-600">Reason:</span> {record.reasonForVisit}</div>
-              <div><span className="text-gray-600">Age:</span> {record.age}</div>
-              <div><span className="text-gray-600">Bed/Room:</span> {record.bedNo} / {record.room}</div>
-              <div><span className="text-gray-600">Priority:</span> {record.priority}</div>
-              <div><span className="text-gray-600">Category:</span> {record.category}</div>
-              {record.category === 'Pathology' && record.pathologyTests?.length > 0 && (
-                <div><span className="text-gray-600">Pathology:</span> {record.pathologyTests.slice(0, 2).join(', ')}{record.pathologyTests.length > 2 ? '...' : ''}</div>
-              )}
-              {record.category === 'Radiology' && record.radiologyTests?.length > 0 && (
-                <div><span className="text-gray-600">Radiology:</span> {record.radiologyTests.slice(0, 2).join(', ')}{record.radiologyTests.length > 2 ? '...' : ''}</div>
-              )}
-            </div>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {historyAdvices.length > 0 ? (
+                  historyAdvices.map((record) => (
+                    <tr key={record.adviceId} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-purple-600 whitespace-nowrap">{record.admission_no}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        <span
+                          className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            record.priority === 'High'
+                              ? 'bg-red-100 text-red-700'
+                              : record.priority === 'Medium'
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}
+                        >
+                          {record.priority}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                        {record.category === 'Pathology' && record.pathologyTests?.length > 0
+                          ? record.pathologyTests.slice(0, 2).join(', ') +
+                            (record.pathologyTests?.length > 2 ? '...' : '')
+                          : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                        {record.category === 'Radiology' && record.radiologyTests?.length > 0
+                          ? record.radiologyTests.slice(0, 2).join(', ') +
+                            (record.radiologyTests?.length > 2 ? '...' : '')
+                          : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        <button
+                          onClick={() => handleViewClick(record)}
+                          className="flex gap-1 items-center px-3 py-1.5 text-green-600 bg-green-50 rounded-lg shadow-sm hover:bg-green-100"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
+                      <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                      <p className="text-lg font-medium text-gray-900">No lab history records</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        ))
-      ) : (
-        <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
-          <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-          <p className="text-sm font-medium text-gray-900">No history records</p>
-        </div>
+
+          {/* Mobile Card View */}
+          <div className="space-y-3 md:hidden">
+            {historyAdvices.length > 0 ? (
+              historyAdvices.map((record) => (
+                <div key={record.adviceId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo}</div>
+                      <div className="text-xs font-medium text-purple-600 mb-1">{record.admission_no}</div>
+                      <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
+                      <div className="text-xs text-gray-500 mt-1">{record.phoneNumber}</div>
+                    </div>
+                    <button
+                      onClick={() => handleViewClick(record)}
+                      className="flex-shrink-0 px-3 py-1.5 text-xs text-green-600 bg-green-50 rounded-lg"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="text-xs space-y-1">
+                    <div><span className="text-gray-600">Reason:</span> {record.reasonForVisit}</div>
+                    <div><span className="text-gray-600">Age:</span> {record.age}</div>
+                    <div><span className="text-gray-600">Bed/Location:</span> {record.bedNo} / {record.location}</div>
+                    <div><span className="text-gray-600">Priority:</span> {record.priority}</div>
+                    <div><span className="text-gray-600">Category:</span> {record.category}</div>
+                    {record.category === 'Pathology' && record.pathologyTests?.length > 0 && (
+                      <div><span className="text-gray-600">Pathology:</span> {record.pathologyTests.slice(0, 2).join(', ')}{record.pathologyTests.length > 2 ? '...' : ''}</div>
+                    )}
+                    {record.category === 'Radiology' && record.radiologyTests?.length > 0 && (
+                      <div><span className="text-gray-600">Radiology:</span> {record.radiologyTests.slice(0, 2).join(', ')}{record.radiologyTests.length > 2 ? '...' : ''}</div>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
+                <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                <p className="text-sm font-medium text-gray-900">No lab history records</p>
+              </div>
+            )}
+          </div>
+        </>
       )}
-    </div>
-  </>
-)}
 
-
-
-      {/* Modal */}
+      {/* Modal for Processing Lab Advice */}
       {showModal && selectedPatient && (
         <div className="overflow-y-auto fixed inset-0 z-50 flex justify-center items-center p-4 bg-black bg-opacity-50">
           <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-xl">
@@ -508,7 +708,8 @@ const LabAdvice = () => {
                   setShowModal(false);
                   resetForm();
                 }}
-                className="p-1 text-gray-400 rounded-full hover:text-gray-600 hover:bg-gray-100"
+                disabled={isLoading}
+                className="p-1 text-gray-400 rounded-full hover:text-gray-600 hover:bg-gray-100 disabled:opacity-50"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -520,8 +721,8 @@ const LabAdvice = () => {
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
                   <div>
-                    <span className="text-gray-600">Unique No:</span>
-                    <div className="font-medium text-gray-900">{selectedPatient.uniqueNumber}</div>
+                    <span className="text-gray-600">Admission No:</span>
+                    <div className="font-medium text-gray-900">{selectedPatient.admission_no}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Name:</span>
@@ -540,6 +741,18 @@ const LabAdvice = () => {
                     <div className="font-medium text-gray-900">{selectedPatient.gender}</div>
                   </div>
                   <div>
+                    <span className="text-gray-600">Department:</span>
+                    <div className="font-medium text-gray-900">{selectedPatient.department || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Bed No:</span>
+                    <div className="font-medium text-gray-900">{selectedPatient.bedNo}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Location:</span>
+                    <div className="font-medium text-gray-900">{selectedPatient.location}</div>
+                  </div>
+                  <div>
                     <span className="text-gray-600">Reason:</span>
                     <div className="font-medium text-gray-900">{selectedPatient.reasonForVisit}</div>
                   </div>
@@ -555,7 +768,8 @@ const LabAdvice = () => {
                       name="priority"
                       value={formData.priority}
                       onChange={handleInputChange}
-                      className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      disabled={isLoading}
+                      className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
                     >
                       <option value="High">High</option>
                       <option value="Medium">Medium</option>
@@ -569,7 +783,8 @@ const LabAdvice = () => {
                       name="category"
                       value={formData.category}
                       onChange={handleInputChange}
-                      className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      disabled={isLoading}
+                      className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
                     >
                       <option value="">Select Category</option>
                       <option value="Pathology">Pathology</option>
@@ -585,19 +800,26 @@ const LabAdvice = () => {
                       Select Pathology Tests * ({formData.pathologyTests.length} selected)
                     </label>
                     <div className="p-4 max-h-60 overflow-y-auto bg-gray-50 rounded-lg border border-gray-300">
-                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-                        {pathologyTests.map((test) => (
-                          <label key={test} className="flex items-start gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={formData.pathologyTests.includes(test)}
-                              onChange={() => handleCheckboxChange(test, 'pathology')}
-                              className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                            />
-                            <span className="text-sm text-gray-700">{test}</span>
-                          </label>
-                        ))}
-                      </div>
+                      {availableTests.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                          {availableTests.map((test) => (
+                            <label key={test} className="flex items-start gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={formData.pathologyTests.includes(test)}
+                                onChange={() => handleCheckboxChange(test)}
+                                disabled={isLoading}
+                                className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-50"
+                              />
+                              <span className="text-sm text-gray-700">{test}</span>
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-gray-500 py-8">
+                          <p>Loading pathology tests...</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -611,7 +833,8 @@ const LabAdvice = () => {
                         name="radiologyType"
                         value={formData.radiologyType}
                         onChange={handleInputChange}
-                        className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        disabled={isLoading}
+                        className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
                       >
                         <option value="">Select Type</option>
                         <option value="X-ray">X-ray</option>
@@ -626,19 +849,26 @@ const LabAdvice = () => {
                           Select {formData.radiologyType} Tests * ({formData.radiologyTests.length} selected)
                         </label>
                         <div className="p-4 max-h-60 overflow-y-auto bg-gray-50 rounded-lg border border-gray-300">
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                            {getRadiologyTests().map((test) => (
-                              <label key={test} className="flex items-start gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={formData.radiologyTests.includes(test)}
-                                  onChange={() => handleCheckboxChange(test, 'radiology')}
-                                  className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                                />
-                                <span className="text-sm text-gray-700">{test}</span>
-                              </label>
-                            ))}
-                          </div>
+                          {availableTests.length > 0 ? (
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                              {availableTests.map((test) => (
+                                <label key={test} className="flex items-start gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={formData.radiologyTests.includes(test)}
+                                    onChange={() => handleCheckboxChange(test)}
+                                    disabled={isLoading}
+                                    className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-50"
+                                  />
+                                  <span className="text-sm text-gray-700">{test}</span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center text-gray-500 py-8">
+                              <p>Loading {formData.radiologyType} tests...</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -654,7 +884,8 @@ const LabAdvice = () => {
                     onChange={handleInputChange}
                     rows="3"
                     placeholder="Add any additional notes or instructions..."
-                    className="px-3 py-2 w-full rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                    disabled={isLoading}
+                    className="px-3 py-2 w-full rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
                   />
                 </div>
               </div>
@@ -673,16 +904,18 @@ const LabAdvice = () => {
                     setShowModal(false);
                     resetForm();
                   }}
-                  className="px-6 py-2 w-full font-medium text-gray-700 bg-gray-100 rounded-lg transition-colors hover:bg-gray-200 sm:w-auto"
+                  disabled={isLoading}
+                  className="px-6 py-2 w-full font-medium text-gray-700 bg-gray-100 rounded-lg transition-colors hover:bg-gray-200 disabled:opacity-50 sm:w-auto"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  className="px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 sm:w-auto"
+                  disabled={isLoading}
+                  className="px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 disabled:bg-gray-400 sm:w-auto"
                 >
-                  Submit
+                  {isLoading ? 'Submitting...' : 'Submit'}
                 </button>
               </div>
             </div>
@@ -710,12 +943,12 @@ const LabAdvice = () => {
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
                   <div>
-                    <span className="text-gray-600">Unique No:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.uniqueNumber}</div>
+                    <span className="text-gray-600">Lab No:</span>
+                    <div className="font-medium text-green-600">{viewingRecord.adviceNo}</div>
                   </div>
                   <div>
-                    <span className="text-gray-600">Advice No:</span>
-                    <div className="font-medium text-green-600">{viewingRecord.adviceNo}</div>
+                    <span className="text-gray-600">Admission No:</span>
+                    <div className="font-medium text-gray-900">{viewingRecord.admission_no}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Name:</span>
@@ -738,16 +971,16 @@ const LabAdvice = () => {
                     <div className="font-medium text-gray-900">{viewingRecord.bedNo}</div>
                   </div>
                   <div>
-                    <span className="text-gray-600">Room:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.room}</div>
-                  </div>
-                  <div>
                     <span className="text-gray-600">Location:</span>
                     <div className="font-medium text-gray-900">{viewingRecord.location}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Ward Type:</span>
                     <div className="font-medium text-gray-900">{viewingRecord.wardType}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Department:</span>
+                    <div className="font-medium text-gray-900">{viewingRecord.department || 'N/A'}</div>
                   </div>
                   <div className="col-span-2 md:col-span-3">
                     <span className="text-gray-600">Reason for Visit:</span>

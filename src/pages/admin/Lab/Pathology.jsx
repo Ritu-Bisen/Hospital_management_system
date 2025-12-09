@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Eye, FileText, Upload, Check } from 'lucide-react';
+import supabase from '../../../SupabaseClient';
 
 const Pathology = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -11,6 +12,8 @@ const Pathology = () => {
   const [viewingRecord, setViewingRecord] = useState(null);
   const [modalError, setModalError] = useState('');
   const [reportPreview, setReportPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   
   const [formData, setFormData] = useState({
     report: null,
@@ -19,34 +22,117 @@ const Pathology = () => {
 
   useEffect(() => {
     loadData();
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('pathology-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lab'
+        },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      // Load from Payment History (where paymentStatus exists)
-      const paymentHistory = localStorage.getItem('paymentHistory');
-      const pathologyHistory = localStorage.getItem('pathologyHistory');
+      setInitialLoading(true);
       
-      if (paymentHistory) {
-        const allPayments = JSON.parse(paymentHistory);
-        
-        // Filter only Pathology records
-        const pathologyPayments = allPayments.filter(r => r.category === 'Pathology');
-        
-        // Get IDs of records already processed in pathology history
-        const existingHistory = pathologyHistory ? JSON.parse(pathologyHistory) : [];
-        const processedIds = existingHistory.map(r => r.paymentId || r.adviceId);
-        
-        // Pending: Records from payment history not yet in pathology history
-        const pending = pathologyPayments.filter(r => 
-          !processedIds.includes(r.paymentId || r.adviceId)
-        );
-        
-        setPendingRecords(pending);
-        setHistoryRecords(existingHistory);
-      }
+      // Load pending pathology records from lab table
+      // Conditions: category = 'Pathology', planned1 IS NOT NULL, actual1 IS NULL, payment_status IS NOT NULL
+      const { data: pendingData, error: pendingError } = await supabase
+        .from('lab')
+        .select(`*`)
+        .eq('category', 'Pathology')
+        .not('planned2', 'is', null)
+        .is('actual2', null)
+        .not('payment_status', 'is', null)
+        .order('timestamp', { ascending: false });
+
+      if (pendingError) throw pendingError;
+
+      const formattedPending = pendingData.map(record => {
+        return {
+          id: record.id,
+          uniqueNumber: record.admission_no || 'N/A',
+          patientName: record.patient_name || 'N/A',
+          phoneNumber: record.phone_no || 'N/A',
+          age: record.age || 'N/A', // Corrected: age column
+          gender: record.gender || 'N/A',
+          bedNo: record.bed_no || 'N/A', // Corrected: bed_no column
+          location: record.location || 'N/A',
+          wardType: record.ward_type || 'N/A', // Corrected: ward_type column
+          room: record.room || 'N/A',
+          reasonForVisit: record.reason_for_visit || 'N/A',
+          adviceNo: record.admission_no || 'N/A',
+          category: record.category,
+          priority: record.priority,
+          pathologyTests: record.pathology_tests || [],
+          planned1: record.planned1,
+          actual1: record.actual1, // Corrected: actual1 column
+          paymentStatus: record.payment_status,
+          paymentId: record.id,
+          admissionNo: record.admission_no
+        };
+      });
+
+      setPendingRecords(formattedPending);
+
+      // Load completed pathology records (pathology_report IS NOT NULL)
+      const { data: historyData, error: historyError } = await supabase
+        .from('lab')
+        .select(`*`)
+        .eq('category', 'Pathology')
+         .not('planned2', 'is', null)
+            .not('actual2', 'is', null)
+        .order('actual2', { ascending: false });
+
+      if (historyError) throw historyError;
+
+      const formattedHistory = historyData.map(record => {
+        return {
+          id: record.id,
+          uniqueNumber: record.admission_no || 'N/A',
+          patientName: record.patient_name || 'N/A',
+          phoneNumber: record.phone_no || 'N/A',
+          age: record.age || 'N/A', // Corrected: age column
+          gender: record.gender || 'N/A',
+          bedNo: record.bed_no || 'N/A', // Corrected: bed_no column
+          location: record.location || 'N/A',
+          wardType: record.ward_type || 'N/A', // Corrected: ward_type column
+          room: record.room || 'N/A',
+          reasonForVisit: record.reason_for_visit || 'N/A',
+          adviceNo: record.admission_no || 'N/A',
+          category: record.category,
+          priority: record.priority,
+          pathologyTests: record.pathology_tests || [],
+          pathologyReport: record.report_url,
+          pathologyRemarks: record.lab_report_remarks,
+          pathologyCompletedDate: record.actual2,
+          planned1: record.planned1,
+          actual1: record.actual1, // Corrected: actual1 column
+          paymentStatus: record.payment_status,
+          paymentId: record.id,
+          admissionNo: record.admission_no
+        };
+      });
+
+      setHistoryRecords(formattedHistory);
     } catch (error) {
       console.error('Failed to load data:', error);
+      setModalError('Failed to load data. Please try again.');
+    } finally {
+      setInitialLoading(false);
     }
   };
 
@@ -83,7 +169,7 @@ const Pathology = () => {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.report) {
       setModalError('Please upload report');
       return;
@@ -94,22 +180,67 @@ const Pathology = () => {
       return;
     }
 
-    const pathologyRecord = {
-      ...selectedRecord,
-      report: formData.report,
-      remarks: formData.remarks,
-      completedDate: new Date().toISOString()
-    };
+    try {
+      setLoading(true);
+      
+      // Convert base64 to blob
+      const base64Data = formData.report.split(',')[1];
+      const binaryData = atob(base64Data);
+      const arrayBuffer = new ArrayBuffer(binaryData.length);
+      const uint8Array = new Uint8Array(arrayBuffer);
+      
+      for (let i = 0; i < binaryData.length; i++) {
+        uint8Array[i] = binaryData.charCodeAt(i);
+      }
+      
+      const blob = new Blob([uint8Array], { type: 'image/jpeg' });
+      
+      // Upload report image to Supabase Storage
+      const fileName = `pathology_report_${selectedRecord.id}_${Date.now()}.jpg`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('pathology_reports')
+        .upload(fileName, blob, {
+          contentType: 'image/jpeg',
+          upsert: true
+        });
 
-    const existingHistory = localStorage.getItem('pathologyHistory');
-    const updatedHistory = existingHistory ? JSON.parse(existingHistory) : [];
-    updatedHistory.unshift(pathologyRecord);
-    
-    localStorage.setItem('pathologyHistory', JSON.stringify(updatedHistory));
-    
-    setShowModal(false);
-    resetForm();
-    loadData();
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('pathology_reports')
+        .getPublicUrl(fileName);
+
+      // Update lab record with pathology info
+      const { error: updateError } = await supabase
+        .from('lab')
+        .update({
+          report_url: publicUrl,
+          lab_report_remarks: formData.remarks,
+          planned3: new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
+          actual2:  new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),// Update actual1 with completion date
+        })
+        .eq('id', selectedRecord.id);
+
+      if (updateError) throw updateError;
+
+      // Reload data
+      await loadData();
+      
+      setShowModal(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to save pathology report:', error);
+      setModalError('Failed to save report. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
@@ -127,17 +258,37 @@ const Pathology = () => {
     setShowViewModal(true);
   };
 
-  const handleViewReport = (reportData) => {
+  const handleViewReport = (reportUrl) => {
+    if (!reportUrl) {
+      alert('No report available');
+      return;
+    }
+    
     const newWindow = window.open();
     newWindow.document.write(`
       <html>
-        <head><title>Report</title></head>
+        <head><title>Pathology Report</title></head>
         <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;">
-          <img src="${reportData}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
+          <img src="${reportUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
         </body>
       </html>
     `);
   };
+
+  // Calculate statistics
+  const totalRecords = pendingRecords.length + historyRecords.length;
+  const highPriorityCount = [...pendingRecords, ...historyRecords].filter(r => r.priority === 'High').length;
+
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6 bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-600 mb-4"></div>
+          <p className="text-gray-600">Loading pathology data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-3 space-y-4 md:p-6 bg-gray-50 min-h-screen">
@@ -153,7 +304,7 @@ const Pathology = () => {
         <div className="p-4 bg-white rounded-lg border border-green-200 shadow-sm">
           <div className="flex flex-col">
             <span className="text-xs font-medium text-gray-600 uppercase">Total Records</span>
-            <span className="text-2xl font-bold text-green-600 mt-1">{pendingRecords.length + historyRecords.length}</span>
+            <span className="text-2xl font-bold text-green-600 mt-1">{totalRecords}</span>
           </div>
         </div>
 
@@ -174,9 +325,7 @@ const Pathology = () => {
         <div className="p-4 bg-white rounded-lg border border-purple-200 shadow-sm">
           <div className="flex flex-col">
             <span className="text-xs font-medium text-gray-600 uppercase">High Priority</span>
-            <span className="text-2xl font-bold text-purple-600 mt-1">
-              {[...pendingRecords, ...historyRecords].filter(r => r.priority === 'High').length}
-            </span>
+            <span className="text-2xl font-bold text-purple-600 mt-1">{highPriorityCount}</span>
           </div>
         </div>
       </div>
@@ -214,8 +363,7 @@ const Pathology = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Unique Number</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Advice No</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Admission No</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone Number</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Reason For Visit</th>
@@ -232,7 +380,7 @@ const Pathology = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {pendingRecords.length > 0 ? (
                   pendingRecords.map((record) => (
-                    <tr key={record.paymentId || record.adviceId} className="hover:bg-gray-50">
+                    <tr key={record.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <button
                           onClick={() => handleActionClick(record)}
@@ -241,8 +389,7 @@ const Pathology = () => {
                           Process
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.uniqueNumber}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.admissionNo}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
@@ -268,7 +415,7 @@ const Pathology = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
                       <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium text-gray-900">No pending records</p>
                     </td>
@@ -282,11 +429,10 @@ const Pathology = () => {
           <div className="space-y-3 md:hidden">
             {pendingRecords.length > 0 ? (
               pendingRecords.map((record) => (
-                <div key={record.paymentId || record.adviceId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.uniqueNumber}</div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo || 'N/A'}</div>
+                      <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo}</div>
                       <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
                     </div>
                     <button
@@ -336,8 +482,7 @@ const Pathology = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Unique Number</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Advice No</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Reason For Visit</th>
@@ -356,9 +501,8 @@ const Pathology = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {historyRecords.length > 0 ? (
                   historyRecords.map((record) => (
-                    <tr key={record.paymentId || record.adviceId} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.uniqueNumber}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo || 'N/A'}</td>
+                    <tr key={record.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.admissionNo}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
@@ -389,12 +533,12 @@ const Pathology = () => {
                           View
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.remarks}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.pathologyRemarks}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="15" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
                       <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium text-gray-900">No history records</p>
                     </td>
@@ -408,11 +552,10 @@ const Pathology = () => {
           <div className="space-y-3 md:hidden">
             {historyRecords.length > 0 ? (
               historyRecords.map((record) => (
-                <div key={record.paymentId || record.adviceId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.uniqueNumber}</div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo || 'N/A'}</div>
+                      <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo}</div>
                       <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
                     </div>
                     <button
@@ -433,7 +576,7 @@ const Pathology = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Remarks:</span>
-                      <span className="font-medium text-gray-900 truncate max-w-[150px]">{record.remarks}</span>
+                      <span className="font-medium text-gray-900 truncate max-w-[150px]">{record.pathologyRemarks}</span>
                     </div>
                   </div>
                 </div>
@@ -470,12 +613,8 @@ const Pathology = () => {
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
                   <div>
-                    <span className="text-gray-600">Unique No:</span>
-                    <div className="font-medium text-gray-900">{selectedRecord.uniqueNumber}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Advice No:</span>
-                    <div className="font-medium text-green-600">{selectedRecord.adviceNo || 'N/A'}</div>
+                    <span className="text-gray-600">Admission No:</span>
+                    <div className="font-medium text-green-600">{selectedRecord.admissionNo}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Name:</span>
@@ -584,9 +723,10 @@ const Pathology = () => {
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  className="px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 sm:w-auto"
+                  disabled={loading}
+                  className="px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 disabled:opacity-50 sm:w-auto"
                 >
-                  Save Report
+                  {loading ? 'Processing...' : 'Save Report'}
                 </button>
               </div>
             </div>
@@ -613,12 +753,8 @@ const Pathology = () => {
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
                   <div>
-                    <span className="text-gray-600">Unique No:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.uniqueNumber}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Advice No:</span>
-                    <div className="font-medium text-green-600">{viewingRecord.adviceNo || 'N/A'}</div>
+                    <span className="text-gray-600">Admission No:</span>
+                    <div className="font-medium text-green-600">{viewingRecord.admissionNo}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Name:</span>
@@ -658,12 +794,12 @@ const Pathology = () => {
                 <div className="space-y-3 text-sm">
                   <div>
                     <span className="text-gray-600">Remarks:</span>
-                    <div className="font-medium text-gray-900 mt-1 whitespace-pre-wrap">{viewingRecord.remarks}</div>
+                    <div className="font-medium text-gray-900 mt-1 whitespace-pre-wrap">{viewingRecord.pathologyRemarks}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Completed Date:</span>
                     <div className="font-medium text-gray-900 mt-1">
-                      {new Date(viewingRecord.completedDate).toLocaleString()}
+                      {viewingRecord.pathologyCompletedDate ? new Date(viewingRecord.pathologyCompletedDate).toLocaleString() : 'N/A'}
                     </div>
                   </div>
                 </div>
@@ -672,17 +808,26 @@ const Pathology = () => {
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">Report Image</h3>
                 <div className="space-y-3">
-                  <img
-                    src={viewingRecord.report}
-                    alt="Report"
-                    className="w-full max-h-96 object-contain rounded-lg border border-gray-300"
-                  />
-                  <button
-                    onClick={() => handleViewReport(viewingRecord.report)}
-                    className="w-full px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-                  >
-                    Open in Full Screen
-                  </button>
+                  {viewingRecord.pathologyReport ? (
+                    <>
+                      <img
+                        src={viewingRecord.pathologyReport}
+                        alt="Report"
+                        className="w-full max-h-96 object-contain rounded-lg border border-gray-300"
+                      />
+                      <button
+                        onClick={() => handleViewReport(viewingRecord.pathologyReport)}
+                        className="w-full px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                      >
+                        Open in Full Screen
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <FileText className="mx-auto w-12 h-12 text-gray-300 mb-2" />
+                      <p className="text-gray-600">No report available</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

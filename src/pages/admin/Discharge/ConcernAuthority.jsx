@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, X, Clock, CheckCircle, Image } from 'lucide-react';
+import supabase from '../../../SupabaseClient';
 
 const ConcernAuthority = () => {
   const [activeTab, setActiveTab] = useState('pending');
   const [pendingRecords, setPendingRecords] = useState([]);
   const [historyRecords, setHistoryRecords] = useState([]);
   const [selectedRecords, setSelectedRecords] = useState({});
-  const [workFileStatus, setWorkFileStatus] = useState({}); // New: Yes/No for Authority
+  const [workFileStatus, setWorkFileStatus] = useState({});
   const [viewImageModal, setViewImageModal] = useState(false);
   const [viewingImage, setViewingImage] = useState(null);
   const [submitError, setSubmitError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Separate state for submission
 
-  // Load data every second (same as your other pages)
+  // Load data on component mount and set interval
   useEffect(() => {
     loadData();
 
@@ -22,25 +25,38 @@ const ConcernAuthority = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      const storedRMOInitiations = localStorage.getItem('rmoInitiations');
-      if (!storedRMOInitiations) return;
+      setIsLoading(true);
+      
+      // Fetch pending records (planned4 is not null and actual4 is null)
+      const { data: pendingData, error: pendingError } = await supabase
+        .from('discharge')
+        .select('*')
+        .not('planned4', 'is', null)
+        .is('actual4', null)
+        .order('planned4', { ascending: true });
 
-      const rmoInitiations = JSON.parse(storedRMOInitiations);
+      if (pendingError) throw pendingError;
+      setPendingRecords(pendingData || []);
 
-      // Pending: Records where Concern Department is completed but Authority is NOT
-      const pending = rmoInitiations.filter(
-        (r) => r.concernDepartmentCompleted && !r.concernAuthorityCompleted
-      );
+      // Fetch history records (both planned4 and actual4 are not null)
+      const { data: historyData, error: historyError } = await supabase
+        .from('discharge')
+        .select('*')
+        .not('planned4', 'is', null)
+        .not('actual4', 'is', null)
+        .order('actual4', { ascending: false });
 
-      // History: Records where Authority has already approved
-      const history = rmoInitiations.filter((r) => r.concernAuthorityCompleted);
+      if (historyError) throw historyError;
+      setHistoryRecords(historyData || []);
 
-      setPendingRecords(pending);
-      setHistoryRecords(history);
     } catch (error) {
-      console.error('Error loading data for Concern Authority:', error);
+      console.error('Error loading data from Supabase:', error);
+      setSubmitError('Failed to load data');
+      setTimeout(() => setSubmitError(''), 3000);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -58,7 +74,7 @@ const ConcernAuthority = () => {
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const selectedAdmissions = Object.keys(selectedRecords).filter(
       (key) => selectedRecords[key]
     );
@@ -79,43 +95,70 @@ const ConcernAuthority = () => {
     }
 
     try {
-      const stored = localStorage.getItem('rmoInitiations');
-      const data = stored ? JSON.parse(stored) : [];
+      setIsSubmitting(true); // Set submitting state to true
+      
+      // Prepare update data for each selected record
+      const updates = selectedAdmissions.map(admissionNo => ({
+        admission_no: admissionNo,
+        actual4: new Date().toISOString(), // Set current timestamp
+        concern_dept: workFileStatus[admissionNo], // Yes or No
+        delay4: calculateDelay(admissionNo), // Calculate delay
+      }));
 
-      const updatedData = data.map((record) => {
-        if (selectedAdmissions.includes(record.admissionNo)) {
-          return {
-            ...record,
-            concernAuthorityWorkFile: workFileStatus[record.admissionNo], // Yes or No
-            concernAuthorityCompleted: true,
-            concernAuthorityCompletionDate: new Date().toLocaleDateString('en-GB'),
-            concernAuthorityCompletionTime: new Date().toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            }),
-            concernAuthorityTimestamp: new Date().toISOString(),
-          };
-        }
-        return record;
+      // Update records in Supabase
+      const updatePromises = updates.map(async (updateData) => {
+        const { error } = await supabase
+          .from('discharge')
+          .update({
+            actual4:new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
+            concern_authority_work_file: updateData.concern_dept,
+            planned5:new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
+          
+          })
+          .eq('admission_no', updateData.admission_no);
+
+        if (error) throw error;
       });
 
-      localStorage.setItem('rmoInitiations', JSON.stringify(updatedData));
+      await Promise.all(updatePromises);
 
       // Reset form
       setSelectedRecords({});
       setWorkFileStatus({});
       setSubmitError('');
-      loadData();
+      
+      // Reload data
+      await loadData();
+
     } catch (error) {
-      console.error('Error saving Concern Authority data:', error);
+      console.error('Error updating records in Supabase:', error);
       setSubmitError('Failed to save. Please try again.');
       setTimeout(() => setSubmitError(''), 3000);
+    } finally {
+      setIsSubmitting(false); // Reset submitting state
     }
   };
 
-  const openImageViewer = (imageData) => {
-    setViewingImage(imageData);
+  const calculateDelay = (admissionNo) => {
+    const record = pendingRecords.find(r => r.admission_no === admissionNo);
+    if (!record || !record.planned4) return null;
+    
+    const plannedDate = new Date(record.planned4);
+    const actualDate = new Date();
+    const diffHours = Math.floor((actualDate - plannedDate) / (1000 * 60 * 60));
+    
+    if (diffHours <= 0) return 'On Time';
+    return `${diffHours} hour${diffHours > 1 ? 's' : ''} delay`;
+  };
+
+  const openImageViewer = (imageUrl) => {
+    setViewingImage(imageUrl);
     setViewImageModal(true);
   };
 
@@ -133,6 +176,11 @@ const ConcernAuthority = () => {
             Final approval for work file after Concern Department review
           </p>
         </div>
+        {/* {isLoading && (
+          <div className="text-sm text-gray-500 animate-pulse">
+            Loading...
+          </div>
+        )} */}
       </div>
 
       {/* Tabs & Submit Button */}
@@ -179,15 +227,15 @@ const ConcernAuthority = () => {
         {activeTab === 'pending' && (
           <button
             onClick={handleSubmit}
-            disabled={!isAnySelected}
+            disabled={!isAnySelected || isSubmitting} // Use isSubmitting instead of isLoading
             className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg shadow-sm font-medium transition-all mb-[-2px] ${
-              isAnySelected
+              isAnySelected && !isSubmitting
                 ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
                 : 'bg-gray-400 cursor-not-allowed opacity-60'
             }`}
           >
             <Building2 className="w-5 h-5" />
-            Submit
+            {isSubmitting ? 'Processing...' : 'Submit'} {/* Use isSubmitting here */}
           </button>
         )}
       </div>
@@ -217,7 +265,7 @@ const ConcernAuthority = () => {
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Status</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">RMO Name</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Summary Report</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Concern Dept</th>
+                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Concern Dept</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -225,21 +273,23 @@ const ConcernAuthority = () => {
                   pendingRecords.map((record) => (
                     <tr
                       key={record.id}
-                      className={`hover:bg-green-50 ${selectedRecords[record.admissionNo] ? 'bg-green-50' : ''}`}
+                      className={`hover:bg-green-50 ${selectedRecords[record.admission_no] ? 'bg-green-50' : ''}`}
                     >
                       <td className="px-4 py-3 text-sm">
                         <input
                           type="checkbox"
-                          checked={selectedRecords[record.admissionNo] || false}
-                          onChange={() => handleCheckboxChange(record.admissionNo)}
+                          checked={selectedRecords[record.admission_no] || false}
+                          onChange={() => handleCheckboxChange(record.admission_no)}
                           className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                          disabled={isSubmitting} // Use isSubmitting here too
                         />
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <select
-                          value={workFileStatus[record.admissionNo] || ''}
-                          onChange={(e) => handleWorkFileChange(record.admissionNo, e.target.value)}
+                          value={workFileStatus[record.admission_no] || ''}
+                          onChange={(e) => handleWorkFileChange(record.admission_no, e.target.value)}
                           className="px-2 py-1 text-sm border rounded bg-white focus:ring-2 focus:ring-green-500"
+                          disabled={isSubmitting} // Use isSubmitting here too
                         >
                           <option value="">Select</option>
                           <option value="Yes">Yes</option>
@@ -247,36 +297,37 @@ const ConcernAuthority = () => {
                         </select>
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">
-                        {record.admissionNo}
+                        {record.admission_no}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                        {record.patientName}
+                        {record.patient_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                         {record.department}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.consultantName || 'N/A'}
+                        {record.consultant_name || 'N/A'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.staffName}
+                        {record.staff_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.dischargeDate}
+                        {record.planned4 ? new Date(record.planned4).toLocaleDateString('en-GB') : 'N/A'}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                          {record.status}
+                          Pending
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.rmoName}
+                        {record.rmo_name || 'N/A'}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        {record.summaryReportImage ? (
+                        {record.summary_report_image ? (
                           <button
-                            onClick={() => openImageViewer(record.summaryReportImage)}
+                            onClick={() => openImageViewer(record.summary_report_image)}
                             className="flex items-center gap-1 px-2 py-1 text-xs text-green-600 bg-green-50 rounded hover:bg-green-100"
+                            disabled={isSubmitting} // Use isSubmitting here too
                           >
                             <Image className="w-3 h-3" />
                             View
@@ -285,22 +336,15 @@ const ConcernAuthority = () => {
                           <span className="text-gray-500">No image</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span
-                          className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            record.concernDepartment === 'Yes'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          {record.concernDepartment}
-                        </span>
+                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {record.concern_dept}
                       </td>
                     </tr>
+                    
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="12" className="px-4 py-12 text-center text-gray-500">
+                    <td colSpan="11" className="px-4 py-12 text-center text-gray-500">
                       <Clock className="mx-auto mb-4 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium">No pending approvals</p>
                       <p>Records will appear here after Concern Department review</p>
@@ -318,7 +362,7 @@ const ConcernAuthority = () => {
                 <div
                   key={record.id}
                   className={`p-4 rounded-lg border shadow-sm ${
-                    selectedRecords[record.admissionNo]
+                    selectedRecords[record.admission_no]
                       ? 'border-green-400 bg-green-50'
                       : 'border-gray-200 bg-white'
                   }`}
@@ -327,39 +371,36 @@ const ConcernAuthority = () => {
                     <div className="flex items-start gap-3">
                       <input
                         type="checkbox"
-                        checked={selectedRecords[record.admissionNo] || false}
-                        onChange={() => handleCheckboxChange(record.admissionNo)}
+                        checked={selectedRecords[record.admission_no] || false}
+                        onChange={() => handleCheckboxChange(record.admission_no)}
                         className="mt-1 w-4 h-4 text-green-600 rounded"
+                        disabled={isSubmitting} // Use isSubmitting here too
                       />
                       <div>
-                        <div className="text-sm font-medium text-green-600">{record.admissionNo}</div>
-                        <div className="font-semibold">{record.patientName}</div>
+                        <div className="text-sm font-medium text-green-600">{record.admission_no}</div>
+                        <div className="font-semibold">{record.patient_name}</div>
                       </div>
                     </div>
                     <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
-                      {record.status}
+                      Pending
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs my-3">
                     <div><span className="text-gray-600">Dept:</span> <strong>{record.department}</strong></div>
-                    <div><span className="text-gray-600">Consultant:</span> {record.consultantName || 'N/A'}</div>
-                    <div><span className="text-gray-600">Staff:</span> {record.staffName}</div>
-                    <div><span className="text-gray-600">Discharge:</span> {record.dischargeDate}</div>
-                    <div><span className="text-gray-600">RMO:</span> {record.rmoName}</div>
-                    <div><span className="text-gray-600">Concern Dept:</span>{' '}
-                      <span className={record.concernDepartment === 'Yes' ? 'text-green-700' : 'text-red-700'}>
-                        {record.concernDepartment}
-                      </span>
-                    </div>
+                    <div><span className="text-gray-600">Consultant:</span> {record.consultant_name || 'N/A'}</div>
+                    <div><span className="text-gray-600">Staff:</span> {record.staff_name}</div>
+                    <div><span className="text-gray-600">Planned:</span> {record.planned4 ? new Date(record.planned4).toLocaleDateString('en-GB') : 'N/A'}</div>
+                    <div><span className="text-gray-600">RMO:</span> {record.rmo_name || 'N/A'}</div>
                   </div>
 
                   <div className="flex justify-between items-center pt-3 border-t">
                     <label className="text-xs font-medium">Work File (Authority):</label>
                     <select
-                      value={workFileStatus[record.admissionNo] || ''}
-                      onChange={(e) => handleWorkFileChange(record.admissionNo, e.target.value)}
+                      value={workFileStatus[record.admission_no] || ''}
+                      onChange={(e) => handleWorkFileChange(record.admission_no, e.target.value)}
                       className="px-2 py-1 text-xs border rounded text-sm"
+                      disabled={isSubmitting} // Use isSubmitting here too
                     >
                       <option value="">Select</option>
                       <option value="Yes">Yes</option>
@@ -367,11 +408,12 @@ const ConcernAuthority = () => {
                     </select>
                   </div>
 
-                  {record.summaryReportImage && (
+                  {record.summary_report_image && (
                     <div className="mt-3 text-right">
                       <button
-                        onClick={() => openImageViewer(record.summaryReportImage)}
+                        onClick={() => openImageViewer(record.summary_report_image)}
                         className="text-xs text-green-600 underline"
+                        disabled={isSubmitting} // Use isSubmitting here too
                       >
                         View Summary Report →
                       </button>
@@ -415,22 +457,23 @@ const ConcernAuthority = () => {
                 {historyRecords.length > 0 ? (
                   historyRecords.map((record) => (
                     <tr key={record.id} className="hover:bg-green-50">
-                      <td className="px-4 py-3 text-sm font-medium text-green-600">{record.admissionNo}</td>
-                      <td className="px-4 py-3 text-sm">{record.patientName}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-green-600">{record.admission_no}</td>
+                      <td className="px-4 py-3 text-sm">{record.patient_name}</td>
                       <td className="px-4 py-3 text-sm">{record.department}</td>
-                      <td className="px-4 py-3 text-sm">{record.consultantName || 'N/A'}</td>
-                      <td className="px-4 py-3 text-sm">{record.staffName}</td>
-                      <td className="px-4 py-3 text-sm">{record.dischargeDate}</td>
+                      <td className="px-4 py-3 text-sm">{record.consultant_name || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm">{record.staff_name}</td>
                       <td className="px-4 py-3 text-sm">
-                        <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
-                          {record.status}
-                        </span>
+                        {record.planned4 ? new Date(record.planned4).toLocaleDateString('en-GB') : 'N/A'}
                       </td>
-                      <td className="px-4 py-3 text-sm">{record.rmoName}</td>
                       <td className="px-4 py-3 text-sm">
-                        {record.summaryReportImage ? (
+                        {record.rmo_status}
+                      </td>
+                    
+                      <td className="px-4 py-3 text-sm">{record.rmo_name || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {record.summary_report_image ? (
                           <button
-                            onClick={() => openImageViewer(record.summaryReportImage)}
+                            onClick={() => openImageViewer(record.summary_report_image)}
                             className="flex items-center gap-1 text-xs text-green-600"
                           >
                             <Image className="w-4 h-4" /> View
@@ -439,36 +482,20 @@ const ConcernAuthority = () => {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`px-2 py-1 text-xs rounded-full ${
-                          record.workFile === 'Yes'
+                          record.work_file === 'Yes'
                             ? 'bg-green-100 text-green-700'
                             : 'bg-red-100 text-red-700'
                         }`}>
-                          {record.workFile || '-'}
+                          {record.work_file || '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          record.concernDepartment === 'Yes'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
-                          {record.concernDepartment}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          record.concernAuthorityWorkFile === 'Yes'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
-                          {record.concernAuthorityWorkFile || '-'}
-                        </span>
-                      </td>
+                       <td className="px-4 py-3 text-sm">{record.concern_dept}</td>
+                        <td className="px-4 py-3 text-sm">{record.concern_authority_work_file}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="12" className="py-12 text-center text-gray-500">
+                    <td colSpan="11" className="py-12 text-center text-gray-500">
                       <CheckCircle className="mx-auto mb-4 w-12 h-12 text-gray-300" />
                       <p>No completed approvals yet</p>
                     </td>
@@ -484,24 +511,28 @@ const ConcernAuthority = () => {
               <div key={record.id} className="p-4 bg-white rounded-lg border">
                 <div className="flex justify-between">
                   <div>
-                    <div className="text-sm font-medium text-green-600">{record.admissionNo}</div>
-                    <div className="font-semibold">{record.patientName}</div>
+                    <div className="text-sm font-medium text-green-600">{record.admission_no}</div>
+                    <div className="font-semibold">{record.patient_name}</div>
                   </div>
-                  <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
-                    {record.status}
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    record.delay4 === 'On Time' || !record.delay4
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}>
+                    {record.delay4 || 'N/A'}
                   </span>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <div>Dept: <strong>{record.department}</strong></div>
-                  <div>Consultant: {record.consultantName || 'N/A'}</div>
-                  <div>Staff: {record.staffName}</div>
-                  <div>Discharge: {record.dischargeDate}</div>
-                  <div>Concern Dept: <strong className={record.concernDepartment === 'Yes' ? 'text-green-700' : 'text-red-700'}>{record.concernDepartment}</strong></div>
-                  <div>Authority: <strong className={record.concernAuthorityWorkFile === 'Yes' ? 'text-green-700' : 'text-red-700'}>{record.concernAuthorityWorkFile}</strong></div>
+                  <div>Consultant: {record.consultant_name || 'N/A'}</div>
+                  <div>Staff: {record.staff_name}</div>
+                  <div>Planned: {record.planned4 ? new Date(record.planned4).toLocaleDateString('en-GB') : 'N/A'}</div>
+                  <div>Actual: {record.actual4 ? new Date(record.actual4).toLocaleDateString('en-GB') : 'N/A'}</div>
+                  <div>Work File: <strong className={record.concern_dept === 'Yes' ? 'text-green-700' : 'text-red-700'}>{record.concern_dept}</strong></div>
                 </div>
-                {record.summaryReportImage && (
+                {record.summary_report_image && (
                   <div className="mt-3 text-right">
-                    <button onClick={() => openImageViewer(record.summaryReportImage)} className="text-xs text-green-600 underline">
+                    <button onClick={() => openImageViewer(record.summary_report_image)} className="text-xs text-green-600 underline">
                       View Summary →
                     </button>
                   </div>

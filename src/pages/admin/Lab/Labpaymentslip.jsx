@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Eye, FileText, Upload, Check } from 'lucide-react';
+import supabase from '../../../SupabaseClient';
 
 const Payment = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -11,71 +12,133 @@ const Payment = () => {
   const [viewingRecord, setViewingRecord] = useState(null);
   const [modalError, setModalError] = useState('');
   const [imagePreview, setImagePreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   
   const [formData, setFormData] = useState({
     payment: '',
     billImage: null
   });
 
-  // Load data from localStorage
+  // Load data from Supabase
   useEffect(() => {
     loadData();
 
-    // Listen for updates from Lab page
-    const handleLabUpdate = () => {
-      loadData();
-    };
-
-    window.addEventListener('labAdviceUpdated', handleLabUpdate);
-    window.addEventListener('focus', handleLabUpdate);
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('payment-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lab'
+        },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
 
     return () => {
-      window.removeEventListener('labAdviceUpdated', handleLabUpdate);
-      window.removeEventListener('focus', handleLabUpdate);
+      supabase.removeChannel(channel);
     };
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      const storedHistory = localStorage.getItem('paymentHistory');
-      const labAdviceHistory = localStorage.getItem('labAdviceHistory');
+      setInitialLoading(true);
       
-      // Load payment history
-      const existingHistory = storedHistory ? JSON.parse(storedHistory) : [];
-      setHistoryPayments(existingHistory);
+      // Load pending payments (planned1 IS NOT NULL AND actually IS NULL AND payment_status IS NULL)
+      const { data: pendingData, error: pendingError } = await supabase
+        .from('lab')
+        .select(`*`)
+        .not('planned1', 'is', null)
+        .is('actual1', null)
+        .is('payment_status', null)
+        .order('timestamp', { ascending: false });
 
-      // Load pending from Lab Advice History stored by Lab page
-      if (labAdviceHistory) {
-        const labRecords = JSON.parse(labAdviceHistory);
+      if (pendingError) throw pendingError;
+
+      const formattedPending = pendingData.map(record => {
+        // Generate advice number from record.id (UUID)
+        const idString = record.id?.toString() || '';
+        const adviceNo = record.advice_no || `ADV-${idString.substring(0, 8)}`;
         
-        // Get IDs of records already in payment history
-        const processedIds = existingHistory.map(record => record.adviceId);
+        return {
+          id: record.id,
+          uniqueNumber: record.admission_no || 'N/A', // Changed from unique_number to admission_no
+          patientName: record.patient_name || 'N/A',
+          phoneNumber: record.phone_no || 'N/A',
+          age: record.age || 'N/A', // sgs seems to be age field
+          gender: record.gender || 'N/A',
+          bedNo: record.bed_no || 'N/A', // Fixed typo: bad_no to bed_no
+          location: record.location || 'N/A',
+          wardType: record.ward_type || 'N/A', // Fixed typo: word_type to ward_type
+          room: record.room || 'N/A',
+          reasonForVisit: record.reason_for_visit || 'N/A',
+          adviceNo: record.admission_no || 'N/A', // Use admission_no as advice number
+          category: record.category,
+          priority: record.priority,
+          pathologyTests: record.pathology_tests || [],
+          radiologyTests: record.radiology_tests || [],
+          radiologyType: record.radiology_type,
+          planned1: record.planned1,
+          actual1: record.actual1, // Note: column name is "actually" not "actual1"
+          paymentId: record.id,
+          admissionNo: record.admission_no // Added this to show full admission_no
+        };
+      });
+
+      setPendingPayments(formattedPending);
+
+      // Load history payments (payment_status IS NOT NULL)
+      const { data: historyData, error: historyError } = await supabase
+        .from('lab')
+        .select(`*`)
+        .not('planned1', 'is', null)
+         .not('actual1', 'is', null)
+        .order('timestamp', { ascending: false });
+
+      if (historyError) throw historyError;
+
+      const formattedHistory = historyData.map(record => {
+        // Generate advice number from record.id (UUID)
+        const idString = record.id?.toString() || '';
+        const adviceNo = record.advice_no || `ADV-${idString.substring(0, 8)}`;
         
-        // Filter out already processed records
-        const newPending = labRecords
-          .filter(record => !processedIds.includes(record.adviceId))
-          .map(record => ({
-            ...record,
-            paymentId: record.adviceId || record.id || Date.now() + Math.random()
-          }));
-        
-        setPendingPayments(newPending);
-      } else {
-        setPendingPayments([]);
-      }
+        return {
+          id: record.id,
+          uniqueNumber: record.admission_no || 'N/A', // Changed from unique_number to admission_no
+          patientName: record.patient_name || 'N/A',
+          phoneNumber: record.phone_no || 'N/A',
+          age: record.age || 'N/A', // sgs seems to be age field
+          gender: record.gender || 'N/A',
+          bedNo: record.bed_no || 'N/A', // Fixed typo: bad_no to bed_no
+          location: record.location || 'N/A',
+          wardType: record.ward_type || 'N/A', // Fixed typo: word_type to ward_type
+          room: record.room || 'N/A',
+          reasonForVisit: record.reason_for_visit || 'N/A',
+          adviceNo: record.admission_no || 'N/A', // Use admission_no as advice number
+          category: record.category,
+          priority: record.priority,
+          pathologyTests: record.pathology_tests || [],
+          radiologyTests: record.radiology_tests || [],
+          radiologyType: record.radiology_type,
+          paymentStatus: record.payment_status,
+          billImage: record.bill_image_url, // Note: column name is "kill_image_url" not "bill_image_url"
+          processedDate: record.actual1,
+          paymentId: record.id,
+          admissionNo: record.admission_no // Added this to show full admission_no
+        };
+      });
+
+      setHistoryPayments(formattedHistory);
     } catch (error) {
       console.error('Failed to load data:', error);
-      setPendingPayments([]);
-      setHistoryPayments([]);
-    }
-  };
-
-  const saveToStorage = (pending, history) => {
-    try {
-      localStorage.setItem('paymentPending', JSON.stringify(pending));
-      localStorage.setItem('paymentHistory', JSON.stringify(history));
-    } catch (error) {
-      console.error('Failed to save data:', error);
+      setModalError('Failed to load data. Please try again.');
+    } finally {
+      setInitialLoading(false);
     }
   };
 
@@ -112,7 +175,7 @@ const Payment = () => {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.payment) {
       setModalError('Please select payment status');
       return;
@@ -123,36 +186,68 @@ const Payment = () => {
       return;
     }
 
-    // Create payment record with full details
-    const paymentRecord = {
-      ...selectedRecord,
-      paymentStatus: formData.payment,
-      billImage: formData.billImage,
-      processedDate: new Date().toISOString()
-    };
-
-    // Add to history
-    const updatedHistory = [paymentRecord, ...historyPayments];
-    
-    // Remove from pending
-    const updatedPending = pendingPayments.filter(p => p.paymentId !== selectedRecord.paymentId);
-
-    setHistoryPayments(updatedHistory);
-    setPendingPayments(updatedPending);
-    saveToStorage(updatedPending, updatedHistory);
-    
-    // Sync with Lab page's labAdviceHistory - remove from pending
     try {
-      localStorage.setItem('labAdviceHistory', JSON.stringify(updatedPending));
-      console.log('Payment processed. Removed from pending, moved to history');
-      // Notify Lab page to reload
-      window.dispatchEvent(new Event('paymentProcessed'));
-    } catch (e) {
-      console.error('Failed to sync with Lab page:', e);
-    }
+      setLoading(true);
+      
+      // Convert base64 to blob
+      const base64Data = formData.billImage.split(',')[1];
+      const binaryData = atob(base64Data);
+      const arrayBuffer = new ArrayBuffer(binaryData.length);
+      const uint8Array = new Uint8Array(arrayBuffer);
+      
+      for (let i = 0; i < binaryData.length; i++) {
+        uint8Array[i] = binaryData.charCodeAt(i);
+      }
+      
+      const blob = new Blob([uint8Array], { type: 'image/jpeg' });
+      
+      // Upload image to Supabase Storage
+      const fileName = `bill_${selectedRecord.id}_${Date.now()}.jpg`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('bill_image')
+        .upload(fileName, blob, {
+          contentType: 'image/jpeg',
+          upsert: true
+        });
 
-    setShowModal(false);
-    resetForm();
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('bill_image')
+        .getPublicUrl(fileName);
+
+      // Update lab record with payment info
+      // Note: Using "kill_image_url" column name as per your schema
+      const { error: updateError } = await supabase
+        .from('lab')
+        .update({
+          payment_status: formData.payment,
+          bill_image_url: publicUrl, // Fixed: Changed to "kill_image_url"
+           planned2: new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
+          actual1: new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
+        })
+        .eq('id', selectedRecord.id);
+
+      if (updateError) throw updateError;
+
+      // Reload data
+      await loadData();
+      
+      setShowModal(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to process payment:', error);
+      setModalError('Failed to process payment. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
@@ -170,13 +265,18 @@ const Payment = () => {
     setShowViewModal(true);
   };
 
-  const handleViewImage = (imageData) => {
+  const handleViewImage = (imageUrl) => {
+    if (!imageUrl) {
+      alert('No bill image available');
+      return;
+    }
+    
     const newWindow = window.open();
     newWindow.document.write(`
       <html>
         <head><title>Bill Image</title></head>
         <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;">
-          <img src="${imageData}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
+          <img src="${imageUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
         </body>
       </html>
     `);
@@ -189,6 +289,17 @@ const Payment = () => {
   const completeRadiology = historyPayments.filter(r => r.category === 'Radiology').length;
   const pendingPathology = pendingPayments.filter(r => r.category === 'Pathology').length;
   const pendingRadiology = pendingPayments.filter(r => r.category === 'Radiology').length;
+
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6 bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-600 mb-4"></div>
+          <p className="text-gray-600">Loading payment data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-3 space-y-4 md:p-6 bg-gray-50 min-h-screen">
@@ -277,8 +388,7 @@ const Payment = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Unique Number</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Advice No</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Admission No</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone Number</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Reason For Visit</th>
@@ -295,7 +405,7 @@ const Payment = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {pendingPayments.length > 0 ? (
                   pendingPayments.map((record) => (
-                    <tr key={record.paymentId} className="hover:bg-gray-50">
+                    <tr key={record.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <button
                           onClick={() => handleActionClick(record)}
@@ -304,8 +414,9 @@ const Payment = () => {
                           Process
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.uniqueNumber}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">
+                        {record.admissionNo || record.uniqueNumber}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
@@ -333,10 +444,10 @@ const Payment = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
                       <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium text-gray-900">No pending payments</p>
-                      <p className="text-sm text-gray-500 mt-1">Records from Lab Advice History will appear here</p>
+                      <p className="text-sm text-gray-500 mt-1">Records with planned tests will appear here</p>
                     </td>
                   </tr>
                 )}
@@ -348,11 +459,10 @@ const Payment = () => {
           <div className="space-y-3 md:hidden">
             {pendingPayments.length > 0 ? (
               pendingPayments.map((record) => (
-                <div key={record.paymentId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.uniqueNumber}</div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo || 'N/A'}</div>
+                      <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo || record.uniqueNumber}</div>
                       <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
                     </div>
                     <button
@@ -396,7 +506,7 @@ const Payment = () => {
               <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
                 <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                 <p className="text-sm font-medium text-gray-900">No pending payments</p>
-                <p className="text-xs text-gray-500 mt-1">Records from Lab Advice History will appear here</p>
+                <p className="text-xs text-gray-500 mt-1">Records with planned tests will appear here</p>
               </div>
             )}
           </div>
@@ -411,8 +521,7 @@ const Payment = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Unique Number</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Advice No</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Reason For Visit</th>
@@ -430,9 +539,10 @@ const Payment = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {historyPayments.length > 0 ? (
                   historyPayments.map((record) => (
-                    <tr key={record.paymentId} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.uniqueNumber}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo || 'N/A'}</td>
+                    <tr key={record.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">
+                        {record.admissionNo || record.uniqueNumber}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
@@ -471,7 +581,7 @@ const Payment = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
                       <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium text-gray-900">No history records</p>
                     </td>
@@ -485,11 +595,10 @@ const Payment = () => {
           <div className="space-y-3 md:hidden">
             {historyPayments.length > 0 ? (
               historyPayments.map((record) => (
-                <div key={record.paymentId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.uniqueNumber}</div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo || 'N/A'}</div>
+                      <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo || record.uniqueNumber}</div>
                       <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
                     </div>
                     <button
@@ -552,12 +661,8 @@ const Payment = () => {
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
                   <div>
-                    <span className="text-gray-600">Unique No:</span>
-                    <div className="font-medium text-gray-900">{selectedRecord.uniqueNumber}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Advice No:</span>
-                    <div className="font-medium text-green-600">{selectedRecord.adviceNo || 'N/A'}</div>
+                    <span className="text-gray-600">Admission No:</span>
+                    <div className="font-medium text-green-600">{selectedRecord.admissionNo || selectedRecord.uniqueNumber}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Name:</span>
@@ -672,9 +777,10 @@ const Payment = () => {
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  className="px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 sm:w-auto"
+                  disabled={loading}
+                  className="px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 disabled:opacity-50 sm:w-auto"
                 >
-                  Save Payment
+                  {loading ? 'Processing...' : 'Save Payment'}
                 </button>
               </div>
             </div>
@@ -702,12 +808,8 @@ const Payment = () => {
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
                   <div>
-                    <span className="text-gray-600">Unique No:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.uniqueNumber}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Advice No:</span>
-                    <div className="font-medium text-green-600">{viewingRecord.adviceNo || 'N/A'}</div>
+                    <span className="text-gray-600">Admission No:</span>
+                    <div className="font-medium text-green-600">{viewingRecord.admissionNo || viewingRecord.uniqueNumber}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Name:</span>
@@ -816,7 +918,7 @@ const Payment = () => {
                   <div>
                     <span className="text-gray-600">Processed Date:</span>
                     <div className="font-medium text-gray-900 mt-1">
-                      {new Date(viewingRecord.processedDate).toLocaleString()}
+                      {viewingRecord.processedDate ? new Date(viewingRecord.processedDate).toLocaleString() : 'N/A'}
                     </div>
                   </div>
                 </div>
@@ -826,17 +928,26 @@ const Payment = () => {
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">Bill Image</h3>
                 <div className="space-y-3">
-                  <img
-                    src={viewingRecord.billImage}
-                    alt="Bill"
-                    className="w-full max-h-96 object-contain rounded-lg border border-gray-300"
-                  />
-                  <button
-                    onClick={() => handleViewImage(viewingRecord.billImage)}
-                    className="w-full px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-                  >
-                    Open in Full Screen
-                  </button>
+                  {viewingRecord.billImage ? (
+                    <>
+                      <img
+                        src={viewingRecord.billImage}
+                        alt="Bill"
+                        className="w-full max-h-96 object-contain rounded-lg border border-gray-300"
+                      />
+                      <button
+                        onClick={() => handleViewImage(viewingRecord.billImage)}
+                        className="w-full px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                      >
+                        Open in Full Screen
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <FileText className="mx-auto w-12 h-12 text-gray-300 mb-2" />
+                      <p className="text-gray-600">No bill image available</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

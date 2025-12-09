@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, FileText, X, Download, CheckCircle } from 'lucide-react';
+import { Eye, FileText, X, Download, CheckCircle, Clock } from 'lucide-react';
+import supabase from '../../../SupabaseClient';// Adjust the path to your supabase client
 
 const StoreMedicinePage = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -8,38 +9,72 @@ const StoreMedicinePage = () => {
   const [selectedIndent, setSelectedIndent] = useState(null);
   const [pendingIndents, setPendingIndents] = useState([]);
   const [historyIndents, setHistoryIndents] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Load data from localStorage
+  // Load data from Supabase
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      // Fetch data from pharmacy table where planned2 is not null
+      const { data: pharmacyData, error } = await supabase
+        .from('pharmacy')
+        .select('*')
+        .not('planned2', 'is', null)
+        .order('timestamp', { ascending: false });
+
+      if (error) throw error;
+
+      if (pharmacyData) {
+        // Parse JSON strings in the data
+        const parsedData = pharmacyData.map(item => ({
+          ...item,
+          request_types: item.request_types ? JSON.parse(item.request_types) : null,
+          medicines: item.medicines ? JSON.parse(item.medicines) : [],
+          investigations: item.investigations ? JSON.parse(item.investigations) : []
+        }));
+
+        // Separate into pending and history based on actual2
+        const pending = parsedData.filter(indent => 
+          indent.planned2 && !indent.actual2
+        );
+        
+        const history = parsedData.filter(indent => 
+          indent.planned2 && indent.actual2
+        );
+
+        setPendingIndents(pending);
+        setHistoryIndents(history);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      alert('Error loading data from database');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadData = () => {
-      const savedHistory = localStorage.getItem('pharmacyApprovalHistory');
-      const approvalHistory = savedHistory ? JSON.parse(savedHistory) : [];
-
-      const savedStoreHistory = localStorage.getItem('storeHistory');
-      const storeHistory = savedStoreHistory ? JSON.parse(savedStoreHistory) : [];
-
-      // Filter only approved medicine indents from pharmacy approval
-      const medicineIndents = approvalHistory.filter(indent => 
-        indent.status === 'Approved' && 
-        indent.requestTypes.medicineSlip &&
-        indent.medicines?.length > 0
-      );
-
-      // Get IDs of indents already confirmed in store
-      const confirmedIds = storeHistory.map(h => h.indentNumber);
-
-      // Pending: approved medicine indents not yet confirmed
-      const pending = medicineIndents.filter(indent => 
-        !confirmedIds.includes(indent.indentNumber)
-      );
-
-      setPendingIndents(pending);
-      setHistoryIndents(storeHistory);
-    };
-
     loadData();
-    const interval = setInterval(loadData, 2000);
-    return () => clearInterval(interval);
+    
+    // Set up real-time subscription for updates
+    const channel = supabase
+      .channel('pharmacy-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pharmacy'
+        },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleView = (indent) => {
@@ -53,37 +88,62 @@ const StoreMedicinePage = () => {
   };
 
   const downloadSlip = (indent) => {
+    if (!indent.slip_image) return;
+    
     const link = document.createElement('a');
-    link.download = `Medicine_Slip_${indent.indentNumber}.png`;
-    link.href = indent.slipImage;
+    link.download = `Medicine_Slip_${indent.indent_no || indent.id}.png`;
+    link.href = indent.slip_image;
     link.click();
   };
 
-  const handleConfirm = (indent) => {
+  const handleConfirm = async (indent) => {
     const confirmed = window.confirm(
-      `Confirm medicine dispensing for Indent ${indent.indentNumber}?`
+      `Confirm medicine dispensing for Indent ${indent.indent_no || indent.id}?`
     );
 
-    if (confirmed) {
-      const confirmedIndent = {
-        ...indent,
-        confirmedAt: new Date().toISOString(),
-        confirmedBy: 'Store'
-      };
+    if (!confirmed) return;
 
-      // Add to store history
-      const updatedHistory = [confirmedIndent, ...historyIndents];
-      setHistoryIndents(updatedHistory);
-      localStorage.setItem('storeHistory', JSON.stringify(updatedHistory));
+    try {
+      // Update the pharmacy record with actual2 timestamp
+      const { error } = await supabase
+        .from('pharmacy')
+        .update({
+          actual2: new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
+          status: 'dispensed'
+        })
+        .eq('id', indent.id);
 
-      // Remove from pending
-      const updatedPending = pendingIndents.filter(
-        p => p.indentNumber !== indent.indentNumber
-      );
-      setPendingIndents(updatedPending);
+      if (error) throw error;
 
-      alert(`Indent ${indent.indentNumber} confirmed successfully!`);
+      // Show success message
+      alert(`Indent ${indent.indent_no || indent.id} confirmed successfully!`);
+      loadData()
+      // The real-time subscription will automatically refresh the data
+    } catch (error) {
+      console.error('Error confirming indent:', error);
+      alert('Error confirming indent. Please try again.');
     }
+  };
+
+  // Calculate delay for pending items
+  const calculateDelay = (plannedDate) => {
+    if (!plannedDate) return '';
+    const planned = new Date(plannedDate);
+    const now = new Date();
+    const diffHours = Math.floor((now - planned) / (1000 * 60 * 60));
+    
+    if (diffHours > 0) {
+      return <span className="text-red-600 font-medium">{diffHours}h delay</span>;
+    } else if (diffHours === 0) {
+      const diffMinutes = Math.floor((now - planned) / (1000 * 60));
+      if (diffMinutes > 0) {
+        return <span className="text-orange-600 font-medium">{diffMinutes}m delay</span>;
+      }
+    }
+    return <span className="text-green-600 font-medium">On time</span>;
   };
 
   return (
@@ -123,160 +183,180 @@ const StoreMedicinePage = () => {
           </div>
         </div>
 
-        {/* Pending Table */}
-        {activeTab === 'pending' && (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead className="bg-green-600 text-white">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Indent No</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Admission No</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Patient Name</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">UHID</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Staff Name</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Diagnosis</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Medicines Count</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {pendingIndents.length > 0 ? (
-                    pendingIndents.map((indent) => (
-                      <tr key={indent.indentNumber} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-medium text-green-700">{indent.indentNumber}</td>
-                        <td className="px-6 py-4 text-sm">{indent.admissionNumber}</td>
-                        <td className="px-6 py-4 text-sm">{indent.patientName}</td>
-                        <td className="px-6 py-4 text-sm">{indent.uhidNumber}</td>
-                        <td className="px-6 py-4 text-sm">{indent.staffName}</td>
-                        <td className="px-6 py-4 text-sm">{indent.diagnosis}</td>
-                        <td className="px-6 py-4 text-sm">
-                          <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
-                            {indent.medicines?.length || 0} Items
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleView(indent)}
-                              className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            {indent.slipImage && (
-                              <button
-                                onClick={() => handleViewSlip(indent)}
-                                className="p-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors"
-                                title="View Slip"
-                              >
-                                <FileText className="w-4 h-4" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleConfirm(indent)}
-                              className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-1"
-                              title="Confirm Dispensing"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                              <span className="text-xs font-medium">Confirm</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="8" className="px-6 py-12 text-center">
-                        <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                        <p className="text-gray-500 font-medium">No pending medicine requests</p>
-                        <p className="text-gray-400 text-sm mt-1">Approved medicine indents will appear here</p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+        {loading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading data...</p>
             </div>
           </div>
-        )}
+        ) : (
+          <>
+            {/* Pending Table */}
+            {activeTab === 'pending' && (
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead className="bg-green-600 text-white">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Indent No</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Admission No</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Patient Name</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">UHID</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Staff Name</th>
+   <th className="px-6 py-3 text-left text-sm font-semibold">Diagnosis</th>
+   
 
-        {/* History Table */}
-        {activeTab === 'history' && (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead className=" bg-green-600 text-white">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Indent No</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Admission No</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Patient Name</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">UHID</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Staff Name</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Diagnosis</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Medicines Count</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Confirmed At</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {historyIndents.length > 0 ? (
-                    historyIndents.map((indent) => (
-                      <tr key={indent.indentNumber} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-medium text-green-700">{indent.indentNumber}</td>
-                        <td className="px-6 py-4 text-sm">{indent.admissionNumber}</td>
-                        <td className="px-6 py-4 text-sm">{indent.patientName}</td>
-                        <td className="px-6 py-4 text-sm">{indent.uhidNumber}</td>
-                        <td className="px-6 py-4 text-sm">{indent.staffName}</td>
-                        <td className="px-6 py-4 text-sm">{indent.diagnosis}</td>
-                        <td className="px-6 py-4 text-sm">
-                          <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
-                            {indent.medicines?.length || 0} Items
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
-                          {new Date(indent.confirmedAt).toLocaleString('en-GB', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </td>
-                        <td className="px-6 py-4 text-sm">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleView(indent)}
-                              className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            {indent.slipImage && (
-                              <button
-                                onClick={() => handleViewSlip(indent)}
-                                className="p-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors"
-                                title="View Slip"
-                              >
-                                <FileText className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Medicines Count</th>
+                   
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Actions</th>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="9" className="px-6 py-12 text-center">
-                        <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                        <p className="text-gray-500 font-medium">No confirmed medicines yet</p>
-                        <p className="text-gray-400 text-sm mt-1">Confirmed medicine dispensing will appear here</p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {pendingIndents.length > 0 ? (
+                        pendingIndents.map((indent) => (
+                          <tr key={indent.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 text-sm font-medium text-green-700">
+                              {indent.indent_no || `IND-${indent.id}`}
+                            </td>
+                            <td className="px-6 py-4 text-sm">{indent.admission_number}</td>
+                            <td className="px-6 py-4 text-sm">{indent.patient_name}</td>
+                            <td className="px-6 py-4 text-sm">{indent.uhid_number}</td>
+                            <td className="px-6 py-4 text-sm">{indent.staff_name}</td>
+                              <td className="px-6 py-4 text-sm">{indent.diagnosis}</td>
+                            <td className="px-6 py-4 text-sm">
+                              <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                                {indent.medicines?.length || 0} Items
+                              </span>
+                            </td>
+                           
+                           
+                            <td className="px-6 py-4 text-sm">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleView(indent)}
+                                  className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+                                  title="View Details"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                {indent.slip_image && (
+                                  <button
+                                    onClick={() => handleViewSlip(indent)}
+                                    className="p-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors"
+                                    title="View Slip"
+                                  >
+                                    <FileText className="w-4 h-4" />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleConfirm(indent)}
+                                  className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-1"
+                                  title="Confirm Dispensing"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span className="text-xs font-medium">Confirm</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="9" className="px-6 py-12 text-center">
+                            <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                            <p className="text-gray-500 font-medium">No pending medicine requests</p>
+                            <p className="text-gray-400 text-sm mt-1">Approved medicine indents will appear here</p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* History Table */}
+            {activeTab === 'history' && (
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead className="bg-green-600 text-white">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Indent No</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Admission No</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Patient Name</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">UHID</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Staff Name</th>
+                          <th className="px-6 py-3 text-left text-sm font-semibold">Diagnosis</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Medicines Count</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Confirmed At</th>
+                        <th className="px-6 py-3 text-left text-sm font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {historyIndents.length > 0 ? (
+                        historyIndents.map((indent) => (
+                          <tr key={indent.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 text-sm font-medium text-green-700">
+                              {indent.indent_no || `IND-${indent.id}`}
+                            </td>
+                            <td className="px-6 py-4 text-sm">{indent.admission_number}</td>
+                            <td className="px-6 py-4 text-sm">{indent.patient_name}</td>
+                            <td className="px-6 py-4 text-sm">{indent.uhid_number}</td>
+                            <td className="px-6 py-4 text-sm">{indent.staff_name}</td>
+                              <td className="px-6 py-4 text-sm">{indent.diagnosis}</td>
+                            <td className="px-6 py-4 text-sm">
+                              <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                                {indent.medicines?.length || 0} Items
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm">
+                              {indent.actual2 ? new Date(indent.actual2).toLocaleString('en-GB', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                day: '2-digit',
+                                month: 'short'
+                              }) : '-'}
+                            </td>
+                           
+                            <td className="px-6 py-4 text-sm">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleView(indent)}
+                                  className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+                                  title="View Details"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                {indent.slip_image && (
+                                  <button
+                                    onClick={() => handleViewSlip(indent)}
+                                    className="p-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors"
+                                    title="View Slip"
+                                  >
+                                    <FileText className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="9" className="px-6 py-12 text-center">
+                            <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                            <p className="text-gray-500 font-medium">No confirmed medicines yet</p>
+                            <p className="text-gray-400 text-sm mt-1">Confirmed medicine dispensing will appear here</p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -285,7 +365,9 @@ const StoreMedicinePage = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-green-600 text-white px-6 py-4 flex justify-between items-center">
-              <h2 className="text-xl font-bold">Medicine Details - {selectedIndent.indentNumber}</h2>
+              <h2 className="text-xl font-bold">
+                Medicine Details - {selectedIndent.indent_no || `IND-${selectedIndent.id}`}
+              </h2>
               <button
                 onClick={() => {
                   setViewModal(false);
@@ -303,16 +385,20 @@ const StoreMedicinePage = () => {
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Patient Information</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
+                    <p className="text-sm text-gray-500">Indent Number</p>
+                    <p className="font-medium">{selectedIndent.indent_no || `IND-${selectedIndent.id}`}</p>
+                  </div>
+                  <div>
                     <p className="text-sm text-gray-500">Admission Number</p>
-                    <p className="font-medium">{selectedIndent.admissionNumber}</p>
+                    <p className="font-medium">{selectedIndent.admission_number}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Patient Name</p>
-                    <p className="font-medium">{selectedIndent.patientName}</p>
+                    <p className="font-medium">{selectedIndent.patient_name}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">UHID Number</p>
-                    <p className="font-medium">{selectedIndent.uhidNumber}</p>
+                    <p className="font-medium">{selectedIndent.uhid_number}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Age</p>
@@ -332,15 +418,15 @@ const StoreMedicinePage = () => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Ward Location</p>
-                    <p className="font-medium">{selectedIndent.wardLocation}</p>
+                    <p className="font-medium">{selectedIndent.ward_location}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Staff Name</p>
-                    <p className="font-medium">{selectedIndent.staffName}</p>
+                    <p className="font-medium">{selectedIndent.staff_name}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Consultant Name</p>
-                    <p className="font-medium">{selectedIndent.consultantName}</p>
+                    <p className="font-medium">{selectedIndent.consultant_name}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Diagnosis</p>
@@ -359,6 +445,9 @@ const StoreMedicinePage = () => {
                         <tr>
                           <th className="px-4 py-3 text-left text-sm font-semibold">#</th>
                           <th className="px-4 py-3 text-left text-sm font-semibold">Medicine Name</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold">Dosage</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold">Frequency</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold">Duration</th>
                           <th className="px-4 py-3 text-left text-sm font-semibold">Quantity</th>
                         </tr>
                       </thead>
@@ -367,9 +456,12 @@ const StoreMedicinePage = () => {
                           <tr key={medicine.id || index}>
                             <td className="px-4 py-3 text-sm">{index + 1}</td>
                             <td className="px-4 py-3 text-sm font-medium">{medicine.name}</td>
+                            <td className="px-4 py-3 text-sm">{medicine.dosage || '-'}</td>
+                            <td className="px-4 py-3 text-sm">{medicine.frequency || '-'}</td>
+                            <td className="px-4 py-3 text-sm">{medicine.duration || '-'}</td>
                             <td className="px-4 py-3 text-sm">
                               <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                                {medicine.quantity}
+                                {medicine.quantity || 1}
                               </span>
                             </td>
                           </tr>
@@ -387,22 +479,30 @@ const StoreMedicinePage = () => {
                   <div className="flex items-center gap-4">
                     <span className="text-sm text-gray-600">Pharmacy Status:</span>
                     <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
-                      Approved
+                      {selectedIndent.status || 'Approved'}
                     </span>
-                    {selectedIndent.approvedAt && (
+                    {selectedIndent.planned2 && (
                       <span className="text-sm text-gray-500">
-                        on {new Date(selectedIndent.approvedAt).toLocaleString('en-GB')}
+                        Planned on {new Date(selectedIndent.planned2).toLocaleString('en-GB')}
                       </span>
                     )}
                   </div>
-                  {selectedIndent.confirmedAt && (
+                  {selectedIndent.actual2 && (
                     <div className="flex items-center gap-4">
                       <span className="text-sm text-gray-600">Store Confirmed:</span>
                       <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
                         Dispensed
                       </span>
                       <span className="text-sm text-gray-500">
-                        on {new Date(selectedIndent.confirmedAt).toLocaleString('en-GB')}
+                        on {new Date(selectedIndent.actual2).toLocaleString('en-GB')}
+                      </span>
+                    </div>
+                  )}
+                  {selectedIndent.delay2 && (
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-gray-600">Delay:</span>
+                      <span className="px-3 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">
+                        {selectedIndent.delay2}
                       </span>
                     </div>
                   )}
@@ -410,7 +510,7 @@ const StoreMedicinePage = () => {
               </div>
 
               <div className="flex justify-end gap-3 pt-6 border-t">
-                {!selectedIndent.confirmedAt && (
+                {!selectedIndent.actual2 && (
                   <button
                     onClick={() => {
                       setViewModal(false);
@@ -438,11 +538,13 @@ const StoreMedicinePage = () => {
       )}
 
       {/* Slip View Modal */}
-      {slipModal && selectedIndent && selectedIndent.slipImage && (
+      {slipModal && selectedIndent && selectedIndent.slip_image && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-purple-600 text-white px-6 py-4 flex justify-between items-center">
-              <h2 className="text-xl font-bold">Medicine Slip - {selectedIndent.indentNumber}</h2>
+              <h2 className="text-xl font-bold">
+                Medicine Slip - {selectedIndent.indent_no || `IND-${selectedIndent.id}`}
+              </h2>
               <button
                 onClick={() => {
                   setSlipModal(false);
@@ -457,7 +559,7 @@ const StoreMedicinePage = () => {
             <div className="p-6">
               <div className="bg-gray-100 p-4 rounded-lg mb-4">
                 <img 
-                  src={selectedIndent.slipImage} 
+                  src={selectedIndent.slip_image} 
                   alt="Medicine Slip" 
                   className="w-full rounded border border-gray-300"
                 />

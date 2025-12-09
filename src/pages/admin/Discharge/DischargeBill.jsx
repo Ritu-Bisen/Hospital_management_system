@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, X, Clock, CheckCircle, Image, Upload } from 'lucide-react';
+import supabase from '../../../SupabaseClient';
 
 const DischargeBill = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -8,13 +9,15 @@ const DischargeBill = () => {
   const [showBillModal, setShowBillModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [billStatus, setBillStatus] = useState('');
-  const [billImage, setBillImage] = useState(null);
+  const [billImageFile, setBillImageFile] = useState(null);
   const [billImagePreview, setBillImagePreview] = useState('');
   const [viewImageModal, setViewImageModal] = useState(false);
   const [viewingImage, setViewingImage] = useState(null);
   const [submitError, setSubmitError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load data every second
+  // Load data on component mount and set interval
   useEffect(() => {
     loadData();
     const interval = setInterval(() => {
@@ -23,32 +26,45 @@ const DischargeBill = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      const storedRMOInitiations = localStorage.getItem('rmoInitiations');
-      if (!storedRMOInitiations) return;
+      setIsLoading(true);
+      
+      // Fetch pending records (planned5 is not null and actual5 is null)
+      const { data: pendingData, error: pendingError } = await supabase
+        .from('discharge')
+        .select('*')
+        .not('planned5', 'is', null)
+        .is('actual5', null)
+        .order('planned5', { ascending: true });
 
-      const rmoInitiations = JSON.parse(storedRMOInitiations);
+      if (pendingError) throw pendingError;
+      setPendingRecords(pendingData || []);
 
-      // Pending: Records where Concern Authority is completed but Bill is NOT
-      const pending = rmoInitiations.filter(
-        (r) => r.concernAuthorityCompleted && !r.dischargeBillCompleted
-      );
+      // Fetch history records (both planned5 and actual5 are not null)
+      const { data: historyData, error: historyError } = await supabase
+        .from('discharge')
+        .select('*')
+        .not('planned5', 'is', null)
+        .not('actual5', 'is', null)
+        .order('actual5', { ascending: false });
 
-      // History: Records where Bill has been completed
-      const history = rmoInitiations.filter((r) => r.dischargeBillCompleted);
+      if (historyError) throw historyError;
+      setHistoryRecords(historyData || []);
 
-      setPendingRecords(pending);
-      setHistoryRecords(history);
     } catch (error) {
-      console.error('Error loading data for Discharge Bill:', error);
+      console.error('Error loading data from Supabase:', error);
+      setSubmitError('Failed to load data');
+      setTimeout(() => setSubmitError(''), 3000);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleOpenBillModal = (record) => {
     setSelectedRecord(record);
     setBillStatus('');
-    setBillImage(null);
+    setBillImageFile(null);
     setBillImagePreview('');
     setSubmitError('');
     setShowBillModal(true);
@@ -58,7 +74,7 @@ const DischargeBill = () => {
     setShowBillModal(false);
     setSelectedRecord(null);
     setBillStatus('');
-    setBillImage(null);
+    setBillImageFile(null);
     setBillImagePreview('');
     setSubmitError('');
   };
@@ -72,65 +88,112 @@ const DischargeBill = () => {
         return;
       }
 
+      // Store the file object for later upload
+      setBillImageFile(file);
+      
+      // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
-        setBillImage(reader.result);
         setBillImagePreview(reader.result);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleSubmitBill = () => {
+  const uploadImageToStorage = async (file) => {
+    try {
+      // Generate a unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `bill_${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `bill_images/${fileName}`;
+
+      // Upload image to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('discharge-documents') // Make sure this bucket exists
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) throw error;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('discharge-documents')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+
+    } catch (error) {
+      console.error('Error uploading image to storage:', error);
+      throw new Error('Failed to upload image');
+    }
+  };
+
+  const handleSubmitBill = async () => {
     if (!billStatus) {
       setSubmitError('Please select Bill Status');
       setTimeout(() => setSubmitError(''), 3000);
       return;
     }
 
-    if (!billImage) {
+    if (!billImageFile) {
       setSubmitError('Please upload Bill Image');
       setTimeout(() => setSubmitError(''), 3000);
       return;
     }
 
     try {
-      const stored = localStorage.getItem('rmoInitiations');
-      const data = stored ? JSON.parse(stored) : [];
+      setIsSubmitting(true);
+      setSubmitError('');
 
-      const updatedData = data.map((record) => {
-        if (record.admissionNo === selectedRecord.admissionNo) {
-          return {
-            ...record,
-            billStatus: billStatus,
-            billImage: billImage,
-            dischargeBillCompleted: true,
-            dischargeBillCompletionDate: new Date().toLocaleDateString('en-GB'),
-            dischargeBillCompletionTime: new Date().toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            }),
-            dischargeBillTimestamp: new Date().toISOString(),
-          };
-        }
-        return record;
-      });
+      // Step 1: Upload image to Supabase Storage
+      const billImageUrl = await uploadImageToStorage(billImageFile);
 
-      localStorage.setItem('rmoInitiations', JSON.stringify(updatedData));
+      // Step 2: Update the record in Supabase database
+      const { error } = await supabase
+        .from('discharge')
+        .update({
+          actual5: new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
+          bill_status: billStatus,
+          bill_image: billImageUrl,
+        })
+        .eq('admission_no', selectedRecord.admission_no);
+
+      if (error) throw error;
+
       handleCloseBillModal();
-      loadData();
+      await loadData();
+
     } catch (error) {
-      console.error('Error saving Discharge Bill data:', error);
-      setSubmitError('Failed to save. Please try again.');
+      console.error('Error updating Discharge Bill data:', error);
+      setSubmitError(error.message || 'Failed to save. Please try again.');
       setTimeout(() => setSubmitError(''), 3000);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const openImageViewer = (imageData) => {
-    setViewingImage(imageData);
+  const calculateDelay = (plannedDate) => {
+    if (!plannedDate) return 'On Time';
+    
+    const planned = new Date(plannedDate);
+    const actual = new Date();
+    const diffHours = Math.floor((actual - planned) / (1000 * 60 * 60));
+    
+    if (diffHours <= 0) return 'On Time';
+    return `${diffHours} hour${diffHours > 1 ? 's' : ''} delay`;
+  };
+
+  const openImageViewer = (imageUrl) => {
+    setViewingImage(imageUrl);
     setViewImageModal(true);
   };
+
+ 
 
   return (
     <div className="p-3 space-y-4 md:p-6 bg-white min-h-screen">
@@ -144,6 +207,11 @@ const DischargeBill = () => {
             Process discharge bills after authority approval
           </p>
         </div>
+        {/* {isLoading && (
+          <div className="text-sm text-gray-500 animate-pulse">
+            Loading...
+          </div>
+        )} */}
       </div>
 
       {/* Tabs */}
@@ -217,41 +285,41 @@ const DischargeBill = () => {
                         <button
                           onClick={() => handleOpenBillModal(record)}
                           className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700"
+                          disabled={isSubmitting}
                         >
                           Add Bill
                         </button>
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">
-                        {record.admissionNo}
+                        {record.admission_no}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                        {record.patientName}
+                        {record.patient_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                         {record.department}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.consultantName || 'N/A'}
+                        {record.consultant_name || 'N/A'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.staffName}
+                        {record.staff_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.dischargeDate}
+                        {record.planned5 ? new Date(record.planned5).toLocaleDateString('en-GB') : 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {record.rmo_status}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {record.rmo_name}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                          {record.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.rmoName}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {record.summaryReportImage ? (
+                        {record.summary_report_image ? (
                           <button
-                            onClick={() => openImageViewer(record.summaryReportImage)}
+                            onClick={() => openImageViewer(record.summary_report_image)}
                             className="flex items-center gap-1 px-2 py-1 text-xs text-green-600 bg-green-50 rounded hover:bg-green-100"
+                            disabled={isSubmitting}
                           >
                             <Image className="w-3 h-3" />
                             View
@@ -262,30 +330,24 @@ const DischargeBill = () => {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          record.workFile === 'Yes'
+                          record.work_file === 'Yes'
                             ? 'bg-green-100 text-green-700'
                             : 'bg-red-100 text-red-700'
                         }`}>
-                          {record.workFile || '-'}
+                          {record.work_file || '-'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          record.concernDepartment === 'Yes'
+                          record.concern_dept === 'Yes'
                             ? 'bg-green-100 text-green-700'
                             : 'bg-red-100 text-red-700'
                         }`}>
-                          {record.concernDepartment}
+                          {record.concern_dept || '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          record.concernAuthorityWorkFile === 'Yes'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
-                          {record.concernAuthorityWorkFile || '-'}
-                        </span>
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {record.concern_authority_work_file}
                       </td>
                     </tr>
                   ))
@@ -309,23 +371,23 @@ const DischargeBill = () => {
                 <div key={record.id} className="p-4 bg-white rounded-lg border shadow-sm">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="text-sm font-medium text-green-600">{record.admissionNo}</div>
-                      <div className="font-semibold">{record.patientName}</div>
+                      <div className="text-sm font-medium text-green-600">{record.admission_no}</div>
+                      <div className="font-semibold">{record.patient_name}</div>
                     </div>
                     <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
-                      {record.status}
+                      Pending
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs my-3">
                     <div><span className="text-gray-600">Dept:</span> <strong>{record.department}</strong></div>
-                    <div><span className="text-gray-600">Consultant:</span> {record.consultantName || 'N/A'}</div>
-                    <div><span className="text-gray-600">Staff:</span> {record.staffName}</div>
-                    <div><span className="text-gray-600">Discharge:</span> {record.dischargeDate}</div>
-                    <div><span className="text-gray-600">RMO:</span> {record.rmoName}</div>
+                    <div><span className="text-gray-600">Consultant:</span> {record.consultant_name || 'N/A'}</div>
+                    <div><span className="text-gray-600">Staff:</span> {record.staff_name}</div>
+                    <div><span className="text-gray-600">Planned:</span> {record.planned5 ? new Date(record.planned5).toLocaleDateString('en-GB') : 'N/A'}</div>
+                    <div><span className="text-gray-600">RMO:</span> {record.rmo_name}</div>
                     <div><span className="text-gray-600">Authority:</span>{' '}
-                      <span className={record.concernAuthorityWorkFile === 'Yes' ? 'text-green-700' : 'text-red-700'}>
-                        {record.concernAuthorityWorkFile}
+                      <span className={record.concern_dept === 'Yes' ? 'text-green-700' : 'text-red-700'}>
+                        {record.concern_dept}
                       </span>
                     </div>
                   </div>
@@ -333,15 +395,17 @@ const DischargeBill = () => {
                   <button
                     onClick={() => handleOpenBillModal(record)}
                     className="w-full mt-3 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded hover:bg-green-700"
+                    disabled={isSubmitting}
                   >
                     Add Bill Information
                   </button>
 
-                  {record.summaryReportImage && (
+                  {record.summary_report_image && (
                     <div className="mt-3 text-right">
                       <button
-                        onClick={() => openImageViewer(record.summaryReportImage)}
+                        onClick={() => openImageViewer(record.summary_report_image)}
                         className="text-xs text-green-600 underline"
+                        disabled={isSubmitting}
                       >
                         View Summary Report →
                       </button>
@@ -377,7 +441,7 @@ const DischargeBill = () => {
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">RMO Name</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Summary Report</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Work File</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Concern Dept</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Concern dept</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Authority</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Bill Status</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Bill Image</th>
@@ -387,22 +451,22 @@ const DischargeBill = () => {
                 {historyRecords.length > 0 ? (
                   historyRecords.map((record) => (
                     <tr key={record.id} className="hover:bg-green-50">
-                      <td className="px-4 py-3 text-sm font-medium text-green-600">{record.admissionNo}</td>
-                      <td className="px-4 py-3 text-sm">{record.patientName}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-green-600">{record.admission_no}</td>
+                      <td className="px-4 py-3 text-sm">{record.patient_name}</td>
                       <td className="px-4 py-3 text-sm">{record.department}</td>
-                      <td className="px-4 py-3 text-sm">{record.consultantName || 'N/A'}</td>
-                      <td className="px-4 py-3 text-sm">{record.staffName}</td>
-                      <td className="px-4 py-3 text-sm">{record.dischargeDate}</td>
+                      <td className="px-4 py-3 text-sm">{record.consultant_name || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm">{record.staff_name}</td>
                       <td className="px-4 py-3 text-sm">
-                        <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
-                          {record.status}
-                        </span>
+                        {record.planned5 ? new Date(record.planned5).toLocaleDateString('en-GB') : 'N/A'}
                       </td>
-                      <td className="px-4 py-3 text-sm">{record.rmoName}</td>
                       <td className="px-4 py-3 text-sm">
-                        {record.summaryReportImage ? (
+                        {record.rmo_status}
+                      </td>
+                      <td className="px-4 py-3 text-sm">{record.rmo_name}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {record.summary_report_image ? (
                           <button
-                            onClick={() => openImageViewer(record.summaryReportImage)}
+                            onClick={() => openImageViewer(record.summary_report_image)}
                             className="flex items-center gap-1 text-xs text-green-600"
                           >
                             <Image className="w-4 h-4" /> View
@@ -411,44 +475,36 @@ const DischargeBill = () => {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`px-2 py-1 text-xs rounded-full ${
-                          record.workFile === 'Yes'
+                          record.work_file === 'Yes'
                             ? 'bg-green-100 text-green-700'
                             : 'bg-red-100 text-red-700'
                         }`}>
-                          {record.workFile || '-'}
+                          {record.work_file || '-'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`px-2 py-1 text-xs rounded-full ${
-                          record.concernDepartment === 'Yes'
+                          record.concern_dept === 'Yes'
                             ? 'bg-green-100 text-green-700'
                             : 'bg-red-100 text-red-700'
                         }`}>
-                          {record.concernDepartment}
+                          {record.concern_dept || '-'}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-sm">{record.concern_authority_work_file}</td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`px-2 py-1 text-xs rounded-full ${
-                          record.concernAuthorityWorkFile === 'Yes'
+                          record.bill_status === 'Yes'
                             ? 'bg-green-100 text-green-700'
                             : 'bg-red-100 text-red-700'
                         }`}>
-                          {record.concernAuthorityWorkFile || '-'}
+                          {record.bill_status || '-'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          record.billStatus === 'Yes'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
-                          {record.billStatus || '-'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {record.billImage ? (
+                        {record.bill_image ? (
                           <button
-                            onClick={() => openImageViewer(record.billImage)}
+                            onClick={() => openImageViewer(record.bill_image)}
                             className="flex items-center gap-1 text-xs text-green-600"
                           >
                             <Image className="w-4 h-4" /> View
@@ -475,24 +531,29 @@ const DischargeBill = () => {
               <div key={record.id} className="p-4 bg-white rounded-lg border">
                 <div className="flex justify-between">
                   <div>
-                    <div className="text-sm font-medium text-green-600">{record.admissionNo}</div>
-                    <div className="font-semibold">{record.patientName}</div>
+                    <div className="text-sm font-medium text-green-600">{record.admission_no}</div>
+                    <div className="font-semibold">{record.patient_name}</div>
                   </div>
-                  <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
-                    {record.status}
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    record.delay5 === 'On Time' || !record.delay5
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}>
+                    {record.delay5 || 'N/A'}
                   </span>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <div>Dept: <strong>{record.department}</strong></div>
-                  <div>Consultant: {record.consultantName || 'N/A'}</div>
-                  <div>Staff: {record.staffName}</div>
-                  <div>Discharge: {record.dischargeDate}</div>
-                  <div>Authority: <strong className={record.concernAuthorityWorkFile === 'Yes' ? 'text-green-700' : 'text-red-700'}>{record.concernAuthorityWorkFile}</strong></div>
-                  <div>Bill Status: <strong className={record.billStatus === 'Yes' ? 'text-green-700' : 'text-red-700'}>{record.billStatus}</strong></div>
+                  <div>Consultant: {record.consultant_name || 'N/A'}</div>
+                  <div>Staff: {record.staff_name}</div>
+                  <div>Planned: {record.planned5 ? new Date(record.planned5).toLocaleDateString('en-GB') : 'N/A'}</div>
+                  <div>Actual: {record.actual5 ? new Date(record.actual5).toLocaleDateString('en-GB') : 'N/A'}</div>
+                  <div>Authority: <strong className={record.concern_dept === 'Yes' ? 'text-green-700' : 'text-red-700'}>{record.concern_dept}</strong></div>
+                  <div>Bill Status: <strong className={record.bill_status === 'Yes' ? 'text-green-700' : 'text-red-700'}>{record.bill_status}</strong></div>
                 </div>
-                {record.billImage && (
+                {record.bill_image && (
                   <div className="mt-3 text-right">
-                    <button onClick={() => openImageViewer(record.billImage)} className="text-xs text-green-600 underline">
+                    <button onClick={() => openImageViewer(record.bill_image)} className="text-xs text-green-600 underline">
                       View Bill Image →
                     </button>
                   </div>
@@ -532,7 +593,7 @@ const DischargeBill = () => {
                   </label>
                   <input
                     type="text"
-                    value={selectedRecord.admissionNo}
+                    value={selectedRecord.admission_no}
                     disabled
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
                   />
@@ -544,7 +605,7 @@ const DischargeBill = () => {
                   </label>
                   <input
                     type="text"
-                    value={selectedRecord.patientName}
+                    value={selectedRecord.patient_name}
                     disabled
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
                   />
@@ -568,7 +629,7 @@ const DischargeBill = () => {
                   </label>
                   <input
                     type="text"
-                    value={selectedRecord.consultantName || 'N/A'}
+                    value={selectedRecord.consultant_name || 'N/A'}
                     disabled
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
                   />
@@ -584,6 +645,7 @@ const DischargeBill = () => {
                   value={billStatus}
                   onChange={(e) => setBillStatus(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  disabled={isSubmitting}
                 >
                   <option value="">Select Bill Status</option>
                   <option value="Yes">Yes</option>
@@ -607,10 +669,11 @@ const DischargeBill = () => {
                         />
                         <button
                           onClick={() => {
-                            setBillImage(null);
+                            setBillImageFile(null);
                             setBillImagePreview('');
                           }}
                           className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full hover:bg-red-700"
+                          disabled={isSubmitting}
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -626,6 +689,7 @@ const DischargeBill = () => {
                               accept="image/*"
                               onChange={handleBillImageUpload}
                               className="sr-only"
+                              disabled={isSubmitting}
                             />
                           </label>
                           <p className="pl-1">or drag and drop</p>
@@ -642,14 +706,18 @@ const DischargeBill = () => {
                 <button
                   onClick={handleCloseBillModal}
                   className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSubmitBill}
-                  className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                  disabled={isSubmitting}
+                  className={`flex-1 px-4 py-2.5 text-white rounded-lg font-medium ${
+                    isSubmitting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+                  }`}
                 >
-                  Submit Bill
+                  {isSubmitting ? 'Uploading Image...' : 'Submit Bill'}
                 </button>
               </div>
             </div>

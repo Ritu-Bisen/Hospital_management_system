@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, CheckCircle, XCircle, FileText, X, Download, Edit, Save, Trash2, Plus } from 'lucide-react';
+import supabase from '../../../SupabaseClient'; // Adjust the path as needed
 
 const DUMMY_MEDICINE_NAMES = [
   'Paracetamol 500mg',
@@ -65,375 +66,552 @@ const PharmacyApproval = () => {
   const [pendingIndents, setPendingIndents] = useState([]);
   const [historyIndents, setHistoryIndents] = useState([]);
   const [statusChanges, setStatusChanges] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [realtimeChannel, setRealtimeChannel] = useState(null);
 
-  // Load data from localStorage
+  // Parse JSON fields from Supabase
+  const parseJsonField = (field) => {
+    try {
+      return field ? JSON.parse(field) : {};
+    } catch (error) {
+      console.error('Error parsing JSON field:', error);
+      return {};
+    }
+  };
+
+  // Load data from Supabase
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load pending indents (status = 'pending')
+      const { data: pendingData, error: pendingError } = await supabase
+        .from('pharmacy')
+        .select('*')
+        .not('planned1', 'is', null)
+        .is('actual1', null)
+        .eq('status', 'pending')
+        .order('timestamp', { ascending: false });
+
+      if (pendingError) throw pendingError;
+      
+      const formattedPending = (pendingData || []).map(indent => ({
+        id: indent.id,
+        indentNumber: indent.indent_no,
+        admissionNumber: indent.admission_number,
+        ipdNumber: indent.ipd_number,
+        staffName: indent.staff_name,
+        consultantName: indent.consultant_name,
+        patientName: indent.patient_name,
+        uhidNumber: indent.uhid_number,
+        age: indent.age,
+        gender: indent.gender,
+        wardLocation: indent.ward_location,
+        category: indent.category,
+        room: indent.room,
+        diagnosis: indent.diagnosis,
+        requestTypes: parseJsonField(indent.request_types),
+        medicines: parseJsonField(indent.medicines) || [],
+        investigations: parseJsonField(indent.investigations) || [],
+        investigationAdvice: parseJsonField(indent.investigation_advice),
+        timestamp: indent.timestamp,
+        status: indent.status
+      }));
+
+      setPendingIndents(formattedPending);
+
+      // Load history indents (status = 'approved' or 'rejected')
+      const { data: historyData, error: historyError } = await supabase
+        .from('pharmacy')
+        .select('*')
+        .not('actual1', 'is', null)
+        .not('planned1', 'is', null)
+        .in('status', ['approved', 'rejected'])
+        .order('actual1', { ascending: false });
+
+      if (historyError) throw historyError;
+      
+      const formattedHistory = (historyData || []).map(indent => ({
+        id: indent.id,
+        indentNumber: indent.indent_no,
+        admissionNumber: indent.admission_number,
+        ipdNumber: indent.ipd_number,
+        staffName: indent.staff_name,
+        consultantName: indent.consultant_name,
+        patientName: indent.patient_name,
+        uhidNumber: indent.uhid_number,
+        age: indent.age,
+        gender: indent.gender,
+        wardLocation: indent.ward_location,
+        category: indent.category,
+        room: indent.room,
+        diagnosis: indent.diagnosis,
+        requestTypes: parseJsonField(indent.request_types),
+        medicines: parseJsonField(indent.medicines) || [],
+        investigations: parseJsonField(indent.investigations) || [],
+        investigationAdvice: parseJsonField(indent.investigation_advice),
+        timestamp: indent.timestamp,
+        status: indent.status,
+        slipImage: indent.slip_image,
+        slipImageUrl: indent.slip_image_url,
+        approvedAt: indent.approved_at,
+        rejectedAt: indent.rejected_at,
+        approvedBy: indent.approved_by,
+        updatedAt: indent.updated_at
+      }));
+
+      setHistoryIndents(formattedHistory);
+
+    } catch (error) {
+      console.error('Error loading data:', error);
+      alert(`Error loading data: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Setup realtime subscription
   useEffect(() => {
-    const loadData = () => {
-      const savedIndents = localStorage.getItem('pharmacyIndents');
-      const allIndents = savedIndents ? JSON.parse(savedIndents) : [];
-
-      const savedHistory = localStorage.getItem('pharmacyApprovalHistory');
-      const history = savedHistory ? JSON.parse(savedHistory) : [];
-
-      const approvedIds = history.map(h => h.indentNumber);
-      const pending = allIndents.filter(indent => !approvedIds.includes(indent.indentNumber));
-
-      setPendingIndents(pending);
-      setHistoryIndents(history);
-    };
-
     loadData();
-    const interval = setInterval(loadData, 2000);
-    return () => clearInterval(interval);
+    
+    const channel = supabase
+      .channel('pharmacy_approval_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pharmacy'
+        },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
+
+    setRealtimeChannel(channel);
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   // Handle status dropdown change
-  const handleStatusChange = (indentNumber, status) => {
+  const handleStatusChange = (indentId, indentNumber, status) => {
     setStatusChanges(prev => ({
       ...prev,
-      [indentNumber]: status
+      [indentId]: { status, indentNumber }
     }));
   };
 
-  // Save status changes
-  const handleSaveStatusChanges = () => {
+  // Upload slip image to Supabase Storage
+  const uploadSlipToStorage = async (slipImageBase64, indentNumber) => {
+    try {
+      // Convert base64 to blob
+      const base64Response = await fetch(slipImageBase64);
+      const blob = await base64Response.blob();
+      
+      // Create a file from blob
+      const fileName = `pharmacy_slip_${indentNumber}_${Date.now()}.png`;
+      
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('slip_image') // Your bucket name
+        .upload(fileName, blob, {
+          contentType: 'image/png',
+          upsert: true
+        });
+
+      if (error) {
+        console.error('Error uploading to storage:', error);
+        return null;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('slip_image')
+        .getPublicUrl(fileName);
+
+      return publicUrl;
+
+    } catch (error) {
+      console.error('Error in uploadSlipToStorage:', error);
+      return null;
+    }
+  };
+
+  // Save status changes to Supabase
+  const handleSaveStatusChanges = async () => {
     if (Object.keys(statusChanges).length === 0) {
       alert('No changes to save');
       return;
     }
 
-    const indentsToProcess = pendingIndents.filter(indent => 
-      statusChanges[indent.indentNumber]
-    );
-
-    const processedIndents = indentsToProcess.map(indent => {
-      const status = statusChanges[indent.indentNumber];
+    try {
+      setLoading(true);
       
-      if (status === 'Approved') {
-        return {
-          ...indent,
-          status: 'Approved',
-          approvedAt: new Date().toISOString(),
-          slipImage: generateSlipImage(indent)
+      // Process each status change
+      for (const [id, { status, indentNumber }] of Object.entries(statusChanges)) {
+        const indent = pendingIndents.find(p => p.id === parseInt(id));
+        const updateData = {
+          status: status.toLowerCase(),
+          actual1:  new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
+        planned2: new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
         };
-      } else {
-        return {
-          ...indent,
-          status: 'Rejected',
-          rejectedAt: new Date().toISOString(),
-          slipImage: null
-        };
+
+        if (status === 'Approved') {
+          const user=localStorage.getItem("mis_user");
+          updateData.approved_by = user.name;
+          
+          // Generate slip image
+          const slipImageBase64 = generateSlipImage(indent);
+          
+          // First update with base64 (for immediate use)
+          // updateData.slip_image = slipImageBase64;
+          
+          // Then upload to storage and update with URL
+          try {
+            const slipImageUrl = await uploadSlipToStorage(slipImageBase64, indentNumber);
+            if (slipImageUrl) {
+              updateData.slip_image = slipImageUrl;
+            }
+          } catch (uploadError) {
+            console.error('Failed to upload slip to storage:', uploadError);
+            // Continue even if storage upload fails
+          }
+        }
+
+        // Update the database
+        const { error } = await supabase
+          .from('pharmacy')
+          .update(updateData)
+          .eq('id', id);
+
+        if (error) {
+          console.error(`Error updating indent ${id}:`, error);
+          throw new Error(`Failed to update indent ${indentNumber}`);
+        }
       }
-    });
 
-    const updatedHistory = [...processedIndents, ...historyIndents];
-    setHistoryIndents(updatedHistory);
-    localStorage.setItem('pharmacyApprovalHistory', JSON.stringify(updatedHistory));
+      // Clear status changes
+      setStatusChanges({});
+      
+      // Reload data
+      await loadData();
+      
+      alert(`${Object.keys(statusChanges).length} indent(s) processed successfully!`);
 
-    const updatedPending = pendingIndents.filter(p => 
-      !statusChanges[p.indentNumber]
-    );
-    setPendingIndents(updatedPending);
-    setStatusChanges({});
-
-    alert(`${processedIndents.length} indent(s) processed successfully!`);
+    } catch (error) {
+      console.error('Error saving status changes:', error);
+      alert(`Failed to save status changes: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
-// Generate slip image
-const generateSlipImage = (indent) => {
-  const canvas = document.createElement('canvas');
-  canvas.width = 850;
-  canvas.height = 1100;
-  const ctx = canvas.getContext('2d');
+  // Generate slip image (same as before)
+  const generateSlipImage = (indent) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 850;
+    canvas.height = 1100;
+    const ctx = canvas.getContext('2d');
 
-  // Yellow background
-  ctx.fillStyle = '#FFEB3B';
-  ctx.fillRect(0, 0, 850, 1100);
-
-  // Draw main border
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(10, 10, 830, 1080);
-
-  let y = 10;
-
-  // Header - Hospital Name
-  ctx.strokeRect(10, y, 830, 40);
-  ctx.fillStyle = '#000000';
-  ctx.font = 'bold 22px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('MAMTA SUPERSPECIALITY HOSPITAL', 425, y + 27);
-
-  // Subheader - Location
-  y += 40;
-  ctx.strokeRect(10, y, 830, 25);
-  ctx.font = '14px Arial';
-  ctx.fillText('Dubey Colony Mowa, Raipur (C.G)', 425, y + 17);
-
-  // Row 1: Indent No, Date, Request Type
-  y += 25;
-  ctx.strokeRect(10, y, 830, 25);
-  ctx.font = 'bold 12px Arial';
-  ctx.textAlign = 'left';
-  ctx.fillText('Indent No:', 20, y + 17);
-  ctx.fillStyle = '#FF0000';
-  ctx.font = '12px Arial';
-  ctx.fillText(indent.indentNumber, 80, y + 17);
-  
-  ctx.fillStyle = '#000000';
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('Date:', 300, y + 17);
-  ctx.font = '12px Arial';
-  ctx.fillText(new Date().toLocaleDateString('en-GB'), 335, y + 17);
-  
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('Request Type:', 520, y + 17);
-  ctx.fillStyle = '#FF0000';
-  ctx.font = '12px Arial';
-  let requestTypes = [];
-  if (indent.requestTypes.medicineSlip) requestTypes.push('Medicine Slip');
-  if (indent.requestTypes.investigation) requestTypes.push('Investigation');
-  if (indent.requestTypes.package) requestTypes.push('Package');
-  if (indent.requestTypes.nonPackage) requestTypes.push('Non-Package');
-  ctx.fillText(requestTypes.join(', '), 620, y + 17);
-
-  // Row 2: Patient Name, Age, Gender
-  y += 25;
-  ctx.strokeRect(10, y, 830, 25);
-  ctx.fillStyle = '#000000';
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('Patient Name:', 20, y + 17);
-  ctx.font = '12px Arial';
-  ctx.fillText(indent.patientName.toUpperCase(), 110, y + 17);
-  
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('Age:', 480, y + 17);
-  ctx.font = '12px Arial';
-  ctx.fillText(indent.age.toString(), 510, y + 17);
-  
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('Gender:', 620, y + 17);
-  ctx.font = '12px Arial';
-  ctx.fillText(indent.gender, 675, y + 17);
-
-  // Row 3: UHID, Diagnosis, Ward Type
-  y += 25;
-  ctx.strokeRect(10, y, 830, 25);
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('UHID No:', 20, y + 17);
-  ctx.font = '12px Arial';
-  ctx.fillText(indent.uhidNumber, 75, y + 17);
-  
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('Diagnosis:', 250, y + 17);
-  ctx.fillStyle = '#FF0000';
-  ctx.font = '12px Arial';
-  ctx.fillText(indent.diagnosis, 325, y + 17);
-  
-  ctx.fillStyle = '#000000';
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('Ward Type:', 620, y + 17);
-  ctx.font = '12px Arial';
-  ctx.fillText(indent.room, 695, y + 17);
-
-  // Row 4: Consultant, Nursing Staff, Category
-  y += 25;
-  ctx.strokeRect(10, y, 830, 25);
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('Consultant Name:', 20, y + 17);
-  ctx.font = '12px Arial';
-  ctx.fillText(indent.consultantName, 135, y + 17);
-  
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('Nursing Staff:', 380, y + 17);
-  ctx.font = '12px Arial';
-  ctx.fillText(indent.staffName, 470, y + 17);
-  
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('Category:', 650, y + 17);
-  ctx.font = '12px Arial';
-  ctx.fillText(indent.category, 720, y + 17);
-
-  y += 25;
-
-  // Medicine Slip Section
-  if (indent.requestTypes.medicineSlip && indent.medicines.length > 0) {
-    // Medicine Table Header
-    ctx.strokeRect(10, y, 830, 30);
+    // Yellow background
     ctx.fillStyle = '#FFEB3B';
-    ctx.fillRect(10, y, 830, 30);
-    
-    // Column headers
-    ctx.strokeRect(10, y, 80, 30); // Serial Number
-    ctx.strokeRect(90, y, 520, 30); // Medicine Name
-    ctx.strokeRect(610, y, 230, 30); // Quantity
-    
+    ctx.fillRect(0, 0, 850, 1100);
+
+    // Draw main border
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(10, 10, 830, 1080);
+
+    let y = 10;
+
+    // Header - Hospital Name
+    ctx.strokeRect(10, y, 830, 40);
     ctx.fillStyle = '#000000';
-    ctx.font = 'bold 13px Arial';
+    ctx.font = 'bold 22px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('SN', 50, y + 20);
-    ctx.fillText('Medicine Name', 350, y + 20);
-    ctx.fillText('Quantity', 725, y + 20);
+    ctx.fillText('MAMTA SUPERSPECIALITY HOSPITAL', 425, y + 27);
 
-    // Medicine rows
-    y += 30;
-    const rowHeight = 25;
-    indent.medicines.forEach((med, index) => {
-      ctx.strokeRect(10, y, 80, rowHeight);
-      ctx.strokeRect(90, y, 520, rowHeight);
-      ctx.strokeRect(610, y, 230, rowHeight);
-      
-      ctx.fillStyle = '#000000';
-      ctx.font = '12px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText((index + 1).toString(), 50, y + 17);
-      ctx.textAlign = 'left';
-      ctx.fillText(med.name.toUpperCase(), 100, y + 17);
-      ctx.textAlign = 'center';
-      ctx.fillText(med.quantity.toString(), 725, y + 17);
-      
-      y += rowHeight;
-    });
+    // Subheader - Location
+    y += 40;
+    ctx.strokeRect(10, y, 830, 25);
+    ctx.font = '14px Arial';
+    ctx.fillText('Dubey Colony Mowa, Raipur (C.G)', 425, y + 17);
 
-    // Add empty rows to maintain consistent height (total 15 rows)
-    const emptyRows = Math.max(0, 15 - indent.medicines.length);
-    for (let i = 0; i < emptyRows; i++) {
-      ctx.strokeRect(10, y, 80, rowHeight);
-      ctx.strokeRect(90, y, 520, rowHeight);
-      ctx.strokeRect(610, y, 230, rowHeight);
-      y += rowHeight;
-    }
-  }
-
-  // Investigation Advice Section
-  if (indent.requestTypes.investigation && indent.investigationAdvice) {
-    // Investigation header
-    ctx.strokeRect(10, y, 830, 30);
-    ctx.fillStyle = '#FFEB3B';
-    ctx.fillRect(10, y, 830, 30);
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 14px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('INVESTIGATION ADVICE', 425, y + 20);
-
-    y += 30;
-
-    // Category and Priority row
+    // Row 1: Indent No, Date, Request Type
+    y += 25;
     ctx.strokeRect(10, y, 830, 25);
     ctx.font = 'bold 12px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText('Category:', 20, y + 17);
+    ctx.fillText('Indent No:', 20, y + 17);
+    ctx.fillStyle = '#FF0000';
     ctx.font = '12px Arial';
-    ctx.fillText(indent.investigationAdvice.adviceCategory, 90, y + 17);
+    ctx.fillText(indent.indentNumber, 80, y + 17);
+    
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('Date:', 300, y + 17);
+    ctx.font = '12px Arial';
+    ctx.fillText(new Date().toLocaleDateString('en-GB'), 335, y + 17);
     
     ctx.font = 'bold 12px Arial';
-    ctx.fillText('Priority:', 400, y + 17);
+    ctx.fillText('Request Type:', 520, y + 17);
+    ctx.fillStyle = '#FF0000';
     ctx.font = '12px Arial';
-    ctx.fillText(indent.investigationAdvice.priority, 460, y + 17);
+    let requestTypes = [];
+    if (indent.requestTypes.medicineSlip) requestTypes.push('Medicine Slip');
+    if (indent.requestTypes.investigation) requestTypes.push('Investigation');
+    if (indent.requestTypes.package) requestTypes.push('Package');
+    if (indent.requestTypes.nonPackage) requestTypes.push('Non-Package');
+    ctx.fillText(requestTypes.join(', '), 620, y + 17);
+
+    // Row 2: Patient Name, Age, Gender
+    y += 25;
+    ctx.strokeRect(10, y, 830, 25);
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('Patient Name:', 20, y + 17);
+    ctx.font = '12px Arial';
+    ctx.fillText(indent.patientName.toUpperCase(), 110, y + 17);
+    
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('Age:', 480, y + 17);
+    ctx.font = '12px Arial';
+    ctx.fillText(indent.age.toString(), 510, y + 17);
+    
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('Gender:', 620, y + 17);
+    ctx.font = '12px Arial';
+    ctx.fillText(indent.gender, 675, y + 17);
+
+    // Row 3: UHID, Diagnosis, Ward Type
+    y += 25;
+    ctx.strokeRect(10, y, 830, 25);
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('UHID No:', 20, y + 17);
+    ctx.font = '12px Arial';
+    ctx.fillText(indent.uhidNumber, 75, y + 17);
+    
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('Diagnosis:', 250, y + 17);
+    ctx.fillStyle = '#FF0000';
+    ctx.font = '12px Arial';
+    ctx.fillText(indent.diagnosis, 325, y + 17);
+    
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('Ward Type:', 620, y + 17);
+    ctx.font = '12px Arial';
+    ctx.fillText(indent.room, 695, y + 17);
+
+    // Row 4: Consultant, Nursing Staff, Category
+    y += 25;
+    ctx.strokeRect(10, y, 830, 25);
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('Consultant Name:', 20, y + 17);
+    ctx.font = '12px Arial';
+    ctx.fillText(indent.consultantName, 135, y + 17);
+    
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('Nursing Staff:', 380, y + 17);
+    ctx.font = '12px Arial';
+    ctx.fillText(indent.staffName, 470, y + 17);
+    
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('Category:', 650, y + 17);
+    ctx.font = '12px Arial';
+    ctx.fillText(indent.category, 720, y + 17);
 
     y += 25;
 
-    // Pathology Tests
-    if (indent.investigationAdvice.adviceCategory === 'Pathology' && 
-        indent.investigationAdvice.pathologyTests?.length > 0) {
-      ctx.strokeRect(10, y, 830, 25);
-      ctx.font = 'bold 12px Arial';
-      ctx.fillText('Pathology Tests:', 20, y + 17);
-      y += 25;
+    // Medicine Slip Section
+    if (indent.requestTypes.medicineSlip && indent.medicines.length > 0) {
+      // Medicine Table Header
+      ctx.strokeRect(10, y, 830, 30);
+      ctx.fillStyle = '#FFEB3B';
+      ctx.fillRect(10, y, 830, 30);
+      
+      // Column headers
+      ctx.strokeRect(10, y, 80, 30); // Serial Number
+      ctx.strokeRect(90, y, 520, 30); // Medicine Name
+      ctx.strokeRect(610, y, 230, 30); // Quantity
+      
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 13px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('SN', 50, y + 20);
+      ctx.fillText('Medicine Name', 350, y + 20);
+      ctx.fillText('Quantity', 725, y + 20);
 
-      // List tests with proper wrapping
-      const testsText = indent.investigationAdvice.pathologyTests.join(', ');
-      ctx.strokeRect(10, y, 830, 100);
-      ctx.font = '11px Arial';
-      
-      const words = testsText.split(' ');
-      let line = '';
-      let lineY = y + 15;
-      const maxWidth = 800;
-      
-      words.forEach(word => {
-        const testLine = line + word + ' ';
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && line !== '') {
-          ctx.fillText(line, 20, lineY);
-          line = word + ' ';
-          lineY += 15;
-        } else {
-          line = testLine;
-        }
+      // Medicine rows
+      y += 30;
+      const rowHeight = 25;
+      indent.medicines.forEach((med, index) => {
+        ctx.strokeRect(10, y, 80, rowHeight);
+        ctx.strokeRect(90, y, 520, rowHeight);
+        ctx.strokeRect(610, y, 230, rowHeight);
+        
+        ctx.fillStyle = '#000000';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText((index + 1).toString(), 50, y + 17);
+        ctx.textAlign = 'left';
+        ctx.fillText(med.name.toUpperCase(), 100, y + 17);
+        ctx.textAlign = 'center';
+        ctx.fillText(med.quantity.toString(), 725, y + 17);
+        
+        y += rowHeight;
       });
-      ctx.fillText(line, 20, lineY);
-      y += 100;
+
+      // Add empty rows to maintain consistent height (total 15 rows)
+      const emptyRows = Math.max(0, 15 - indent.medicines.length);
+      for (let i = 0; i < emptyRows; i++) {
+        ctx.strokeRect(10, y, 80, rowHeight);
+        ctx.strokeRect(90, y, 520, rowHeight);
+        ctx.strokeRect(610, y, 230, rowHeight);
+        y += rowHeight;
+      }
     }
 
-    // Radiology Tests
-    if (indent.investigationAdvice.adviceCategory === 'Radiology' && 
-        indent.investigationAdvice.radiologyTests?.length > 0) {
+    // Investigation Advice Section
+    if (indent.requestTypes.investigation && indent.investigationAdvice) {
+      // Investigation header
+      ctx.strokeRect(10, y, 830, 30);
+      ctx.fillStyle = '#FFEB3B';
+      ctx.fillRect(10, y, 830, 30);
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('INVESTIGATION ADVICE', 425, y + 20);
+
+      y += 30;
+
+      // Category and Priority row
       ctx.strokeRect(10, y, 830, 25);
       ctx.font = 'bold 12px Arial';
-      ctx.fillText(`${indent.investigationAdvice.radiologyType} Tests:`, 20, y + 17);
-      y += 25;
-
-      // List tests
-      const testsText = indent.investigationAdvice.radiologyTests.join(', ');
-      ctx.strokeRect(10, y, 830, 100);
-      ctx.font = '11px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('Category:', 20, y + 17);
+      ctx.font = '12px Arial';
+      ctx.fillText(indent.investigationAdvice.adviceCategory, 90, y + 17);
       
-      const words = testsText.split(' ');
-      let line = '';
-      let lineY = y + 15;
-      const maxWidth = 800;
-      
-      words.forEach(word => {
-        const testLine = line + word + ' ';
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && line !== '') {
-          ctx.fillText(line, 20, lineY);
-          line = word + ' ';
-          lineY += 15;
-        } else {
-          line = testLine;
-        }
-      });
-      ctx.fillText(line, 20, lineY);
-      y += 100;
-    }
-
-    // Remarks
-    if (indent.investigationAdvice.remarks) {
-      ctx.strokeRect(10, y, 830, 25);
       ctx.font = 'bold 12px Arial';
-      ctx.fillText('Remarks:', 20, y + 17);
+      ctx.fillText('Priority:', 400, y + 17);
+      ctx.font = '12px Arial';
+      ctx.fillText(indent.investigationAdvice.priority, 460, y + 17);
+
       y += 25;
 
-      ctx.strokeRect(10, y, 830, 60);
-      ctx.font = '11px Arial';
-      ctx.fillText(indent.investigationAdvice.remarks, 20, y + 15);
-      y += 60;
+      // Pathology Tests
+      if (indent.investigationAdvice.adviceCategory === 'Pathology' && 
+          indent.investigationAdvice.pathologyTests?.length > 0) {
+        ctx.strokeRect(10, y, 830, 25);
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText('Pathology Tests:', 20, y + 17);
+        y += 25;
+
+        // List tests with proper wrapping
+        const testsText = indent.investigationAdvice.pathologyTests.join(', ');
+        ctx.strokeRect(10, y, 830, 100);
+        ctx.font = '11px Arial';
+        
+        const words = testsText.split(' ');
+        let line = '';
+        let lineY = y + 15;
+        const maxWidth = 800;
+        
+        words.forEach(word => {
+          const testLine = line + word + ' ';
+          const metrics = ctx.measureText(testLine);
+          if (metrics.width > maxWidth && line !== '') {
+            ctx.fillText(line, 20, lineY);
+            line = word + ' ';
+            lineY += 15;
+          } else {
+            line = testLine;
+          }
+        });
+        ctx.fillText(line, 20, lineY);
+        y += 100;
+      }
+
+      // Radiology Tests
+      if (indent.investigationAdvice.adviceCategory === 'Radiology' && 
+          indent.investigationAdvice.radiologyTests?.length > 0) {
+        ctx.strokeRect(10, y, 830, 25);
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText(`${indent.investigationAdvice.radiologyType} Tests:`, 20, y + 17);
+        y += 25;
+
+        // List tests
+        const testsText = indent.investigationAdvice.radiologyTests.join(', ');
+        ctx.strokeRect(10, y, 830, 100);
+        ctx.font = '11px Arial';
+        
+        const words = testsText.split(' ');
+        let line = '';
+        let lineY = y + 15;
+        const maxWidth = 800;
+        
+        words.forEach(word => {
+          const testLine = line + word + ' ';
+          const metrics = ctx.measureText(testLine);
+          if (metrics.width > maxWidth && line !== '') {
+            ctx.fillText(line, 20, lineY);
+            line = word + ' ';
+            lineY += 15;
+          } else {
+            line = testLine;
+          }
+        });
+        ctx.fillText(line, 20, lineY);
+        y += 100;
+      }
+
+      // Remarks
+      if (indent.investigationAdvice.remarks) {
+        ctx.strokeRect(10, y, 830, 25);
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText('Remarks:', 20, y + 17);
+        y += 25;
+
+        ctx.strokeRect(10, y, 830, 60);
+        ctx.font = '11px Arial';
+        ctx.fillText(indent.investigationAdvice.remarks, 20, y + 15);
+        y += 60;
+      }
     }
-  }
 
-  // Move to footer position (always at bottom)
-  y = 1050;
+    // Move to footer position (always at bottom)
+    y = 1050;
 
-  // Footer - Prepared By and Approved By
-  ctx.strokeRect(10, y, 415, 40);
-  ctx.strokeRect(425, y, 415, 40);
-  
-  ctx.fillStyle = '#000000';
-  ctx.font = 'bold 12px Arial';
-  ctx.textAlign = 'left';
-  ctx.fillText('Prepared By', 20, y + 15);
-  ctx.font = '11px Arial';
-  ctx.fillText(indent.staffName, 20, y + 32);
-  
-  ctx.font = 'bold 12px Arial';
-  ctx.fillText('Approved By', 435, y + 15);
-  ctx.font = '11px Arial';
-  ctx.fillText(indent.consultantName || 'Pharmacy', 435, y + 32);
+    // Footer - Prepared By and Approved By
+    ctx.strokeRect(10, y, 415, 40);
+    ctx.strokeRect(425, y, 415, 40);
+    
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('Prepared By', 20, y + 15);
+    ctx.font = '11px Arial';
+    ctx.fillText(indent.staffName, 20, y + 32);
+    
+    ctx.font = 'bold 12px Arial';
+    ctx.fillText('Approved By', 435, y + 15);
+    ctx.font = '11px Arial';
+    ctx.fillText(indent.consultantName || 'Pharmacy', 435, y + 32);
 
-  return canvas.toDataURL('image/png');
-};
+    return canvas.toDataURL('image/png');
+  };
 
   const handleView = (indent) => {
     setSelectedIndent(indent);
@@ -540,7 +718,7 @@ const generateSlipImage = (indent) => {
     }
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editFormData.diagnosis) {
       alert('Please enter Diagnosis');
       return;
@@ -557,31 +735,38 @@ const generateSlipImage = (indent) => {
       return;
     }
 
-    // Update in pharmacyIndents localStorage
-    const savedIndents = localStorage.getItem('pharmacyIndents');
-    const allIndents = savedIndents ? JSON.parse(savedIndents) : [];
-    
-    const updatedAllIndents = allIndents.map(indent =>
-      indent.indentNumber === editFormData.indentNumber
-        ? { ...editFormData, updatedAt: new Date().toISOString() }
-        : indent
-    );
-    
-    localStorage.setItem('pharmacyIndents', JSON.stringify(updatedAllIndents));
+    try {
+      setLoading(true);
 
-    // Update pending indents state
-    const updatedPending = pendingIndents.map(indent =>
-      indent.indentNumber === editFormData.indentNumber
-        ? { ...editFormData, updatedAt: new Date().toISOString() }
-        : indent
-    );
-    
-    setPendingIndents(updatedPending);
-    setEditModal(false);
-    setEditFormData(null);
-    setSelectedIndent(null);
-    
-    alert('Indent updated successfully!');
+      const updateData = {
+        diagnosis: editFormData.diagnosis,
+        medicines: JSON.stringify(editFormData.medicines),
+        investigation_advice: JSON.stringify(editFormData.investigationAdvice),
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('pharmacy')
+        .update(updateData)
+        .eq('id', editFormData.id);
+
+      if (error) throw error;
+
+      // Refresh data
+      await loadData();
+      
+      setEditModal(false);
+      setEditFormData(null);
+      setSelectedIndent(null);
+      
+      alert('Indent updated successfully!');
+
+    } catch (error) {
+      console.error('Error updating indent:', error);
+      alert(`Failed to update indent: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleViewSlip = (indent) => {
@@ -589,11 +774,23 @@ const generateSlipImage = (indent) => {
     setSlipModal(true);
   };
 
-  const downloadSlip = (indent) => {
-    const link = document.createElement('a');
-    link.download = `Pharmacy_Slip_${indent.indentNumber}.png`;
-    link.href = indent.slipImage;
-    link.click();
+  const downloadSlip = async (indent) => {
+    try {
+      let imageUrl = indent.slipImage;
+      
+      // If we have a storage URL, try to use it
+      if (indent.slipImageUrl) {
+        imageUrl = indent.slipImageUrl;
+      }
+      
+      const link = document.createElement('a');
+      link.download = `Pharmacy_Slip_${indent.indentNumber}.png`;
+      link.href = imageUrl;
+      link.click();
+    } catch (error) {
+      console.error('Error downloading slip:', error);
+      alert('Failed to download slip');
+    }
   };
 
   return (
@@ -616,6 +813,7 @@ const generateSlipImage = (indent) => {
                     ? 'border-green-500 text-green-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
+                disabled={loading}
               >
                 Pending ({pendingIndents.length})
               </button>
@@ -626,6 +824,7 @@ const generateSlipImage = (indent) => {
                     ? 'border-green-500 text-green-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
+                disabled={loading}
               >
                 History ({historyIndents.length})
               </button>
@@ -643,17 +842,27 @@ const generateSlipImage = (indent) => {
               <button
                 onClick={() => setStatusChanges({})}
                 className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                disabled={loading}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveStatusChanges}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                disabled={loading}
               >
                 <Save className="w-4 h-4" />
-                Save Changes
+                {loading ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+            <span className="text-blue-800 font-medium">Loading data...</span>
           </div>
         )}
 
@@ -679,28 +888,30 @@ const generateSlipImage = (indent) => {
                 <tbody className="divide-y divide-gray-200">
                   {pendingIndents.length > 0 ? (
                     pendingIndents.map((indent) => (
-                      <tr key={indent.indentNumber} className="hover:bg-gray-50">
+                      <tr key={indent.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4">
                           <input
                             type="checkbox"
-                            checked={!!statusChanges[indent.indentNumber]}
+                            checked={!!statusChanges[indent.id]}
                             onChange={(e) => {
                               if (!e.target.checked) {
                                 const newChanges = { ...statusChanges };
-                                delete newChanges[indent.indentNumber];
+                                delete newChanges[indent.id];
                                 setStatusChanges(newChanges);
                               } else {
-                                handleStatusChange(indent.indentNumber, 'Approved');
+                                handleStatusChange(indent.id, indent.indentNumber, 'Approved');
                               }
                             }}
                             className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                            disabled={loading}
                           />
                         </td>
                         <td className="px-6 py-4">
                           <select
-                            value={statusChanges[indent.indentNumber] || ''}
-                            onChange={(e) => handleStatusChange(indent.indentNumber, e.target.value)}
+                            value={statusChanges[indent.id]?.status || ''}
+                            onChange={(e) => handleStatusChange(indent.id, indent.indentNumber, e.target.value)}
                             className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                            disabled={loading}
                           >
                             <option value="">Select Status</option>
                             <option value="Approved">Approved</option>
@@ -735,6 +946,7 @@ const generateSlipImage = (indent) => {
                               onClick={() => handleView(indent)}
                               className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
                               title="View Details"
+                              disabled={loading}
                             >
                               <Eye className="w-4 h-4" />
                             </button>
@@ -742,6 +954,7 @@ const generateSlipImage = (indent) => {
                               onClick={() => handleEdit(indent)}
                               className="p-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors"
                               title="Edit Indent"
+                              disabled={loading}
                             >
                               <Edit className="w-4 h-4" />
                             </button>
@@ -785,7 +998,7 @@ const generateSlipImage = (indent) => {
                 <tbody className="divide-y divide-gray-200">
                   {historyIndents.length > 0 ? (
                     historyIndents.map((indent) => (
-                      <tr key={indent.indentNumber} className="hover:bg-gray-50">
+                      <tr key={indent.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 text-sm font-medium text-green-700">{indent.indentNumber}</td>
                         <td className="px-6 py-4 text-sm">{indent.admissionNumber}</td>
                         <td className="px-6 py-4 text-sm">{indent.patientName}</td>
@@ -809,7 +1022,7 @@ const generateSlipImage = (indent) => {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-sm">
-                          {indent.status === 'Approved' ? (
+                          {indent.status === 'approved' ? (
                             <span className="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
                               Approved
                             </span>
@@ -825,14 +1038,16 @@ const generateSlipImage = (indent) => {
                               onClick={() => handleView(indent)}
                               className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
                               title="View Details"
+                              disabled={loading}
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            {indent.status === 'Approved' && indent.slipImage && (
+                            {indent.status === 'approved' && (indent.slipImage || indent.slipImageUrl) && (
                               <button
                                 onClick={() => handleViewSlip(indent)}
                                 className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
                                 title="View Slip"
+                                disabled={loading}
                               >
                                 <FileText className="w-4 h-4" />
                               </button>
@@ -869,6 +1084,7 @@ const generateSlipImage = (indent) => {
                   setEditFormData(null);
                 }}
                 className="text-white hover:bg-amber-700 rounded-full p-1"
+                disabled={loading}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -902,6 +1118,7 @@ const generateSlipImage = (indent) => {
                       onChange={handleEditInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                       placeholder="Enter diagnosis"
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -926,6 +1143,7 @@ const generateSlipImage = (indent) => {
                             value={medicine.name}
                             onChange={(e) => updateMedicine(medicine.id, 'name', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                            disabled={loading}
                           >
                             <option value="">Select Medicine</option>
                             {DUMMY_MEDICINE_NAMES.map((med) => (
@@ -942,11 +1160,13 @@ const generateSlipImage = (indent) => {
                             onChange={(e) => updateMedicine(medicine.id, 'quantity', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                             placeholder="0"
+                            disabled={loading}
                           />
                         </div>
                         <button
                           onClick={() => removeMedicine(medicine.id)}
-                          className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg h-10"
+                          className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg h-10 disabled:bg-red-300"
+                          disabled={loading}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -956,7 +1176,8 @@ const generateSlipImage = (indent) => {
 
                   <button
                     onClick={addMedicine}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm w-full justify-center"
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm w-full justify-center disabled:bg-green-300"
+                    disabled={loading}
                   >
                     <Plus className="w-4 h-4" />
                     Add Medicine
@@ -978,6 +1199,7 @@ const generateSlipImage = (indent) => {
                           value={editFormData.investigationAdvice.priority}
                           onChange={handleInvestigationAdviceChange}
                           className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          disabled={loading}
                         >
                           <option value="High">High</option>
                           <option value="Medium">Medium</option>
@@ -992,6 +1214,7 @@ const generateSlipImage = (indent) => {
                           value={editFormData.investigationAdvice.adviceCategory}
                           onChange={handleInvestigationAdviceChange}
                           className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          disabled={loading}
                         >
                           <option value="">Select Category</option>
                           <option value="Pathology">Pathology</option>
@@ -1015,6 +1238,7 @@ const generateSlipImage = (indent) => {
                                   checked={editFormData.investigationAdvice.pathologyTests.includes(test)}
                                   onChange={() => handleAdviceCheckboxChange(test, 'pathology')}
                                   className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                  disabled={loading}
                                 />
                                 <span className="text-sm text-gray-700">{test}</span>
                               </label>
@@ -1034,6 +1258,7 @@ const generateSlipImage = (indent) => {
                             value={editFormData.investigationAdvice.radiologyType}
                             onChange={handleInvestigationAdviceChange}
                             className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                            disabled={loading}
                           >
                             <option value="">Select Type</option>
                             <option value="X-ray">X-ray</option>
@@ -1056,6 +1281,7 @@ const generateSlipImage = (indent) => {
                                       checked={editFormData.investigationAdvice.radiologyTests.includes(test)}
                                       onChange={() => handleAdviceCheckboxChange(test, 'radiology')}
                                       className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                      disabled={loading}
                                     />
                                     <span className="text-sm text-gray-700">{test}</span>
                                   </label>
@@ -1077,6 +1303,7 @@ const generateSlipImage = (indent) => {
                         rows="3"
                         placeholder="Add any additional notes or instructions..."
                         className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        disabled={loading}
                       />
                     </div>
                   </div>
@@ -1090,16 +1317,27 @@ const generateSlipImage = (indent) => {
                     setEditModal(false);
                     setEditFormData(null);
                   }}
-                  className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium"
+                  className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium disabled:bg-gray-100"
+                  disabled={loading}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveEdit}
-                  className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium"
+                  className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:bg-green-300"
+                  disabled={loading}
                 >
-                  <Save className="w-4 h-4" />
-                  Save Changes
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save Changes
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -1119,6 +1357,7 @@ const generateSlipImage = (indent) => {
                   setSelectedIndent(null);
                 }}
                 className="text-white hover:bg-green-700 rounded-full p-1"
+                disabled={loading}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -1210,7 +1449,7 @@ const generateSlipImage = (indent) => {
                       </thead>
                       <tbody className="divide-y divide-gray-200 bg-white">
                         {selectedIndent.medicines.map((medicine, index) => (
-                          <tr key={medicine.id}>
+                          <tr key={medicine.id || index}>
                             <td className="px-4 py-3 text-sm">{index + 1}</td>
                             <td className="px-4 py-3 text-sm font-medium">{medicine.name}</td>
                             <td className="px-4 py-3 text-sm">{medicine.quantity}</td>
@@ -1291,16 +1530,16 @@ const generateSlipImage = (indent) => {
               )}
 
               {/* Status */}
-              {selectedIndent.status && (
+              {selectedIndent.status && selectedIndent.status !== 'pending' && (
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Status</h3>
                   <div className="flex items-center gap-4">
                     <span className={`px-4 py-2 rounded-lg font-medium ${
-                      selectedIndent.status === 'Approved' 
+                      selectedIndent.status === 'approved' 
                         ? 'bg-green-100 text-green-700' 
                         : 'bg-red-100 text-red-700'
                     }`}>
-                      {selectedIndent.status}
+                      {selectedIndent.status === 'approved' ? 'Approved' : 'Rejected'}
                     </span>
                     {selectedIndent.approvedAt && (
                       <span className="text-sm text-gray-500">
@@ -1333,7 +1572,7 @@ const generateSlipImage = (indent) => {
       )}
 
       {/* Slip View Modal */}
-      {slipModal && selectedIndent && selectedIndent.slipImage && (
+      {slipModal && selectedIndent && (selectedIndent.slipImage || selectedIndent.slipImageUrl) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-green-600 text-white px-6 py-4 flex justify-between items-center">
@@ -1352,7 +1591,7 @@ const generateSlipImage = (indent) => {
             <div className="p-6">
               <div className="bg-gray-100 p-4 rounded-lg mb-4">
                 <img 
-                  src={selectedIndent.slipImage} 
+                  src={selectedIndent.slipImageUrl || selectedIndent.slipImage} 
                   alt="Pharmacy Slip" 
                   className="w-full rounded border border-gray-300"
                 />

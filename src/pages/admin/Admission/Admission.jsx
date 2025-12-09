@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Edit2, Save, UserPlus, Search, Filter } from 'lucide-react';
+import supabase from '../../../SupabaseClient';
 
-// This is the main component for the Admission page
 const Admission = () => {
   const [patients, setPatients] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -9,6 +9,7 @@ const Admission = () => {
   const [modalError, setModalError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     patientName: '',
     phoneNumber: '',
@@ -20,29 +21,53 @@ const Admission = () => {
     gender: 'Male'
   });
 
-  // Load existing patients from localStorage on component mount
+  // Load existing patients from Supabase on component mount
   useEffect(() => {
     loadPatients();
   }, []);
 
-  // Load patients from localStorage
-  const loadPatients = () => {
+  // Load patients from Supabase database
+  const loadPatients = async () => {
     try {
-      const storedPatients = localStorage.getItem('admissionPatients');
-      if (storedPatients) {
-        setPatients(JSON.parse(storedPatients));
-      }
-    } catch (error) {
-      console.log('No existing data found or failed to load:', error);
-    }
-  };
+      setIsLoading(true);
+      
+      // Fetch data from Supabase patient_admission table
+      const { data, error } = await supabase
+        .from('patient_admission')
+        .select('*')
+        .order('timestamp', { ascending: false });
 
-  // Helper function to save the patient list to localStorage
-  const saveToStorage = (updatedPatients) => {
-    try {
-      localStorage.setItem('admissionPatients', JSON.stringify(updatedPatients));
+      if (error) {
+        console.error('Error loading patients from Supabase:', error);
+        setModalError('Failed to load patient data. Please try again.');
+        return;
+      }
+
+      if (data) {
+        // Transform the data from snake_case to camelCase
+        const transformedPatients = data.map(patient => ({
+          id: patient.id,
+          admissionNo: patient.admission_no || `ADM-${patient.id?.toString().padStart(3, '0') || '001'}`,
+          patientName: patient.patient_name || '',
+          phoneNumber: patient.phone_no || '',
+          attenderName: patient.attender_name || '',
+          attenderMobile: patient.attender_mobile_no || '',
+          reasonForVisit: patient.reason_for_visit || '',
+          dateOfBirth: patient.date_of_birth || '',
+          age: patient.age || calculateAge(patient.date_of_birth),
+          gender: patient.gender || 'Male',
+          status: patient.status || 'pending',
+          timestamp: patient.timestamp || ''
+        }));
+        
+        setPatients(transformedPatients);
+      }
+      
     } catch (error) {
-      console.error('Failed to save data:', error);
+      console.error('Failed to load patients:', error);
+      setModalError('An error occurred while loading patient data.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -68,13 +93,12 @@ const Admission = () => {
     return `${day}/${month}/${year}`;
   };
 
-  // Generates a unique admission number in sequential format
+  // Generate admission number based on latest patient
   const generateAdmissionNo = () => {
     if (patients.length === 0) {
       return 'ADM-001';
     }
     
-    // Extract the highest admission number
     const admissionNumbers = patients
       .map(p => p.admissionNo)
       .filter(num => num && num.startsWith('ADM-'))
@@ -104,7 +128,6 @@ const Admission = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
-    // If DOB is changed, automatically calculate age
     if (name === 'dateOfBirth') {
       const calculatedAge = calculateAge(value);
       setFormData(prev => ({
@@ -120,30 +143,60 @@ const Admission = () => {
     }
   };
 
-  // Handles submitting the new patient form
-  const handleSubmit = () => {
-    // Validation check
+  // Submit new patient to Supabase
+  const handleSubmit = async () => {
     if (!formData.patientName || !formData.phoneNumber || !formData.attenderName || 
         !formData.attenderMobile || !formData.reasonForVisit || !formData.dateOfBirth) {
       setModalError('Please fill all required fields marked with *');
       return;
     }
 
-    const newPatient = {
-      id: Date.now(),
-      admissionNo: generateAdmissionNo(),
-      ...formData,
-      status: 'pending',
-      timestamp: new Date().toISOString()
-    };
+    setIsLoading(true);
+    setModalError('');
 
-    // Add new patient to the beginning of the list
-    const updatedPatients = [newPatient, ...patients];
-    setPatients(updatedPatients);
-    saveToStorage(updatedPatients);
-    
-    setShowModal(false);
-    resetForm();
+    try {
+      const timestamp = new Date().toLocaleString("en-CA", { 
+        timeZone: "Asia/Kolkata", 
+        hour12: false 
+      }).replace(',', '');
+      
+      const patientData = {
+        timestamp: timestamp,
+        admission_no: generateAdmissionNo(),
+        patient_name: formData.patientName.trim(),
+        phone_no: formData.phoneNumber.trim(),
+        attender_name: formData.attenderName.trim(),
+        attender_mobile_no: formData.attenderMobile.trim(),
+        reason_for_visit: formData.reasonForVisit.trim(),
+        date_of_birth: formData.dateOfBirth,
+        age: formData.age,
+        gender: formData.gender,
+        status: 'pending',
+        planned1: timestamp
+      };
+
+      const { data, error } = await supabase
+        .from('patient_admission')
+        .insert(patientData)
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        // Refresh the patient list
+        await loadPatients();
+        setShowModal(false);
+        resetForm();
+      }
+      
+    } catch (error) {
+      console.error('Error submitting patient:', error);
+      setModalError(`Failed to save patient: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Resets the form and clears errors
@@ -166,10 +219,44 @@ const Admission = () => {
     setEditingId(id);
   };
 
-  // Saves the changes after inline editing
-  const handleSaveEdit = (id) => {
-    setEditingId(null);
-    saveToStorage(patients);
+  // Saves the changes after inline editing to Supabase
+  const handleSaveEdit = async (id) => {
+    setIsLoading(true);
+    
+    try {
+      const patientToUpdate = patients.find(p => p.id === id);
+      
+      if (patientToUpdate) {
+        const updateData = {
+          patient_name: patientToUpdate.patientName.trim(),
+          phone_no: patientToUpdate.phoneNumber.trim(),
+          attender_name: patientToUpdate.attenderName.trim(),
+          attender_mobile_no: patientToUpdate.attenderMobile.trim(),
+          reason_for_visit: patientToUpdate.reasonForVisit.trim(),
+          date_of_birth: patientToUpdate.dateOfBirth,
+          age: patientToUpdate.age,
+          gender: patientToUpdate.gender
+        };
+
+        const { error } = await supabase
+          .from('patient_admission')
+          .update(updateData)
+          .eq('id', id);
+
+        if (error) {
+          throw error;
+        }
+
+        // Refresh data from Supabase
+        await loadPatients();
+        setEditingId(null);
+      }
+    } catch (error) {
+      console.error('Error updating patient:', error);
+      setModalError('Failed to update patient. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Updates the patient data in state as the user types in the inline edit fields
@@ -206,10 +293,12 @@ const Admission = () => {
           <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
             Patient Admission
           </h1>
+          {isLoading && <p className="text-sm text-gray-600 mt-1">Loading...</p>}
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex gap-2 items-center justify-center px-4 py-2.5 w-full text-white bg-green-600 rounded-lg shadow-sm transition-colors hover:bg-green-700 sm:w-auto"
+          disabled={isLoading}
+          className="flex gap-2 items-center justify-center px-4 py-2.5 w-full text-white bg-green-600 rounded-lg shadow-sm transition-colors hover:bg-green-700 disabled:bg-gray-400 sm:w-auto"
         >
           <Plus className="w-5 h-5" />
           Patient Admission
@@ -266,9 +355,19 @@ const Admission = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-y">
-              {filteredPatients.length > 0 ? (
+              {isLoading && filteredPatients.length === 0 ? (
+                <tr>
+                  <td colSpan="10" className="px-4 py-8 text-center text-gray-500">
+                    <div className="flex flex-col items-center">
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mb-4"></div>
+                      <p className="text-lg font-medium text-gray-900">Loading patients...</p>
+                      <p className="text-sm">Please wait while we fetch the data</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredPatients.length > 0 ? (
                 filteredPatients.map((patient) => (
-                 <tr key={patient.id} className="hover:bg-gray-50">
+                  <tr key={patient.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-700 whitespace-nowrap">
                       {patient.admissionNo}
                     </td>
@@ -366,15 +465,17 @@ const Admission = () => {
                       {editingId === patient.id ? (
                         <button
                           onClick={() => handleSaveEdit(patient.id)}
-                          className="flex gap-1 items-center px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700"
+                          disabled={isLoading}
+                          className="flex gap-1 items-center px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700 disabled:bg-gray-400"
                         >
                           <Save className="w-4 h-4" />
-                          Save
+                          {isLoading ? 'Saving...' : 'Save'}
                         </button>
                       ) : (
                         <button
                           onClick={() => handleEdit(patient.id)}
-                          className="flex gap-1 items-center px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700"
+                          disabled={isLoading}
+                          className="flex gap-1 items-center px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700 disabled:bg-gray-400"
                         >
                           <Edit2 className="w-4 h-4" />
                           Edit
@@ -403,7 +504,15 @@ const Admission = () => {
 
       {/* Mobile Card View */}
       <div className="space-y-3 md:hidden">
-        {filteredPatients.length > 0 ? (
+        {isLoading && filteredPatients.length === 0 ? (
+          <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="flex flex-col items-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mb-4"></div>
+              <p className="text-sm font-medium text-gray-900">Loading patients...</p>
+              <p className="text-xs text-gray-600">Please wait while we fetch the data</p>
+            </div>
+          </div>
+        ) : filteredPatients.length > 0 ? (
           filteredPatients.map((patient) => (
             <div key={patient.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
               <div className="flex justify-between items-start mb-3">
@@ -412,12 +521,12 @@ const Admission = () => {
                     {patient.admissionNo}
                   </div>
                   {editingId === patient.id ? (
-                     <input
-                        type="text"
-                        value={patient.patientName}
-                        onChange={(e) => handleEditChange(patient.id, 'patientName', e.target.value)}
-                        className="px-2 py-1 w-full text-sm font-semibold text-gray-900 border border-gray-300 rounded"
-                      />
+                    <input
+                      type="text"
+                      value={patient.patientName}
+                      onChange={(e) => handleEditChange(patient.id, 'patientName', e.target.value)}
+                      className="px-2 py-1 w-full text-sm font-semibold text-gray-900 border border-gray-300 rounded"
+                    />
                   ) : (
                     <h3 className="text-sm font-semibold text-gray-900">
                       {patient.patientName}
@@ -427,15 +536,17 @@ const Admission = () => {
                 {editingId === patient.id ? (
                   <button
                     onClick={() => handleSaveEdit(patient.id)}
-                    className="flex flex-shrink-0 gap-1 items-center px-2 py-1 text-xs text-white bg-green-600 rounded-lg shadow-sm"
+                    disabled={isLoading}
+                    className="flex flex-shrink-0 gap-1 items-center px-2 py-1 text-xs text-white bg-green-600 rounded-lg shadow-sm disabled:bg-gray-400"
                   >
                     <Save className="w-3 h-3" />
-                    Save
+                    {isLoading ? 'Saving...' : 'Save'}
                   </button>
                 ) : (
                   <button
                     onClick={() => handleEdit(patient.id)}
-                    className="flex flex-shrink-0 gap-1 items-center px-2 py-1 text-xs text-white bg-green-600 rounded-lg shadow-sm"
+                    disabled={isLoading}
+                    className="flex flex-shrink-0 gap-1 items-center px-2 py-1 text-xs text-white bg-green-600 rounded-lg shadow-sm disabled:bg-gray-400"
                   >
                     <Edit2 className="w-3 h-3" />
                     Edit
@@ -455,7 +566,7 @@ const Admission = () => {
                     value={patient.attenderName}
                     onChange={(e) => handleEditChange(patient.id, 'attenderName', e.target.value)}
                   />
-                   <EditableField
+                  <EditableField
                     label="Attender Mobile"
                     value={patient.attenderMobile}
                     onChange={(e) => handleEditChange(patient.id, 'attenderMobile', e.target.value)}
@@ -682,16 +793,18 @@ const Admission = () => {
                     setShowModal(false);
                     resetForm();
                   }}
-                  className="px-4 py-2 w-full font-medium text-gray-700 bg-gray-100 rounded-lg transition-colors hover:bg-gray-200 sm:w-auto"
+                  disabled={isLoading}
+                  className="px-4 py-2 w-full font-medium text-gray-700 bg-gray-100 rounded-lg transition-colors hover:bg-gray-200 disabled:bg-gray-300 sm:w-auto"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  className="px-4 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 sm:w-auto"
+                  disabled={isLoading}
+                  className="px-4 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 disabled:bg-gray-400 sm:w-auto"
                 >
-                  Save Patient
+                  {isLoading ? 'Saving...' : 'Save Patient'}
                 </button>
               </div>
             </div>

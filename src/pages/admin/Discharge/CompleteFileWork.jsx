@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FileCheck, X, Clock, CheckCircle, Image } from 'lucide-react';
+import { FileCheck, X, Clock, CheckCircle, Image as ImageIcon } from 'lucide-react';
+import supabase from '../../../SupabaseClient';
 
 const CompleteFileWork = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -10,32 +11,127 @@ const CompleteFileWork = () => {
   const [viewImageModal, setViewImageModal] = useState(false);
   const [viewingImage, setViewingImage] = useState(null);
   const [submitError, setSubmitError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [uploadingRecords, setUploadingRecords] = useState({});
 
   useEffect(() => {
     loadData();
+  }, [activeTab]);
 
-    const interval = setInterval(() => {
-      loadData();
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadData = () => {
+  const loadData = async () => {
+    setIsLoading(true);
     try {
-      const storedRMOInitiations = localStorage.getItem('rmoInitiations');
-      
-      if (storedRMOInitiations) {
-        const rmoInitiations = JSON.parse(storedRMOInitiations);
-        
-        const pending = rmoInitiations.filter(r => !r.fileWorkCompleted);
-        const history = rmoInitiations.filter(r => r.fileWorkCompleted);
-        
-        setPendingRecords(pending);
-        setHistoryRecords(history);
+      if (activeTab === 'pending') {
+        await loadPendingRecords();
+      } else {
+        await loadHistoryRecords();
       }
     } catch (error) {
-      console.log('Error loading data:', error);
+      console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadPendingRecords = async () => {
+    try {
+      // Fetch records where planned1 is not null AND actual1 is not null 
+      // AND work_file is null (not yet processed)
+      const { data, error } = await supabase
+        .from('discharge')
+        .select('*')
+        .not('planned2', 'is', null)
+        .is('actual2', null)
+        // .is('work_file', null)
+        .order('actual2', { ascending: false });
+
+      if (error) throw error;
+
+      // Format the data for display
+      const formattedRecords = data.map(record => ({
+        id: record.id,
+        admissionNo: record.admission_no,
+        patientName: record.patient_name,
+        department: record.department,
+        consultantName: record.consultant_name,
+        staffName: record.staff_name,
+        dischargeDate: record.actual1 ? new Date(record.actual1).toLocaleDateString('en-GB') : 'N/A',
+        dischargeTime: record.actual1 ? new Date(record.actual1).toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: false 
+        }) : 'N/A',
+        status: record.rmo_status || 'N/A',
+        rmoName: record.rmo_name || 'N/A',
+        summaryReportImage: record.summary_report_image,
+        summaryReportImageName: record.summary_report_image_name,
+        planned1: record.planned1,
+        actual1: record.actual1,
+        delay1: record.delay1,
+        remark: record.remark,
+        workFile: record.work_file,
+        fileWorkCompleted: record.work_file !== null,
+        planned2: record.planned2
+      }));
+
+      setPendingRecords(formattedRecords);
+    } catch (error) {
+      console.error('Error loading pending records:', error);
+      setPendingRecords([]);
+    }
+  };
+
+  const loadHistoryRecords = async () => {
+    try {
+      // Fetch records where planned1 is not null AND actual1 is not null 
+      // AND work_file is not null (already processed)
+      const { data, error } = await supabase
+        .from('discharge')
+        .select('*')
+        .not('planned2', 'is', null)
+        .not('actual2', 'is', null)
+        .not('work_file', 'is', null)
+        .order('planned2', { ascending: false });
+
+      if (error) throw error;
+
+      // Format the data for display
+      const formattedRecords = data.map(record => ({
+        id: record.id,
+        admissionNo: record.admission_no,
+        patientName: record.patient_name,
+        department: record.department,
+        consultantName: record.consultant_name,
+        staffName: record.staff_name,
+        dischargeDate: record.actual1 ? new Date(record.actual1).toLocaleDateString('en-GB') : 'N/A',
+        dischargeTime: record.actual1 ? new Date(record.actual1).toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: false 
+        }) : 'N/A',
+        status: record.rmo_status || 'N/A',
+        rmoName: record.rmo_name || 'N/A',
+        summaryReportImage: record.summary_report_image,
+        summaryReportImageName: record.summary_report_image_name,
+        planned1: record.planned1,
+        actual1: record.actual1,
+        delay1: record.delay1,
+        remark: record.remark,
+        workFile: record.work_file,
+        fileWorkCompleted: record.work_file !== null,
+        fileWorkDate: record.planned2 ? new Date(record.planned2).toLocaleDateString('en-GB') : 'N/A',
+        fileWorkTime: record.planned2 ? new Date(record.planned2).toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: false 
+        }) : 'N/A',
+        planned2: record.planned2
+      }));
+
+      setHistoryRecords(formattedRecords);
+    } catch (error) {
+      console.error('Error loading history records:', error);
+      setHistoryRecords([]);
     }
   };
 
@@ -53,7 +149,7 @@ const CompleteFileWork = () => {
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const selectedAdmissions = Object.keys(selectedRecords).filter(key => selectedRecords[key]);
     
     if (selectedAdmissions.length === 0) {
@@ -71,47 +167,76 @@ const CompleteFileWork = () => {
     }
 
     try {
-      const storedRMOInitiations = localStorage.getItem('rmoInitiations');
-      const rmoInitiations = storedRMOInitiations ? JSON.parse(storedRMOInitiations) : [];
-      
-      // Update the records in rmoInitiations with file work data
-      const updatedRMOInitiations = rmoInitiations.map(record => {
-        if (selectedAdmissions.includes(record.admissionNo)) {
-          return {
-            ...record,
-            workFile: workFileStatus[record.admissionNo],
-            fileWorkCompleted: true,
-            fileWorkCompletionDate: new Date().toLocaleDateString('en-GB'),
-            fileWorkCompletionTime: new Date().toLocaleTimeString('en-US', { 
-              hour: '2-digit', 
-              minute: '2-digit',
-              hour12: false 
-            }),
-            fileWorkTimestamp: new Date().toISOString()
-          };
-        }
-        return record;
+      setUploadingRecords(prev => {
+        const updated = { ...prev };
+        selectedAdmissions.forEach(admNo => {
+          updated[admNo] = true;
+        });
+        return updated;
       });
 
-      localStorage.setItem('rmoInitiations', JSON.stringify(updatedRMOInitiations));
+      const updates = [];
       
+      // Process each selected record
+      for (const admissionNo of selectedAdmissions) {
+        const record = pendingRecords.find(r => r.admissionNo === admissionNo);
+        if (!record) continue;
+
+        const updateData = {
+          work_file: workFileStatus[admissionNo],
+         actual2: new Date().toLocaleString("en-CA", { 
+            timeZone: "Asia/Kolkata", 
+            hour12: false 
+          }).replace(',', ''),
+          planned3: new Date().toLocaleString("en-CA", { 
+            timeZone: "Asia/Kolkata", 
+            hour12: false 
+          }).replace(',', ''),
+        };
+
+        updates.push(
+          supabase
+            .from('discharge')
+            .update(updateData)
+            .eq('id', record.id)
+        );
+      }
+
+      // Execute all updates
+      const results = await Promise.all(updates);
+      
+      // Check for errors
+      const errors = results.filter(result => result.error);
+      if (errors.length > 0) {
+        throw new Error(`Failed to update some records: ${errors[0].error.message}`);
+      }
+
+      // Clear selections and reload data
       setSelectedRecords({});
       setWorkFileStatus({});
       setSubmitError('');
-      loadData();
+      await loadData();
+      
     } catch (error) {
       console.error('Error saving file work:', error);
-      setSubmitError('Failed to save. Please try again.');
+      setSubmitError(error.message || 'Failed to save. Please try again.');
       setTimeout(() => setSubmitError(''), 3000);
+    } finally {
+      setUploadingRecords({});
     }
   };
 
-  const openImageViewer = (imageData) => {
-    setViewingImage(imageData);
-    setViewImageModal(true);
+  const openImageViewer = (imageUrl) => {
+    if (imageUrl) {
+      setViewingImage(imageUrl);
+      setViewImageModal(true);
+    }
   };
 
   const isAnyRecordSelected = Object.values(selectedRecords).some(val => val);
+
+  // Check if any selected records are still uploading
+  const isUploading = Object.values(uploadingRecords).some(val => val);
 
   return (
     <div className="p-3 space-y-4 md:p-6 bg-white min-h-screen">
@@ -124,6 +249,20 @@ const CompleteFileWork = () => {
           <p className="mt-1 text-sm text-gray-600">
             Manage file work completion for RMO initiated patients
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isLoading && (
+            <div className="text-sm text-gray-600 flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+              Loading...
+            </div>
+          )}
+          <button
+            onClick={loadData}
+            className="px-3 py-1.5 text-sm text-green-600 bg-green-50 rounded-lg hover:bg-green-100"
+          >
+            Refresh
+          </button>
         </div>
       </div>
 
@@ -172,15 +311,24 @@ const CompleteFileWork = () => {
         {activeTab === 'pending' && (
           <button
             onClick={handleSubmit}
-            disabled={!isAnyRecordSelected}
+            disabled={!isAnyRecordSelected || isUploading}
             className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg shadow-sm font-medium transition-all mb-[-2px] ${
-              isAnyRecordSelected
+              isAnyRecordSelected && !isUploading
                 ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
                 : 'bg-gray-400 cursor-not-allowed opacity-60'
             }`}
           >
-            <FileCheck className="w-5 h-5" />
-            Submit
+            {isUploading ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Saving...
+              </>
+            ) : (
+              <>
+                <FileCheck className="w-5 h-5" />
+                Submit
+              </>
+            )}
           </button>
         )}
       </div>
@@ -206,7 +354,7 @@ const CompleteFileWork = () => {
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Department</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Consultant</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Staff Name</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Discharge Date</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase"> Discharge Date</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Status</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">RMO Name</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Summary Report</th>
@@ -215,20 +363,25 @@ const CompleteFileWork = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {pendingRecords.length > 0 ? (
                   pendingRecords.map((record) => (
-                    <tr key={record.id} className={`hover:bg-green-50 ${selectedRecords[record.admissionNo] ? 'bg-green-50' : ''}`}>
+                    <tr key={record.id} className={`hover:bg-green-50 ${selectedRecords[record.admissionNo] ? 'bg-green-50' : ''} ${uploadingRecords[record.admissionNo] ? 'opacity-60' : ''}`}>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          checked={selectedRecords[record.admissionNo] || false}
-                          onChange={() => handleCheckboxChange(record.admissionNo)}
-                          className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                        />
+                        {uploadingRecords[record.admissionNo] ? (
+                          <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin mx-2"></div>
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={selectedRecords[record.admissionNo] || false}
+                            onChange={() => handleCheckboxChange(record.admissionNo)}
+                            className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                          />
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <select
                           value={workFileStatus[record.admissionNo] || ''}
                           onChange={(e) => handleWorkFileChange(record.admissionNo, e.target.value)}
-                          className="px-2 py-1 text-sm bg-white rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                          disabled={uploadingRecords[record.admissionNo]}
+                          className="px-2 py-1 text-sm bg-white rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="">Select</option>
                           <option value="Yes">Yes</option>
@@ -251,7 +404,7 @@ const CompleteFileWork = () => {
                         {record.staffName}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.dischargeDate}
+                        {record.dischargeDate} {record.dischargeTime}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
@@ -265,13 +418,14 @@ const CompleteFileWork = () => {
                         {record.summaryReportImage ? (
                           <button
                             onClick={() => openImageViewer(record.summaryReportImage)}
-                            className="flex items-center gap-1 px-2 py-1 text-xs text-green-600 bg-green-50 rounded hover:bg-green-100"
+                            disabled={uploadingRecords[record.admissionNo]}
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-green-600 bg-green-50 rounded hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <Image className="w-3 h-3" />
-                            View Image
+                            <ImageIcon className="w-3 h-3" />
+                            View Report
                           </button>
                         ) : (
-                          <span className="text-gray-500">No image</span>
+                          <span className="text-gray-500">No report</span>
                         )}
                       </td>
                     </tr>
@@ -293,15 +447,19 @@ const CompleteFileWork = () => {
           <div className="space-y-3 md:hidden">
             {pendingRecords.length > 0 ? (
               pendingRecords.map((record) => (
-                <div key={record.id} className={`p-4 bg-white rounded-lg border shadow-sm ${selectedRecords[record.admissionNo] ? 'border-green-400 bg-green-50' : 'border-gray-200'}`}>
+                <div key={record.id} className={`p-4 bg-white rounded-lg border shadow-sm ${selectedRecords[record.admissionNo] ? 'border-green-400 bg-green-50' : 'border-gray-200'} ${uploadingRecords[record.admissionNo] ? 'opacity-60' : ''}`}>
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-start gap-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedRecords[record.admissionNo] || false}
-                        onChange={() => handleCheckboxChange(record.admissionNo)}
-                        className="mt-1 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                      />
+                      {uploadingRecords[record.admissionNo] ? (
+                        <div className="mt-1 w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <input
+                          type="checkbox"
+                          checked={selectedRecords[record.admissionNo] || false}
+                          onChange={() => handleCheckboxChange(record.admissionNo)}
+                          className="mt-1 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                        />
+                      )}
                       <div>
                         <div className="text-xs font-medium text-green-600 mb-1">
                           {record.admissionNo}
@@ -330,8 +488,8 @@ const CompleteFileWork = () => {
                       <span className="font-medium text-gray-900">{record.staffName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Discharge Date:</span>
-                      <span className="font-medium text-gray-900">{record.dischargeDate}</span>
+                      <span className="text-gray-600">Actual Discharge:</span>
+                      <span className="font-medium text-gray-900">{record.dischargeDate} {record.dischargeTime}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">RMO Name:</span>
@@ -345,7 +503,8 @@ const CompleteFileWork = () => {
                       <select
                         value={workFileStatus[record.admissionNo] || ''}
                         onChange={(e) => handleWorkFileChange(record.admissionNo, e.target.value)}
-                        className="px-2 py-1 text-xs bg-white rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        disabled={uploadingRecords[record.admissionNo]}
+                        className="px-2 py-1 text-xs bg-white rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="">Select</option>
                         <option value="Yes">Yes</option>
@@ -358,13 +517,14 @@ const CompleteFileWork = () => {
                       {record.summaryReportImage ? (
                         <button
                           onClick={() => openImageViewer(record.summaryReportImage)}
-                          className="flex items-center gap-1 px-2 py-1 text-xs text-green-600 bg-green-50 rounded hover:bg-green-100"
+                          disabled={uploadingRecords[record.admissionNo]}
+                          className="flex items-center gap-1 px-2 py-1 text-xs text-green-600 bg-green-50 rounded hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <Image className="w-3 h-3" />
-                          View Image
+                          <ImageIcon className="w-3 h-3" />
+                          View Report
                         </button>
                       ) : (
-                        <span className="text-xs text-gray-500">No image</span>
+                        <span className="text-xs text-gray-500">No report</span>
                       )}
                     </div>
                   </div>
@@ -421,8 +581,9 @@ const CompleteFileWork = () => {
                         {record.staffName}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.dischargeDate}
+                        {record.dischargeDate} {record.dischargeTime}
                       </td>
+                     
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
                           {record.status}
@@ -437,11 +598,11 @@ const CompleteFileWork = () => {
                             onClick={() => openImageViewer(record.summaryReportImage)}
                             className="flex items-center gap-1 px-2 py-1 text-xs text-green-600 bg-green-50 rounded hover:bg-green-100"
                           >
-                            <Image className="w-3 h-3" />
-                            View Image
+                            <ImageIcon className="w-3 h-3" />
+                            View Report
                           </button>
                         ) : (
-                          <span className="text-gray-500">No image</span>
+                          <span className="text-gray-500">No report</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
@@ -457,7 +618,7 @@ const CompleteFileWork = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="10" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
                       <CheckCircle className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium text-gray-900">No history records</p>
                       <p className="text-sm">Completed file work will appear here</p>
@@ -501,8 +662,12 @@ const CompleteFileWork = () => {
                       <span className="font-medium text-gray-900">{record.staffName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Discharge Date:</span>
-                      <span className="font-medium text-gray-900">{record.dischargeDate}</span>
+                      <span className="text-gray-600">Actual Discharge:</span>
+                      <span className="font-medium text-gray-900">{record.dischargeDate} {record.dischargeTime}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">File Work Date:</span>
+                      <span className="font-medium text-gray-900">{record.fileWorkDate} {record.fileWorkTime}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">RMO Name:</span>
@@ -525,11 +690,11 @@ const CompleteFileWork = () => {
                           onClick={() => openImageViewer(record.summaryReportImage)}
                           className="flex items-center gap-1 mt-1 px-2 py-1 text-xs text-green-600 bg-green-50 rounded hover:bg-green-100"
                         >
-                          <Image className="w-3 h-3" />
-                          View Image
+                          <ImageIcon className="w-3 h-3" />
+                          View Report
                         </button>
                       ) : (
-                        <p className="mt-1 text-gray-500">No image</p>
+                        <p className="mt-1 text-gray-500">No report</p>
                       )}
                     </div>
                   </div>
@@ -550,7 +715,7 @@ const CompleteFileWork = () => {
       {viewImageModal && viewingImage && (
         <div className="fixed inset-0 z-50 flex justify-center items-center p-4 bg-black bg-opacity-75 backdrop-blur-sm">
           <div className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-lg shadow-xl">
-            <div className="flex justify-between items-center p-4 border-b border-gray-200">
+            <div className="sticky top-0 flex justify-between items-center p-4 border-b border-gray-200 bg-white z-10">
               <h3 className="text-lg font-semibold text-gray-900">Summary Report</h3>
               <button
                 onClick={() => {
@@ -566,7 +731,7 @@ const CompleteFileWork = () => {
               <img
                 src={viewingImage}
                 alt="Summary Report"
-                className="w-full h-auto rounded"
+                className="w-full h-auto max-w-full rounded object-contain"
               />
             </div>
           </div>

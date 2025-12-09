@@ -1,6 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Building2, Users, X, CheckCircle, Clock, Activity, AlertTriangle, Search } from 'lucide-react';
+import supabase from '../../../SupabaseClient';
 
 const DepartmentSelection = () => {
   const [pendingPatients, setPendingPatients] = useState([]);
@@ -18,31 +18,75 @@ const DepartmentSelection = () => {
     ipd: 0,
     emergency: 0
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false); // Separate loading state for modal
 
   useEffect(() => {
     loadPatients();
     
-    const handleStorageChange = () => {
-      loadPatients();
+    // Set up real-time subscription for patient updates
+    const setupRealtimeSubscription = () => {
+      const channel = supabase
+        .channel('patient_admission_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'patient_admission'
+          },
+          () => {
+            loadPatients();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     };
-    
-    window.addEventListener('storage', handleStorageChange);
-    const interval = setInterval(loadPatients, 1000);
+
+    const cleanup = setupRealtimeSubscription();
     
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
+      cleanup();
     };
   }, []);
 
-  const loadPatients = () => {
+  const loadPatients = async () => {
     try {
-      const storedPatients = localStorage.getItem('admissionPatients');
-      if (storedPatients) {
-        const allPatients = JSON.parse(storedPatients);
-        
-        const pending = allPatients.filter(p => p.status === 'pending');
-        const assigned = allPatients.filter(p => p.status === 'assigned');
+      setIsLoading(true);
+      
+      const { data, error } = await supabase
+        .from('patient_admission')
+        .select('*')
+        .order('timestamp', { ascending: false });
+
+      if (error) {
+        console.error('Error loading patients:', error);
+        return;
+      }
+
+      if (data) {
+        const transformedPatients = data.map(patient => ({
+          id: patient.id,
+          admissionNo: patient.admission_no || `ADM-${patient.id?.toString().padStart(3, '0') || '001'}`,
+          patientName: patient.patient_name || '',
+          phoneNumber: patient.phone_no || '',
+          attenderName: patient.attender_name || '',
+          attenderMobile: patient.attender_mobile_no || '',
+          reasonForVisit: patient.reason_for_visit || '',
+          dateOfBirth: patient.date_of_birth || '',
+          age: patient.age || '',
+          gender: patient.gender || 'Male',
+          status: patient.status || 'pending',
+          department: patient.department || '',
+          assignedDate: patient.actual1 || '',
+          timestamp: patient.timestamp || ''
+        }));
+
+        const pending = transformedPatients.filter(p => p.status === 'pending');
+        const assigned = transformedPatients.filter(p => p.status === 'assigned');
         
         setPendingPatients(pending);
         setHistoryPatients(assigned);
@@ -52,7 +96,7 @@ const DepartmentSelection = () => {
         const emergencyCount = assigned.filter(p => p.department === 'Emergency').length;
 
         setStats({
-          total: allPatients.length,
+          total: transformedPatients.length,
           pending: pending.length,
           opd: opdCount,
           ipd: ipdCount,
@@ -60,7 +104,9 @@ const DepartmentSelection = () => {
         });
       }
     } catch (error) {
-      console.log('No existing data found or failed to load:', error);
+      console.error('Failed to load patients:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -71,49 +117,59 @@ const DepartmentSelection = () => {
     setShowAssignModal(true);
   };
 
-  const handleAssignDepartment = () => {
+  const handleAssignDepartment = async () => {
     if (!selectedDepartment) {
       setAssignError('Please select a department');
       return;
     }
 
     try {
-      const storedPatients = localStorage.getItem('admissionPatients');
-      const allPatients = storedPatients ? JSON.parse(storedPatients) : [];
+      setIsAssigning(true);
       
-      const updatedPatients = allPatients.map(p => {
-        if (p.id === selectedPatient.id) {
-          return {
-            ...p,
-            department: selectedDepartment,
-            status: 'assigned',
-            assignedDate: new Date().toISOString()
-          };
-        }
-        return p;
-      });
+      const timestamp = new Date().toLocaleString("en-CA", { 
+        timeZone: "Asia/Kolkata", 
+        hour12: false 
+      }).replace(',', '');
+      
+      const { data, error } = await supabase
+        .from('patient_admission')
+        .update({
+          department: selectedDepartment,
+          status: 'assigned',
+          actual1: timestamp,
+          planned2: timestamp,
+        })
+        .eq('admission_no', selectedPatient.admissionNo)
+        .select();
 
-      localStorage.setItem('admissionPatients', JSON.stringify(updatedPatients));
+      if (error) {
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        await loadPatients();
+        
+        setShowAssignModal(false);
+        setSelectedPatient(null);
+        setSelectedDepartment('');
+        alert(`Patient successfully assigned to ${selectedDepartment}`);
+      }
       
-      loadPatients();
-      
-      setShowAssignModal(false);
-      setSelectedPatient(null);
-      setSelectedDepartment('');
-      alert(`Patient successfully assigned to ${selectedDepartment}`);
     } catch (error) {
       console.error('Failed to assign department:', error);
-      setAssignError('Failed to assign department. Please try again.');
+      setAssignError(`Failed to assign department: ${error.message}`);
+    } finally {
+      setIsAssigning(false);
     }
   };
 
   const formatDate = (dateString) => {
-     if (!dateString) return 'N/A';
-     try {
-       return new Date(dateString).toLocaleString();
-     } catch (e) {
-       return 'Invalid Date';
-     }
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleString();
+    } catch (e) {
+      return 'Invalid Date';
+    }
   };
 
   const formatDOBForDisplay = (dateString) => {
@@ -154,6 +210,7 @@ const DepartmentSelection = () => {
 
   return (
     <div className="p-3 space-y-4 md:p-6 bg-gray-50 min-h-[75vh]">
+      {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 md:gap-4">
         <div className="p-3 bg-white rounded-lg border border-gray-200 shadow-sm md:p-4">
           <div className="flex flex-col gap-2">
@@ -206,6 +263,7 @@ const DepartmentSelection = () => {
         </div>
       </div>
 
+      {/* Search Bar */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -215,6 +273,7 @@ const DepartmentSelection = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            disabled={isLoading}
           />
           {searchQuery && (
             <button
@@ -232,26 +291,30 @@ const DepartmentSelection = () => {
         )}
       </div>
 
+      {/* Main Content */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
         <div className="flex border-b border-gray-200">
           <button
             onClick={() => setActiveView('pending')}
+            disabled={isLoading}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors md:text-base ${
               activeView === 'pending'
                 ? 'text-yellow-600 border-b-2 border-yellow-600 bg-yellow-50'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
+            } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <Clock className="w-4 h-4 md:w-5 md:h-5" />
             Pending ({stats.pending})
+            {isLoading && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-yellow-600"></div>}
           </button>
           <button
             onClick={() => setActiveView('history')}
+            disabled={isLoading}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors md:text-base ${
               activeView === 'history'
                 ? 'text-green-600 border-b-2 border-green-600 bg-green-50'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
+            } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <CheckCircle className="w-4 h-4 md:w-5 md:h-5" />
             History ({historyPatients.length})
@@ -278,13 +341,23 @@ const DepartmentSelection = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredPendingPatients.length > 0 ? (
+                    {isLoading ? (
+                      <tr>
+                        <td colSpan="10" className="px-4 py-8 text-center text-gray-500">
+                          <div className="flex flex-col items-center">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mb-4"></div>
+                            <p className="text-gray-700">Loading patients...</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredPendingPatients.length > 0 ? (
                       filteredPendingPatients.map((patient) => (
                         <tr key={patient.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 whitespace-nowrap">
                             <button
                               onClick={() => handleAssignClick(patient)}
-                              className="px-3 py-1.5 text-sm text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700 transition-colors"
+                              className="px-3 py-1.5 text-sm text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700 transition-colors disabled:bg-gray-400"
+                              disabled={isLoading}
                             >
                               Assign
                             </button>
@@ -337,7 +410,12 @@ const DepartmentSelection = () => {
             </div>
 
             <div className="p-4 space-y-3 md:hidden">
-              {filteredPendingPatients.length > 0 ? (
+              {isLoading ? (
+                <div className="p-8 text-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mx-auto mb-4"></div>
+                  <p className="text-gray-700">Loading patients...</p>
+                </div>
+              ) : filteredPendingPatients.length > 0 ? (
                 filteredPendingPatients.map((patient) => (
                   <div key={patient.id} className="p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
                     <div className="flex justify-between items-start mb-3">
@@ -352,6 +430,7 @@ const DepartmentSelection = () => {
                       <button
                         onClick={() => handleAssignClick(patient)}
                         className="px-3 py-1.5 text-xs text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700"
+                        disabled={isLoading}
                       >
                         Assign
                       </button>
@@ -415,7 +494,16 @@ const DepartmentSelection = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredHistoryPatients.length > 0 ? (
+                    {isLoading ? (
+                      <tr>
+                        <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
+                          <div className="flex flex-col items-center">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mb-4"></div>
+                            <p className="text-gray-700">Loading patients...</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredHistoryPatients.length > 0 ? (
                       filteredHistoryPatients.map((patient) => (
                         <tr key={patient.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 whitespace-nowrap">
@@ -435,7 +523,7 @@ const DepartmentSelection = () => {
                           <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                             {patient.attenderName}
                           </td>
-                           <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                             {patient.attenderMobile}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
@@ -474,7 +562,12 @@ const DepartmentSelection = () => {
             </div>
 
             <div className="p-4 space-y-3 md:hidden max-h-[calc(100vh-400px)] overflow-y-auto">
-              {filteredHistoryPatients.length > 0 ? (
+              {isLoading ? (
+                <div className="p-8 text-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mx-auto mb-4"></div>
+                  <p className="text-gray-700">Loading patients...</p>
+                </div>
+              ) : filteredHistoryPatients.length > 0 ? (
                 filteredHistoryPatients.map((patient) => (
                   <div key={patient.id} className="p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
                     <div className="flex justify-between items-start mb-3">
@@ -535,6 +628,7 @@ const DepartmentSelection = () => {
         )}
       </div>
 
+      {/* Assign Department Modal */}
       {showAssignModal && selectedPatient && (
         <div className="overflow-y-auto fixed inset-0 z-50 flex justify-center items-center p-4 bg-black bg-opacity-50 transition-opacity duration-300">
           <div className="relative w-full max-w-md bg-white rounded-lg shadow-xl animate-scale-in">
@@ -542,7 +636,8 @@ const DepartmentSelection = () => {
               <h2 className="text-xl font-bold text-gray-900">Assign Department</h2>
               <button
                 onClick={() => setShowAssignModal(false)}
-                className="text-gray-400 rounded-full p-1 hover:text-gray-600 hover:bg-gray-100"
+                disabled={isAssigning}
+                className="text-gray-400 rounded-full p-1 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-50"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -593,7 +688,8 @@ const DepartmentSelection = () => {
                   <select
                     value={selectedDepartment}
                     onChange={(e) => setSelectedDepartment(e.target.value)}
-                    className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                    disabled={isAssigning}
+                    className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
                   >
                     <option value="">Select Department</option>
                     <option value="OPD">OPD (Out-Patient Department)</option>
@@ -613,16 +709,25 @@ const DepartmentSelection = () => {
                 <button
                   type="button"
                   onClick={() => setShowAssignModal(false)}
-                  className="px-4 py-2 w-full font-medium text-gray-700 bg-gray-100 rounded-lg transition-colors hover:bg-gray-200 sm:w-auto"
+                  disabled={isAssigning}
+                  className="px-4 py-2 w-full font-medium text-gray-700 bg-gray-100 rounded-lg transition-colors hover:bg-gray-200 disabled:bg-gray-300 sm:w-auto"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleAssignDepartment}
-                  className="px-4 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 sm:w-auto"
+                  disabled={isAssigning}
+                  className="px-4 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 disabled:bg-gray-400 sm:w-auto flex items-center justify-center gap-2"
                 >
-                  Assign Department
+                  {isAssigning ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Assigning...
+                    </>
+                  ) : (
+                    'Assign Department'
+                  )}
                 </button>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, X, Clock, CheckCircle, Upload, Image as ImageIcon } from 'lucide-react';
+import supabase from '../../../SupabaseClient';
 
 const InitiationByRMO = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -8,6 +9,7 @@ const InitiationByRMO = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [modalError, setModalError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     status: '',
     rmoName: '',
@@ -32,42 +34,122 @@ const InitiationByRMO = () => {
 
   useEffect(() => {
     loadData();
+  }, [activeTab]);
 
-    const interval = setInterval(() => {
-      loadData();
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadData = () => {
+  const loadData = async () => {
+    setIsLoading(true);
     try {
-      const storedDischarges = localStorage.getItem('dischargePatients');
-      const storedInitiations = localStorage.getItem('rmoInitiations');
-      
-      if (storedDischarges) {
-        const allDischarges = JSON.parse(storedDischarges);
-        const initiations = storedInitiations ? JSON.parse(storedInitiations) : [];
-        const initiatedAdmissionNumbers = initiations.map(i => i.admissionNo);
-        
-        const pending = allDischarges.filter(
-          d => !initiatedAdmissionNumbers.includes(d.admissionNo)
-        );
-        setPendingPatients(pending);
-        setHistoryPatients(initiations);
+      if (activeTab === 'pending') {
+        await loadPendingPatients();
+      } else {
+        await loadHistoryPatients();
       }
     } catch (error) {
-      console.log('Error loading data:', error);
+      console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadPendingPatients = async () => {
+    try {
+      // Fetch patients where planned1 is not null AND actual1 is null
+      const { data, error } = await supabase
+        .from('discharge')
+        .select('*')
+        .not('planned1', 'is', null)
+        .is('actual1', null)
+        .order('planned1', { ascending: true });
+
+      if (error) throw error;
+
+      // Format the data for display
+      const formattedPatients = data.map(patient => ({
+        id: patient.id,
+        admissionNo: patient.admission_no,
+        patientName: patient.patient_name,
+        department: patient.department,
+        consultantName: patient.consultant_name,
+        staffName: patient.staff_name,
+        dischargeDate: patient.planned1 ? new Date(patient.planned1).toLocaleDateString('en-GB') : 'N/A',
+        dischargeTime: patient.planned1 ? new Date(patient.planned1).toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: false 
+        }) : 'N/A',
+        planned1: patient.planned1,
+        actual1: patient.actual1,
+        remark: patient.remark,
+        dischargeNumber: patient.discharge_number,
+        // RMO fields (will be null for pending patients)
+        rmo_status: patient.rmo_status,
+        rmo_name: patient.rmo_name,
+        summary_report_image: patient.summary_report_image,
+        summary_report_image_name: patient.summary_report_image_name
+      }));
+
+      setPendingPatients(formattedPatients);
+    } catch (error) {
+      console.error('Error loading pending patients:', error);
+      setPendingPatients([]);
+    }
+  };
+
+  const loadHistoryPatients = async () => {
+    try {
+      // Fetch patients where planned1 AND actual1 are not null
+      // AND also has RMO initiation data (rmo_name is not null)
+      const { data, error } = await supabase
+        .from('discharge')
+        .select('*')
+        .not('planned1', 'is', null)
+        .not('actual1', 'is', null)
+        .not('rmo_name', 'is', null) // Only show patients with RMO initiation
+        .order('actual1', { ascending: false });
+
+      if (error) throw error;
+
+      // Format the data for display
+      const formattedPatients = data.map(patient => ({
+        id: patient.id,
+        admissionNo: patient.admission_no,
+        patientName: patient.patient_name,
+        department: patient.department,
+        consultantName: patient.consultant_name,
+        staffName: patient.staff_name,
+        dischargeDate: patient.actual1 ? new Date(patient.actual1).toLocaleDateString('en-GB') : 'N/A',
+        dischargeTime: patient.actual1 ? new Date(patient.actual1).toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: false 
+        }) : 'N/A',
+        planned1: patient.planned1,
+        actual1: patient.actual1,
+        delay1: patient.delay1,
+        remark: patient.remark,
+        dischargeNumber: patient.discharge_number,
+        // RMO fields
+        rmo_status: patient.rmo_status,
+        rmo_name: patient.rmo_name,
+        summary_report_image: patient.summary_report_image,
+        summary_report_image_name: patient.summary_report_image_name,
+        initiation_date: patient.rmo_initiation_date
+      }));
+
+      setHistoryPatients(formattedPatients);
+    } catch (error) {
+      console.error('Error loading history patients:', error);
+      setHistoryPatients([]);
     }
   };
 
   const handleInitiation = (patient) => {
     setSelectedPatient(patient);
     setFormData({
-      status: '',
-      rmoName: '',
-      summaryReportImage: null,
-      summaryReportImageName: ''
+      status: patient.rmo_status || '',
+      rmoName: patient.rmo_name || '',
+      summaryReportImage: patient.summary_report_image || null,
+      summaryReportImageName: patient.summary_report_image_name || ''
     });
     setShowModal(true);
   };
@@ -114,48 +196,103 @@ const InitiationByRMO = () => {
     }));
   };
 
-  const handleSubmit = () => {
-    if (!formData.status || !formData.rmoName || !formData.summaryReportImage) {
-      setModalError('Please fill all required fields marked with *');
-      return;
-    }
+ const handleSubmit = async () => {
+  if (!formData.status || !formData.rmoName || !formData.summaryReportImage) {
+    setModalError('Please fill all required fields marked with *');
+    return;
+  }
 
-    const initiationRecord = {
-      id: Date.now(),
-      admissionNo: selectedPatient.admissionNo,
-      patientName: selectedPatient.patientName,
-      department: selectedPatient.department,
-      consultantName: selectedPatient.consultantName,
-      staffName: selectedPatient.staffName,
-      dischargeDate: selectedPatient.dischargeDate,
-      dischargeTime: selectedPatient.dischargeTime,
-      status: formData.status,
-      rmoName: formData.rmoName,
-      summaryReportImage: formData.summaryReportImage,
-      summaryReportImageName: formData.summaryReportImageName,
-      initiationDate: new Date().toLocaleDateString('en-GB'),
-      initiationTime: new Date().toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false 
-      }),
-      timestamp: new Date().toISOString()
-    };
-
-    try {
-      const storedInitiations = localStorage.getItem('rmoInitiations');
-      const initiations = storedInitiations ? JSON.parse(storedInitiations) : [];
-      initiations.push(initiationRecord);
-      localStorage.setItem('rmoInitiations', JSON.stringify(initiations));
+  try {
+    let imageUrl = null;
+    
+    // If there's an image to upload
+    if (formData.summaryReportImage) {
+      // Generate a unique filename
+      const fileName = `summary_report_${selectedPatient.admissionNo}_${Date.now()}.jpg`;
+      const filePath = `summary-reports/${fileName}`;
       
-      setShowModal(false);
-      setSelectedPatient(null);
-      resetForm();
-      loadData();
-    } catch (error) {
-      console.error('Error saving initiation:', error);
-      setModalError('Failed to save. Please try again.');
+      // Convert base64 to blob
+      const base64Response = await fetch(formData.summaryReportImage);
+      const blob = await base64Response.blob();
+      
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('summary_report_image') // Make sure this bucket exists
+        .upload(filePath, blob, {
+          contentType: 'image/jpeg',
+          upsert: true
+        });
+      
+      if (uploadError) {
+        console.error('Error uploading image:', uploadError);
+        throw new Error('Failed to upload summary report image');
+      }
+      
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('summary_report_image')
+        .getPublicUrl(filePath);
+      
+      imageUrl = urlData.publicUrl;
     }
+
+    const now = new Date();
+    
+    // Update the discharge record in Supabase with RMO initiation data
+    const { error: updateError } = await supabase
+      .from('discharge')
+      .update({
+        // Set actual discharge time
+        actual1: new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
+        
+        // RMO initiation fields
+        rmo_status: formData.status,
+        rmo_name: formData.rmoName,
+        summary_report_image: imageUrl, // Store the public URL instead of base64
+        planned2: new Date().toLocaleString("en-CA", { 
+          timeZone: "Asia/Kolkata", 
+          hour12: false 
+        }).replace(',', ''),
+        
+        // Update delay calculation
+        delay1: calculateDelay(selectedPatient.planned1, now)
+      })
+      .eq('id', selectedPatient.id);
+
+    if (updateError) throw updateError;
+
+    setShowModal(false);
+    setSelectedPatient(null);
+    resetForm();
+    
+    // Reload data
+    await loadData();
+    
+  } catch (error) {
+    console.error('Error saving initiation:', error);
+    setModalError(error.message || 'Failed to save. Please try again.');
+  }
+};
+
+  const calculateDelay = (plannedDate, actualDate) => {
+    if (!plannedDate) return 'No planned date';
+    
+    const planned = new Date(plannedDate);
+    const actual = actualDate || new Date();
+    const diffMs = actual - planned;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffHours < 0) {
+      const hoursEarly = Math.abs(diffHours);
+      const minsEarly = Math.abs(diffMinutes);
+      return `Early by ${hoursEarly}h ${minsEarly}m`;
+    }
+    if (diffHours === 0 && diffMinutes <= 5) return 'On time';
+    return `Delayed by ${diffHours}h ${diffMinutes}m`;
   };
 
   const resetForm = () => {
@@ -176,6 +313,22 @@ const InitiationByRMO = () => {
     setViewImageModal(true);
   };
 
+  // Function to format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-GB');
+  };
+
+  // Function to format time for display
+  const formatTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
+  };
+
   return (
     <div className="p-3 space-y-4 md:p-6 bg-white min-h-screen">
       {/* Header */}
@@ -187,6 +340,20 @@ const InitiationByRMO = () => {
           <p className="mt-1 text-sm text-gray-600">
             Manage RMO initiation records for discharged patients
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isLoading && (
+            <div className="text-sm text-gray-600 flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+              Loading...
+            </div>
+          )}
+          <button
+            onClick={loadData}
+            className="px-3 py-1.5 text-sm text-green-600 bg-green-50 rounded-lg hover:bg-green-100"
+          >
+            Refresh
+          </button>
         </div>
       </div>
 
@@ -244,8 +411,7 @@ const InitiationByRMO = () => {
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Department</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Consultant</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Staff Name</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Discharge Date</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Discharge Time</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Planned Discharge</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -277,19 +443,16 @@ const InitiationByRMO = () => {
                         {patient.staffName}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {patient.dischargeDate}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {patient.dischargeTime}
+                        {patient.dischargeDate} {patient.dischargeTime}
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
                       <Clock className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium text-gray-900">No pending initiations</p>
-                      <p className="text-sm">All discharged patients have been initiated</p>
+                      <p className="text-sm">All planned discharges have been initiated</p>
                     </td>
                   </tr>
                 )}
@@ -334,12 +497,8 @@ const InitiationByRMO = () => {
                       <span className="font-medium text-gray-900">{patient.staffName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Discharge Date:</span>
-                      <span className="font-medium text-gray-900">{patient.dischargeDate}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Discharge Time:</span>
-                      <span className="font-medium text-gray-900">{patient.dischargeTime}</span>
+                      <span className="text-gray-600">Planned Discharge:</span>
+                      <span className="font-medium text-gray-900">{patient.dischargeDate} {patient.dischargeTime}</span>
                     </div>
                   </div>
                 </div>
@@ -348,7 +507,7 @@ const InitiationByRMO = () => {
               <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
                 <Clock className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                 <p className="text-sm font-medium text-gray-900">No pending initiations</p>
-                <p className="text-xs text-gray-600">All discharged patients have been initiated</p>
+                <p className="text-xs text-gray-600">All planned discharges have been initiated</p>
               </div>
             )}
           </div>
@@ -369,8 +528,8 @@ const InitiationByRMO = () => {
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Consultant</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Staff Name</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Discharge Date</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Status</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">RMO Name</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Status</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Summary Report</th>
                 </tr>
               </thead>
@@ -394,20 +553,21 @@ const InitiationByRMO = () => {
                         {patient.staffName}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {patient.dischargeDate}
+                        {patient.dischargeDate} {patient.dischargeTime}
+                      </td>
+                    
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {patient.rmo_name || 'N/A'}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                          {patient.status}
+                          {patient.rmo_status || 'N/A'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {patient.rmoName}
-                      </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        {patient.summaryReportImage ? (
+                        {patient.summary_report_image ? (
                           <button
-                            onClick={() => openImageViewer(patient.summaryReportImage)}
+                            onClick={() => openImageViewer(patient.summary_report_image)}
                             className="flex items-center gap-1 px-2 py-1 text-xs text-green-600 bg-green-50 rounded hover:bg-green-100"
                           >
                             <ImageIcon className="w-3 h-3" />
@@ -421,7 +581,7 @@ const InitiationByRMO = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="9" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="10" className="px-4 py-8 text-center text-gray-500">
                       <CheckCircle className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium text-gray-900">No history records</p>
                       <p className="text-sm">Initiated patients will appear here</p>
@@ -447,7 +607,7 @@ const InitiationByRMO = () => {
                       </h3>
                     </div>
                     <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                      {patient.status}
+                      {patient.rmo_status || 'N/A'}
                     </span>
                   </div>
                   
@@ -465,18 +625,30 @@ const InitiationByRMO = () => {
                       <span className="font-medium text-gray-900">{patient.staffName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Discharge Date:</span>
-                      <span className="font-medium text-gray-900">{patient.dischargeDate}</span>
+                      <span className="text-gray-600">Actual Discharge:</span>
+                      <span className="font-medium text-gray-900">{patient.dischargeDate} {patient.dischargeTime}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Delay:</span>
+                      <span className={`font-medium ${
+                        patient.delay1?.includes('Delayed') 
+                          ? 'text-red-700'
+                          : patient.delay1?.includes('Early')
+                          ? 'text-blue-700'
+                          : 'text-green-700'
+                      }`}>
+                        {patient.delay1 || 'N/A'}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">RMO Name:</span>
-                      <span className="font-medium text-gray-900">{patient.rmoName}</span>
+                      <span className="font-medium text-gray-900">{patient.rmo_name || 'N/A'}</span>
                     </div>
                     <div className="pt-2 border-t border-gray-200">
                       <span className="text-gray-600">Summary Report:</span>
-                      {patient.summaryReportImage ? (
+                      {patient.summary_report_image ? (
                         <button
-                          onClick={() => openImageViewer(patient.summaryReportImage)}
+                          onClick={() => openImageViewer(patient.summary_report_image)}
                           className="flex items-center gap-1 mt-1 px-2 py-1 text-xs text-green-600 bg-green-50 rounded hover:bg-green-100"
                         >
                           <ImageIcon className="w-3 h-3" />
@@ -505,7 +677,9 @@ const InitiationByRMO = () => {
         <div className="fixed inset-0 z-50 flex justify-center items-center p-4 bg-black bg-opacity-50 backdrop-blur-sm">
           <div className="relative w-full max-w-2xl max-h-[90vh] bg-white rounded-lg shadow-xl animate-scale-in overflow-y-auto">
             <div className="sticky top-0 flex justify-between items-center p-4 border-b border-gray-200 bg-green-600 rounded-t-lg md:p-6 z-10">
-              <h2 className="text-xl font-bold text-white md:text-2xl">RMO Initiation</h2>
+              <h2 className="text-xl font-bold text-white md:text-2xl">
+                RMO Initiation - {selectedPatient.admissionNo}
+              </h2>
               <button
                 onClick={() => {
                   setShowModal(false);
@@ -539,6 +713,10 @@ const InitiationByRMO = () => {
                     <div>
                       <span className="text-gray-600">Staff Name:</span>
                       <p className="font-medium text-gray-900">{selectedPatient.staffName}</p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="text-gray-600">Planned Discharge:</span>
+                      <p className="font-medium text-gray-900">{selectedPatient.dischargeDate} {selectedPatient.dischargeTime}</p>
                     </div>
                   </div>
                 </div>
@@ -645,9 +823,33 @@ const InitiationByRMO = () => {
                   onClick={handleSubmit}
                   className="px-4 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 sm:w-auto"
                 >
-                  Save
+                  {selectedPatient.rmo_name ? 'Update Initiation' : 'Save Initiation'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Viewer Modal */}
+      {viewImageModal && viewingImage && (
+        <div className="fixed inset-0 z-50 flex justify-center items-center p-4 bg-black bg-opacity-75 backdrop-blur-sm">
+          <div className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-lg shadow-xl">
+            <div className="sticky top-0 flex justify-between items-center p-4 border-b border-gray-200 bg-white rounded-t-lg z-10">
+              <h2 className="text-lg font-semibold text-gray-900">Summary Report Image</h2>
+              <button
+                onClick={() => setViewImageModal(false)}
+                className="text-gray-500 rounded-full p-1 hover:text-gray-700 hover:bg-gray-100"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-4">
+              <img
+                src={viewingImage}
+                alt="Summary Report"
+                className="w-full h-auto max-h-[70vh] object-contain rounded"
+              />
             </div>
           </div>
         </div>

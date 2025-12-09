@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Eye, FileText, Upload, Check } from 'lucide-react';
+import supabase from '../../../SupabaseClient';
 
 const XRay = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -11,6 +12,8 @@ const XRay = () => {
   const [viewingRecord, setViewingRecord] = useState(null);
   const [modalError, setModalError] = useState('');
   const [reportPreview, setReportPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   
   const [formData, setFormData] = useState({
     reportImage: null,
@@ -19,90 +22,120 @@ const XRay = () => {
 
   useEffect(() => {
     loadData();
-    
-    // Reload data when window gains focus
-    const handleFocus = () => {
-      console.log('X-Ray page focused - reloading data');
-      loadData();
-    };
-    
-    window.addEventListener('focus', handleFocus);
-    
-    // Reload data every 2 seconds to catch new payment records
-    const intervalId = setInterval(() => {
-      loadData();
-    }, 2000);
-    
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('xray-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lab'
+        },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
+
     return () => {
-      window.removeEventListener('focus', handleFocus);
-      clearInterval(intervalId);
+      supabase.removeChannel(channel);
     };
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      const storedHistory = localStorage.getItem('xrayHistory');
-      const paymentHistory = localStorage.getItem('paymentHistory');
+      setInitialLoading(true);
       
-      // Load X-ray history
-      const existingHistory = storedHistory ? JSON.parse(storedHistory) : [];
-      setHistoryRecords(existingHistory);
+      // Load pending X-Ray records
+      // Conditions: category = 'Radiology', radiology_type = 'X-Ray', planned2 IS NOT NULL, actual2 IS NULL, payment_status IS NOT NULL
+      const { data: pendingData, error: pendingError } = await supabase
+        .from('lab')
+        .select(`*`)
+        .eq('category', 'Radiology')
+        .eq('radiology_type', 'X-ray')
+        .not('planned2', 'is', null)
+        .is('actual2', null)
+        .not('payment_status', 'is', null)
+        .order('timestamp', { ascending: false });
 
-      // Load pending from payment history where category is Radiology and radiologyType is X-Ray
-      if (paymentHistory) {
-        const paymentRecords = JSON.parse(paymentHistory);
-        
-        // Get IDs of records already in X-ray history
-        const processedIds = existingHistory.map(record => record.xrayId || record.paymentId || record.adviceId);
-        
-        console.log('=== X-Ray Page Debug ===');
-        console.log('Payment History Records:', paymentRecords.length);
-        console.log('Processed X-Ray IDs:', processedIds);
-        console.log('All Payment Records:', paymentRecords);
-        
-        // Filter for X-ray records that haven't been processed
-        // Handle both "X-Ray", "X-ray", "xray" (case insensitive)
-        const newPending = paymentRecords
-          .filter(record => {
-            const radiologyTypeLower = record.radiologyType?.toLowerCase().replace(/[-\s]/g, '');
-            const isXRay = record.category === 'Radiology' && 
-                          (radiologyTypeLower === 'xray');
-            const notProcessed = !processedIds.includes(record.paymentId || record.adviceId);
-            
-            console.log('Record:', record.uniqueNumber, 
-                       'Category:', record.category, 
-                       'Type:', record.radiologyType,
-                       'Type Lower:', radiologyTypeLower,
-                       'Is X-Ray:', isXRay, 
-                       'Not Processed:', notProcessed);
-            
-            return isXRay && notProcessed;
-          })
-          .map(record => ({
-            ...record,
-            xrayId: record.paymentId || record.adviceId || Date.now() + Math.random()
-          }));
-        
-        console.log('New Pending X-Ray Records:', newPending.length);
-        console.log('Pending Records:', newPending);
-        
-        setPendingRecords(newPending);
-        localStorage.setItem('xrayPending', JSON.stringify(newPending));
-      } else {
-        console.log('No payment history found');
-        setPendingRecords([]);
-      }
+      if (pendingError) throw pendingError;
+
+      const formattedPending = pendingData.map(record => {
+        return {
+          id: record.id,
+          uniqueNumber: record.admission_no || 'N/A',
+          patientName: record.patient_name || 'N/A',
+          phoneNumber: record.phone_no || 'N/A',
+          age: record.age || 'N/A',
+          gender: record.gender || 'N/A',
+          bedNo: record.bed_no || 'N/A',
+          location: record.location || 'N/A',
+          wardType: record.ward_type || 'N/A',
+          room: record.room || 'N/A',
+          reasonForVisit: record.reason_for_visit || 'N/A',
+          adviceNo: record.admission_no || 'N/A',
+          category: record.category,
+          priority: record.priority,
+          radiologyType: record.radiology_type,
+          radiologyTests: record.radiology_tests || [],
+          planned2: record.planned2,
+          actual2: record.actual2,
+          paymentStatus: record.payment_status,
+          xrayId: record.id,
+          admissionNo: record.admission_no
+        };
+      });
+
+      setPendingRecords(formattedPending);
+
+      // Load completed X-Ray records (actual2 IS NOT NULL)
+      const { data: historyData, error: historyError } = await supabase
+        .from('lab')
+        .select(`*`)
+        .eq('category', 'Radiology')
+        .eq('radiology_type', 'X-ray')
+        .not('planned2', 'is', null)
+        .not('actual2', 'is', null)
+        .order('actual2', { ascending: false });
+
+      if (historyError) throw historyError;
+
+      const formattedHistory = historyData.map(record => {
+        return {
+          id: record.id,
+          uniqueNumber: record.admission_no || 'N/A',
+          patientName: record.patient_name || 'N/A',
+          phoneNumber: record.phone_no || 'N/A',
+          age: record.age || 'N/A',
+          gender: record.gender || 'N/A',
+          bedNo: record.bed_no || 'N/A',
+          location: record.location || 'N/A',
+          wardType: record.ward_type || 'N/A',
+          room: record.room || 'N/A',
+          reasonForVisit: record.reason_for_visit || 'N/A',
+          adviceNo: record.admission_no || 'N/A',
+          category: record.category,
+          priority: record.priority,
+          radiologyType: record.radiology_type,
+          radiologyTests: record.radiology_tests || [],
+          xrayReport: record.report_url,
+          xrayRemarks: record.lab_report_remarks,
+          planned2: record.planned2,
+          actual2: record.actual2,
+          paymentStatus: record.payment_status,
+          xrayId: record.id,
+          admissionNo: record.admission_no
+        };
+      });
+
+      setHistoryRecords(formattedHistory);
     } catch (error) {
       console.error('Failed to load data:', error);
-    }
-  };
-
-  const saveToStorage = (pending, history) => {
-    try {
-      localStorage.setItem('xrayPending', JSON.stringify(pending));
-      localStorage.setItem('xrayHistory', JSON.stringify(history));
-    } catch (error) {
-      console.error('Failed to save data:', error);
+      setModalError('Failed to load data. Please try again.');
+    } finally {
+      setInitialLoading(false);
     }
   };
 
@@ -139,7 +172,7 @@ const XRay = () => {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.reportImage) {
       setModalError('Please upload report image');
       return;
@@ -150,26 +183,67 @@ const XRay = () => {
       return;
     }
 
-    // Create X-ray record
-    const xrayRecord = {
-      ...selectedRecord,
-      reportImage: formData.reportImage,
-      remarks: formData.remarks,
-      processedDate: new Date().toISOString()
-    };
+    try {
+      setLoading(true);
+      
+      // Convert base64 to blob
+      const base64Data = formData.reportImage.split(',')[1];
+      const binaryData = atob(base64Data);
+      const arrayBuffer = new ArrayBuffer(binaryData.length);
+      const uint8Array = new Uint8Array(arrayBuffer);
+      
+      for (let i = 0; i < binaryData.length; i++) {
+        uint8Array[i] = binaryData.charCodeAt(i);
+      }
+      
+      const blob = new Blob([uint8Array], { type: 'image/jpeg' });
+      
+      // Upload report image to Supabase Storage
+      const fileName = `xray_${selectedRecord.id}_${Date.now()}.jpg`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('xray_reports')
+        .upload(fileName, blob, {
+          contentType: 'image/jpeg',
+          upsert: true
+        });
 
-    // Add to history
-    const updatedHistory = [xrayRecord, ...historyRecords];
-    
-    // Remove from pending
-    const updatedPending = pendingRecords.filter(p => p.xrayId !== selectedRecord.xrayId);
+      if (uploadError) throw uploadError;
 
-    setHistoryRecords(updatedHistory);
-    setPendingRecords(updatedPending);
-    saveToStorage(updatedPending, updatedHistory);
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('xray_reports')
+        .getPublicUrl(fileName);
 
-    setShowModal(false);
-    resetForm();
+      // Update lab record with X-Ray info
+      const { error: updateError } = await supabase
+        .from('lab')
+        .update({
+          report_url: publicUrl,
+          lab_report_remarks: formData.remarks,
+          actual2: new Date().toLocaleString("en-CA", { 
+            timeZone: "Asia/Kolkata", 
+            hour12: false 
+          }).replace(',', ''),
+          planned3: new Date().toLocaleString("en-CA", { 
+            timeZone: "Asia/Kolkata", 
+            hour12: false 
+          }).replace(',', '')
+        })
+        .eq('id', selectedRecord.id);
+
+      if (updateError) throw updateError;
+
+      // Reload data
+      await loadData();
+      
+      setShowModal(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to save X-Ray report:', error);
+      setModalError('Failed to save report. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
@@ -187,13 +261,18 @@ const XRay = () => {
     setShowViewModal(true);
   };
 
-  const handleViewImage = (imageData) => {
+  const handleViewImage = (imageUrl) => {
+    if (!imageUrl) {
+      alert('No X-Ray report available');
+      return;
+    }
+    
     const newWindow = window.open();
     newWindow.document.write(`
       <html>
         <head><title>X-Ray Report</title></head>
         <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;">
-          <img src="${imageData}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
+          <img src="${imageUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
         </body>
       </html>
     `);
@@ -205,13 +284,30 @@ const XRay = () => {
   const pendingCount = pendingRecords.length;
   const highPriorityCount = [...pendingRecords, ...historyRecords].filter(r => r.priority === 'High').length;
 
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6 bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-600 mb-4"></div>
+          <p className="text-gray-600">Loading X-Ray data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 space-y-4 md:p-6 bg-gray-50 min-h-screen">
       <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">X-Ray Management</h1>
-          <p className="mt-1 text-sm text-gray-600">Process X-ray reports and manage records</p>
+          <p className="mt-1 text-sm text-gray-600">Process X-Ray reports and manage records</p>
         </div>
+        <button
+          onClick={loadData}
+          className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+        >
+          Refresh Data
+        </button>
       </div>
 
       {/* Statistics Cards */}
@@ -278,8 +374,7 @@ const XRay = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Unique Number</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Advice No</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Admission No</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone Number</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Reason For Visit</th>
@@ -296,7 +391,7 @@ const XRay = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {pendingRecords.length > 0 ? (
                   pendingRecords.map((record) => (
-                    <tr key={record.xrayId} className="hover:bg-gray-50">
+                    <tr key={record.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <button
                           onClick={() => handleActionClick(record)}
@@ -305,8 +400,7 @@ const XRay = () => {
                           Process
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.uniqueNumber}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.admissionNo}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
@@ -332,10 +426,10 @@ const XRay = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
                       <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                      <p className="text-lg font-medium text-gray-900">No pending X-ray records</p>
-                      <p className="text-sm text-gray-500 mt-1">X-ray records from payment history will appear here</p>
+                      <p className="text-lg font-medium text-gray-900">No pending X-Ray records</p>
+                      <p className="text-sm text-gray-500 mt-1">X-Ray records with payment status will appear here</p>
                     </td>
                   </tr>
                 )}
@@ -347,11 +441,10 @@ const XRay = () => {
           <div className="space-y-3 md:hidden">
             {pendingRecords.length > 0 ? (
               pendingRecords.map((record) => (
-                <div key={record.xrayId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.uniqueNumber}</div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo || 'N/A'}</div>
+                      <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo}</div>
                       <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
                     </div>
                     <button
@@ -390,8 +483,8 @@ const XRay = () => {
             ) : (
               <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
                 <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                <p className="text-sm font-medium text-gray-900">No pending X-ray records</p>
-                <p className="text-xs text-gray-500 mt-1">X-ray records from payment history will appear here</p>
+                <p className="text-sm font-medium text-gray-900">No pending X-Ray records</p>
+                <p className="text-xs text-gray-500 mt-1">X-Ray records with payment status will appear here</p>
               </div>
             )}
           </div>
@@ -406,8 +499,7 @@ const XRay = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Unique Number</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Advice No</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Reason For Visit</th>
@@ -426,9 +518,8 @@ const XRay = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {historyRecords.length > 0 ? (
                   historyRecords.map((record) => (
-                    <tr key={record.xrayId} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.uniqueNumber}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo || 'N/A'}</td>
+                    <tr key={record.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.admissionNo}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
@@ -459,12 +550,12 @@ const XRay = () => {
                           View
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.remarks}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.xrayRemarks}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="15" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
                       <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium text-gray-900">No history records</p>
                     </td>
@@ -478,11 +569,10 @@ const XRay = () => {
           <div className="space-y-3 md:hidden">
             {historyRecords.length > 0 ? (
               historyRecords.map((record) => (
-                <div key={record.xrayId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.uniqueNumber}</div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo || 'N/A'}</div>
+                      <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo}</div>
                       <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
                     </div>
                     <button
@@ -503,7 +593,7 @@ const XRay = () => {
                     </div>
                     <div>
                       <span className="text-gray-600">Remarks:</span>
-                      <div className="font-medium text-gray-900 mt-1 line-clamp-2">{record.remarks}</div>
+                      <div className="font-medium text-gray-900 mt-1 line-clamp-2">{record.xrayRemarks}</div>
                     </div>
                   </div>
                 </div>
@@ -541,12 +631,8 @@ const XRay = () => {
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
                   <div>
-                    <span className="text-gray-600">Unique No:</span>
-                    <div className="font-medium text-gray-900">{selectedRecord.uniqueNumber}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Advice No:</span>
-                    <div className="font-medium text-green-600">{selectedRecord.adviceNo || 'N/A'}</div>
+                    <span className="text-gray-600">Admission No:</span>
+                    <div className="font-medium text-green-600">{selectedRecord.admissionNo}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Name:</span>
@@ -615,7 +701,7 @@ const XRay = () => {
                       ) : (
                         <div className="text-center">
                           <Upload className="mx-auto w-12 h-12 text-gray-400 mb-2" />
-                          <p className="text-sm text-gray-600">Click to upload X-ray report</p>
+                          <p className="text-sm text-gray-600">Click to upload X-Ray report</p>
                           <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</p>
                         </div>
                       )}
@@ -630,7 +716,7 @@ const XRay = () => {
                     value={formData.remarks}
                     onChange={handleInputChange}
                     rows="4"
-                    placeholder="Enter remarks about the X-ray report..."
+                    placeholder="Enter remarks about the X-Ray report..."
                     className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
@@ -657,9 +743,10 @@ const XRay = () => {
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  className="px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 sm:w-auto"
+                  disabled={loading}
+                  className="px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 disabled:opacity-50 sm:w-auto"
                 >
-                  Save Report
+                  {loading ? 'Processing...' : 'Save Report'}
                 </button>
               </div>
             </div>
@@ -687,12 +774,8 @@ const XRay = () => {
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
                   <div>
-                    <span className="text-gray-600">Unique No:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.uniqueNumber}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Advice No:</span>
-                    <div className="font-medium text-green-600">{viewingRecord.adviceNo || 'N/A'}</div>
+                    <span className="text-gray-600">Admission No:</span>
+                    <div className="font-medium text-green-600">{viewingRecord.admissionNo}</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Name:</span>
@@ -768,13 +851,13 @@ const XRay = () => {
 
                   <div className="pt-3 border-t border-indigo-300">
                     <span className="text-gray-600">Remarks:</span>
-                    <div className="font-medium text-gray-900 mt-1 whitespace-pre-wrap">{viewingRecord.remarks}</div>
+                    <div className="font-medium text-gray-900 mt-1 whitespace-pre-wrap">{viewingRecord.xrayRemarks}</div>
                   </div>
 
                   <div>
                     <span className="text-gray-600">Processed Date:</span>
                     <div className="font-medium text-gray-900 mt-1">
-                      {new Date(viewingRecord.processedDate).toLocaleString()}
+                      {viewingRecord.actual2 ? new Date(viewingRecord.actual2).toLocaleString() : 'N/A'}
                     </div>
                   </div>
                 </div>
@@ -784,17 +867,26 @@ const XRay = () => {
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <h3 className="mb-3 text-sm font-semibold text-gray-900">X-Ray Report</h3>
                 <div className="space-y-3">
-                  <img
-                    src={viewingRecord.reportImage}
-                    alt="X-Ray Report"
-                    className="w-full max-h-96 object-contain rounded-lg border border-gray-300"
-                  />
-                  <button
-                    onClick={() => handleViewImage(viewingRecord.reportImage)}
-                    className="w-full px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-                  >
-                    Open in Full Screen
-                  </button>
+                  {viewingRecord.xrayReport ? (
+                    <>
+                      <img
+                        src={viewingRecord.xrayReport}
+                        alt="X-Ray Report"
+                        className="w-full max-h-96 object-contain rounded-lg border border-gray-300"
+                      />
+                      <button
+                        onClick={() => handleViewImage(viewingRecord.xrayReport)}
+                        className="w-full px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                      >
+                        Open in Full Screen
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <FileText className="mx-auto w-12 h-12 text-gray-300 mb-2" />
+                      <p className="text-gray-600">No X-Ray report available</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

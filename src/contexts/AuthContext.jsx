@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import supabase from '../SupabaseClient';
 
 const AuthContext = createContext(undefined);
 
@@ -18,36 +19,53 @@ export function AuthProvider({ children }) {
   }, []);
 
   // Login function
-  const login = async (username, password) => {
+    const login = async (username, password) => {
     setLoading(true);
     
-    // Mock authentication (replace with actual API call in production)
-    if (username === 'admin' && password === 'admin123') {
-      const adminUser = {
-        id: 'admin-001',
-        name: 'Admin User',
-        role: 'admin',
-        image: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=600'
-      };
-      setUser(adminUser);
-      localStorage.setItem('mis_user', JSON.stringify(adminUser));
+    try {
+      // Query users table for matching username and password
+      const { data: userData, error: queryError } = await supabase
+        .from('users')
+        .select(' user_name,name, role, pages')
+        .eq('user_name', username)
+        .eq('password', password) // WARNING: Plain text password storage
+        .single();
+
+      if (queryError || !userData) {
+        console.error('Invalid credentials:', queryError);
+        setLoading(false);
+        return false;
+      }
+
+      // Format user object for your application
+      // const formattedUser = {
+      //   id: userData.id,
+      //   email: userData.email || `${userData.user_name}@example.com`,
+      //   name: userData.full_name || userData.user_name,
+      //   role: userData.role || 'user',
+      //   image: userData.avatar_url || 
+      //          (userData.role === 'admin' 
+      //            ? 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=600'
+      //            : 'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=600')
+      // };
+      
+      setUser(userData);
+      localStorage.setItem('mis_user', JSON.stringify(userData));
       setLoading(false);
+      
+      // Redirect based on role
+      if (userData.role === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/dashboard');
+      }
+      
       return true;
-    } else if (username === 'user' && password === 'user123') {
-      const regularUser = {
-        id: 'user-001',
-        name: 'John Doe',
-        role: 'user',
-        image: 'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=600'
-      };
-      setUser(regularUser);
-      localStorage.setItem('mis_user', JSON.stringify(regularUser));
+    } catch (error) {
+      console.error('Login error:', error);
       setLoading(false);
-      return true;
+      return false;
     }
-    
-    setLoading(false);
-    return false;
   };
 
   // Logout function
