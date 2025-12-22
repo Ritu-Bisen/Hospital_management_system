@@ -10,24 +10,30 @@ const InitiationByRMO = () => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [modalError, setModalError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    status: '',
-    rmoName: '',
-    summaryReportImage: null,
-    summaryReportImageName: ''
+  const [formData, setFormData] = useState(() => {
+    // Initialize formData with user name from localStorage
+    const storedUser = localStorage.getItem('mis_user');
+    let initialName = '';
+    
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        initialName = user.name || '';
+      } catch (error) {
+        console.error('Error parsing mis_user from localStorage:', error);
+      }
+    }
+    
+    return {
+      status: '',
+      rmoName: initialName,
+      summaryReportImage: null,
+      summaryReportImageName: ''
+    };
   });
 
-  const rmoList = [
-    'Dr. RMO Sharma',
-    'Dr. RMO Patel',
-    'Dr. RMO Kumar',
-    'Dr. RMO Singh',
-    'Dr. RMO Verma'
-  ];
-
   const statusOptions = [
-    'Approved',
-    'Under Review',
+   
     'Completed',
     'Pending Documentation'
   ];
@@ -145,9 +151,24 @@ const InitiationByRMO = () => {
 
   const handleInitiation = (patient) => {
     setSelectedPatient(patient);
+    
+    // Get current user name from localStorage
+    const storedUser = localStorage.getItem('mis_user');
+    let currentUserName = '';
+    
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        currentUserName = user.name || '';
+      } catch (error) {
+        console.error('Error parsing user data in handleInitiation:', error);
+      }
+    }
+    
+    // Pre-fill with existing data or current user's name
     setFormData({
       status: patient.rmo_status || '',
-      rmoName: patient.rmo_name || '',
+      rmoName: patient.rmo_name || currentUserName,
       summaryReportImage: patient.summary_report_image || null,
       summaryReportImageName: patient.summary_report_image_name || ''
     });
@@ -196,8 +217,8 @@ const InitiationByRMO = () => {
     }));
   };
 
- const handleSubmit = async () => {
-  if (!formData.status || !formData.rmoName || !formData.summaryReportImage) {
+const handleSubmit = async () => {
+  if (!formData.status || !formData.rmoName) {
     setModalError('Please fill all required fields marked with *');
     return;
   }
@@ -206,7 +227,7 @@ const InitiationByRMO = () => {
     let imageUrl = null;
     
     // If there's an image to upload
-    if (formData.summaryReportImage) {
+    if (formData.summaryReportImage && typeof formData.summaryReportImage === 'string' && formData.summaryReportImage.startsWith('data:image')) {
       // Generate a unique filename
       const fileName = `summary_report_${selectedPatient.admissionNo}_${Date.now()}.jpg`;
       const filePath = `summary-reports/${fileName}`;
@@ -217,7 +238,7 @@ const InitiationByRMO = () => {
       
       // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('summary_report_image') // Make sure this bucket exists
+        .from('summary_report_image')
         .upload(filePath, blob, {
           contentType: 'image/jpeg',
           upsert: true
@@ -234,32 +255,39 @@ const InitiationByRMO = () => {
         .getPublicUrl(filePath);
       
       imageUrl = urlData.publicUrl;
+    } else if (typeof formData.summaryReportImage === 'string') {
+      // If it's already a URL (from history), use it directly
+      imageUrl = formData.summaryReportImage;
     }
 
-    const now = new Date();
-    
+    // Prepare update data object
+    const updateData = {
+      // RMO initiation fields (always updated)
+      rmo_status: formData.status,
+      rmo_name: formData.rmoName,
+      summary_report_image: imageUrl,
+      summary_report_image_name: formData.summaryReportImageName,
+    };
+
+    // Only set actual1 and planned2 if status is NOT "Pending Documentation"
+    if (formData.status !== 'Pending Documentation') {
+      const currentTime = new Date().toLocaleString("en-CA", { 
+        timeZone: "Asia/Kolkata", 
+        hour12: false 
+      }).replace(',', '');
+      
+      updateData.actual1 = currentTime;
+      updateData.planned2 = currentTime;
+    } else {
+      // For Pending Documentation, ensure these fields remain null
+      updateData.actual1 = null;
+      updateData.planned2 = null;
+    }
+
     // Update the discharge record in Supabase with RMO initiation data
     const { error: updateError } = await supabase
       .from('discharge')
-      .update({
-        // Set actual discharge time
-        actual1: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
-        
-        // RMO initiation fields
-        rmo_status: formData.status,
-        rmo_name: formData.rmoName,
-        summary_report_image: imageUrl, // Store the public URL instead of base64
-        planned2: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
-        
-        // Update delay calculation
-        delay1: calculateDelay(selectedPatient.planned1, now)
-      })
+      .update(updateData)
       .eq('id', selectedPatient.id);
 
     if (updateError) throw updateError;
@@ -296,9 +324,22 @@ const InitiationByRMO = () => {
   };
 
   const resetForm = () => {
+    // Get current user name from localStorage
+    const storedUser = localStorage.getItem('mis_user');
+    let userName = '';
+    
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        userName = user.name || '';
+      } catch (error) {
+        console.error('Error parsing user data in resetForm:', error);
+      }
+    }
+    
     setFormData({
       status: '',
-      rmoName: '',
+      rmoName: userName,
       summaryReportImage: null,
       summaryReportImageName: ''
     });
@@ -311,22 +352,6 @@ const InitiationByRMO = () => {
   const openImageViewer = (imageData) => {
     setViewingImage(imageData);
     setViewImageModal(true);
-  };
-
-  // Function to format date for display
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-GB');
-  };
-
-  // Function to format time for display
-  const formatTime = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: false 
-    });
   };
 
   return (
@@ -555,7 +580,6 @@ const InitiationByRMO = () => {
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                         {patient.dischargeDate} {patient.dischargeTime}
                       </td>
-                    
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                         {patient.rmo_name || 'N/A'}
                       </td>
@@ -627,18 +651,6 @@ const InitiationByRMO = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-600">Actual Discharge:</span>
                       <span className="font-medium text-gray-900">{patient.dischargeDate} {patient.dischargeTime}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Delay:</span>
-                      <span className={`font-medium ${
-                        patient.delay1?.includes('Delayed') 
-                          ? 'text-red-700'
-                          : patient.delay1?.includes('Early')
-                          ? 'text-blue-700'
-                          : 'text-green-700'
-                      }`}>
-                        {patient.delay1 || 'N/A'}
-                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">RMO Name:</span>
@@ -731,6 +743,7 @@ const InitiationByRMO = () => {
                     value={formData.status}
                     onChange={handleInputChange}
                     className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                    required
                   >
                     <option value="">Select Status</option>
                     {statusOptions.map((status) => (
@@ -743,22 +756,21 @@ const InitiationByRMO = () => {
                   <label className="block mb-1 text-sm font-medium text-gray-700">
                     RMO Name <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <input
+                    type="text"
                     name="rmoName"
                     value={formData.rmoName}
-                    onChange={handleInputChange}
-                    className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="">Select RMO</option>
-                    {rmoList.map((rmo) => (
-                      <option key={rmo} value={rmo}>{rmo}</option>
-                    ))}
-                  </select>
+                    readOnly
+                    className="px-3 py-2 w-full bg-gray-100 rounded-lg border border-gray-300 text-gray-700 cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-xs text-green-600">
+                    Auto-filled from your login
+                  </p>
                 </div>
                 
                 <div>
                   <label className="block mb-1 text-sm font-medium text-gray-700">
-                    Summary Report <span className="text-red-500">*</span>
+                    Summary Report (Optional)
                   </label>
                   
                   {!formData.summaryReportImage ? (
@@ -775,7 +787,7 @@ const InitiationByRMO = () => {
                         className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-green-500 hover:bg-green-50 transition-colors"
                       >
                         <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                        <span className="text-sm text-gray-600">Click to upload image</span>
+                        <span className="text-sm text-gray-600">Click to upload image (Optional)</span>
                         <span className="text-xs text-gray-500 mt-1">PNG, JPG, JPEG (Max 5MB)</span>
                       </label>
                     </div>
@@ -784,6 +796,7 @@ const InitiationByRMO = () => {
                       <button
                         onClick={removeImage}
                         className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 z-10"
+                        type="button"
                       >
                         <X className="w-4 h-4" />
                       </button>

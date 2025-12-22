@@ -1,781 +1,592 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, Download, Plus, X } from 'lucide-react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { FileText, Eye, Search, Download, X } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import supabase from '../../../SupabaseClient';
 
 const StatusBadge = ({ status }) => {
   const getColors = () => {
-    if (status === 'Completed') return 'bg-green-100 text-green-700 border-green-300';
-    if (status === 'Pending') return 'bg-yellow-100 text-yellow-700 border-yellow-300';
-    if (status === 'In Progress') return 'bg-blue-100 text-blue-700 border-blue-300';
-    return 'bg-gray-100 text-gray-700 border-gray-300';
+    if (status === 'Completed') return 'bg-green-100 text-green-700';
+    if (status === 'Pending') return 'bg-yellow-100 text-yellow-700';
+    if (status === 'In Progress') return 'bg-blue-100 text-blue-700';
+    return 'bg-gray-100 text-gray-700';
   };
 
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getColors()}`}>
+    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getColors()}`}>
       {status}
     </span>
   );
 };
 
 export default function Lab() {
-  const navigate = useNavigate();
-  const { id } = useParams();
-  const location = useLocation();
-  const data = location.state?.data;
-  const [showLabModal, setShowLabModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'history'
-  const [labFormData, setLabFormData] = useState({
-    priority: 'Medium',
-    category: '',
-    pathologyTests: [],
-    radiologyType: '',
-    radiologyTests: [],
-    remarks: ''
-  });
-
-  // Pending and history lists for Lab Advice
+  const { data } = useOutletContext();
+  const [activeTab, setActiveTab] = useState('complete');
   const [pendingList, setPendingList] = useState([]);
   const [historyList, setHistoryList] = useState([]);
-  const [showPaymentSlip, setShowPaymentSlip] = useState(false);
-  const [paymentData, setPaymentData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState('all');
 
-  // Helper to read stored admission records from localStorage (available to render and handlers)
-  const fetchStoredAdmissionRecord = (admissionNoOrUhid) => {
-    try {
-      const raw = localStorage.getItem('ipdAdmissionRecords');
-      if (!raw) return null;
-      const records = JSON.parse(raw);
-      if (!Array.isArray(records)) return null;
-      return records.find(r => (
-        (r.ipdNumber && r.ipdNumber.toString() === (admissionNoOrUhid || '').toString()) ||
-        (r.admissionNumber && r.admissionNumber.toString() === (admissionNoOrUhid || '').toString()) ||
-        (r.uhid && r.uhid.toString() === (admissionNoOrUhid || '').toString()) ||
-        (r.id && r.id.toString() === (admissionNoOrUhid || '').toString())
-      )) || null;
-    } catch (e) {
-      return null;
-    }
-  };
+  // Report modal state
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [selectedReportImage, setSelectedReportImage] = useState(null);
 
-  // Initialize history list and pending list from localStorage and incoming data when component mounts
-  useEffect(() => {
+  // Fetch lab data from Supabase
+  const fetchLabData = async () => {
     if (!data) return;
-
-    const getStoredAdmissionRecord = (admissionNoOrUhid) => {
-      try {
-        const raw = localStorage.getItem('ipdAdmissionRecords');
-        if (!raw) return null;
-        const records = JSON.parse(raw);
-        if (!Array.isArray(records)) return null;
-        return records.find(r => (
-          (r.ipdNumber && r.ipdNumber.toString() === (admissionNoOrUhid || '').toString()) ||
-          (r.admissionNumber && r.admissionNumber.toString() === (admissionNoOrUhid || '').toString()) ||
-          (r.uhid && r.uhid.toString() === (admissionNoOrUhid || '').toString()) ||
-          (r.id && r.id.toString() === (admissionNoOrUhid || '').toString())
-        )) || null;
-      } catch (e) {
-        return null;
+    
+    try {
+      setLoading(true);
+      const ipdNumber = data.personalInfo.ipd;
+      
+      if (!ipdNumber || ipdNumber === 'N/A') {
+        console.warn('No IPD number available for fetching lab data');
+        return;
       }
-    };
 
-    const src = data.labAdviceHistory || data.labHistory || data.labAdvice || data.labTests || [];
-    let hist = [];
-    if (Array.isArray(src) && src.length) {
-      hist = src.map((item, idx) => {
-        if (item.adviceNo) return item;
-        // convert existing test-like entries into history entries
-        const stored = getStoredAdmissionRecord(data.personalInfo.ipd || data.personalInfo.uhid);
+      const { data: supabaseLabData, error } = await supabase
+        .from('lab')
+        .select('*')
+        .or(`ipd_number.eq.${ipdNumber},admission_no.eq.${ipdNumber}`)
+        .order('timestamp', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching lab data:', error);
+        return;
+      }
+
+      const transformedData = (supabaseLabData || []).map(lab => {
+        let pathologyTests = [];
+        let radiologyTests = [];
+        
+        try {
+          if (lab.pathology_tests) {
+            pathologyTests = Array.isArray(lab.pathology_tests) 
+              ? lab.pathology_tests 
+              : JSON.parse(lab.pathology_tests);
+          }
+          if (lab.radiology_tests) {
+            radiologyTests = Array.isArray(lab.radiology_tests)
+              ? lab.radiology_tests
+              : JSON.parse(lab.radiology_tests);
+          }
+        } catch (e) {
+          console.warn('Error parsing tests JSON:', e);
+        }
+
+        const isCompleted = lab.actual2 !== null;
+        const isPending = lab.planned2 !== null && lab.actual2 === null;
+
         return {
-          admissionNo: data.personalInfo.ipd || '',
-          adviceNo: `AD-${String(src.length - idx).padStart(3, '0')}`,
-          patientName: data.personalInfo.name,
-          phone: data.personalInfo.phone,
-          reason: data.admissionInfo?.reasonForAdmission || '',
-          age: data.personalInfo.age,
-          bedNo: stored?.bedNo || stored?.bed || data.admissionInfo?.bedNo || data.admissionInfo?.bed || data.departmentInfo?.bedNumber || '',
-          location: stored?.location || stored?.bedLocation || data.admissionInfo?.location || data.departmentInfo?.bedLocation || data.departmentInfo?.ward || '',
-          wardType: stored?.ward || stored?.wardType || data.admissionInfo?.wardType || data.admissionInfo?.ward || data.departmentInfo?.ward || '',
-          room: stored?.room || data.admissionInfo?.room || data.departmentInfo?.room || '',
-          priority: item.priority || '',
-          category: item.type || '',
-          tests: item.tests || (item.name ? [item.name] : []),
-          reportUrl: item.reportUrl || null
+          adviceId: `LAB-${lab.id}`,
+          admissionNo: lab.admission_no || ipdNumber,
+          adviceNo: lab.lab_no || `LAB-${lab.id}`,
+          patientName: lab.patient_name || data.personalInfo.name,
+          phone: lab.phone_no || '',
+          reason: lab.reason_for_visit || '',
+          age: lab.age || data.personalInfo.age,
+          bedNo: lab.bed_no || data.departmentInfo?.bedNumber || '',
+          location: lab.location || data.departmentInfo?.ward || '',
+          priority: lab.priority || 'Medium',
+          category: lab.category || '',
+          tests: [...pathologyTests, ...radiologyTests],
+          remarks: lab.remarks || '',
+          status: lab.status || (isCompleted ? 'Completed' : 'Pending'),
+          requestDate: lab.timestamp ? new Date(lab.timestamp).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          reportUrl: lab.report_url || null,
+          supabaseData: lab,
+          isPending: isPending,
+          isCompleted: isCompleted
         };
       });
+
+      const pending = transformedData.filter(item => item.isPending);
+      const history = transformedData.filter(item => item.isCompleted);
+
+      setPendingList(pending);
+      setHistoryList(history);
+
+    } catch (err) {
+      console.error('Error in fetchLabData:', err);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // sort descending so the top row is the latest advice (largest number)
-    hist.sort((a, b) => {
-      const na = parseInt((a.adviceNo || 'AD-000').replace(/^AD-/, ''), 10) || 0;
-      const nb = parseInt((b.adviceNo || 'AD-000').replace(/^AD-/, ''), 10) || 0;
-      return nb - na;
-    });
-
-    setHistoryList(hist);
-
-    // IMPORTANT: Load pending from localStorage FIRST - it has priority
-    // This ensures submitted pending records persist across page navigation
-    try {
-      const stored = localStorage.getItem('labAdviceHistory');
-      if (stored) {
-        const pending = JSON.parse(stored);
-        if (Array.isArray(pending) && pending.length > 0) {
-          setPendingList(pending);
-          console.log('Loaded pending records from localStorage:', pending.length);
-          return; // Exit - don't overwrite localStorage data
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load pending from localStorage:', e);
+  useEffect(() => {
+    if (data) {
+      fetchLabData();
     }
-    
-    // If no pending data in localStorage, start with empty pending list
-    setPendingList([]);
   }, [data]);
 
-  // Refresh pending list from localStorage when page becomes visible (tab focus)
-  useEffect(() => {
-    const handleFocus = () => {
-      try {
-        const stored = localStorage.getItem('labAdviceHistory');
-        if (stored) {
-          const pending = JSON.parse(stored);
-          if (Array.isArray(pending)) {
-            setPendingList(pending);
-          }
-        }
-      } catch (e) {
-        console.error('Failed to refresh pending from localStorage:', e);
-      }
-    };
-
-    const handlePaymentProcessed = () => {
-      console.log('Payment processed event received. Reloading pending list...');
-      handleFocus();
-    };
-
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('paymentProcessed', handlePaymentProcessed);
+  const getFilteredTasks = () => {
+    const tasks = activeTab === 'complete' ? historyList : pendingList;
     
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('paymentProcessed', handlePaymentProcessed);
-    };
-  }, []);
+    return tasks.filter(task => {
+      const matchesSearch = 
+        task.adviceNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        task.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        task.admissionNo?.toLowerCase().includes(searchTerm.toLowerCase());
 
-  // Stored record for render-time display in modal (prefer localStorage values)
-  const storedRecord = data ? fetchStoredAdmissionRecord(data.personalInfo.ipd || data.personalInfo.uhid) : null;
+      const matchesCategory = filterCategory === 'all' || task.category === filterCategory;
 
-  // Pathology tests list
-  const pathologyTests = [
-    'LFT', 'RFT', 'Lipid Profile', 'CBC', 'HBA1C', 'Electrolyte', 'PT/INR', 'Blood Group', 
-    'ESR', 'CRP', 'Sugar', 'Urine R/M', 'Viral Marker', 'Malaria', 'Dengue', 'Widal', 
-    'Troponin-I', 'Troponin-T', 'SGOT', 'SGPT', 'Serum Urea', 'Serum Creatinine', 'CT-BT', 
-    'ABG', 'Urine C/S', 'Thyroid Profile', 'UPT', 'HB', 'PPD', 'Sickling', 'Peripheral Smear'
-  ];
-
-  // X-Ray tests list
-  const xrayTests = [
-    'X-Ray Chest PA', 'X-Ray Chest AP', 'X-Ray Chest Lateral View', 'X-Ray KUB', 
-    'X-Ray LS Spine AP/Lat', 'X-Ray Pelvis AP', 'X-Ray Skull AP/Lat'
-  ];
-
-  // CT Scan tests list
-  const ctScanTests = [
-    'CT Brain', 'CT Chest', 'HRCT Chest', 'NCCT Head', 'CT Angiography'
-  ];
-
-  // USG tests list
-  const usgTests = [
-    'USG Whole Abdomen', 'USG KUB', 'USG Pelvis', 'TVS', 'USG Breast', 'USG Thyroid'
-  ];
-
-  const handleLabInputChange = (e) => {
-    const { name, value } = e.target;
-    setLabFormData(prev => ({
-      ...prev,
-      [name]: value,
-      ...(name === 'category' && { 
-        pathologyTests: [], 
-        radiologyType: '', 
-        radiologyTests: [] 
-      }),
-      ...(name === 'radiologyType' && { radiologyTests: [] })
-    }));
-  };
-
-  const handleCheckboxChange = (testName, category) => {
-    setLabFormData(prev => {
-      const currentTests = category === 'pathology' ? prev.pathologyTests : prev.radiologyTests;
-      const newTests = currentTests.includes(testName)
-        ? currentTests.filter(t => t !== testName)
-        : [...currentTests, testName];
-      
-      return {
-        ...prev,
-        [category === 'pathology' ? 'pathologyTests' : 'radiologyTests']: newTests
-      };
+      return matchesSearch && matchesCategory;
     });
   };
 
-  const handleLabSubmit = () => {
-    // Generate next Advice No by reading top of historyList (if present)
-    const getNextAdviceNo = () => {
-      const top = historyList && historyList.length ? historyList[0].adviceNo : null;
-      if (!top) return 'AD-001';
-      const num = parseInt(top.replace(/^AD-/, ''), 10);
-      const next = num + 1;
-      return `AD-${String(next).padStart(3, '0')}`;
-    };
-
-    const adviceNo = getNextAdviceNo();
-
-    const testsSelected = labFormData.category === 'Pathology' ? labFormData.pathologyTests : labFormData.radiologyTests;
-
-    // Try to enrich with stored admission record from localStorage when present
-    const storedForNew = (() => {
-      try {
-        const raw = localStorage.getItem('ipdAdmissionRecords');
-        if (!raw) return null;
-        const records = JSON.parse(raw);
-        return records.find(r => (r.ipdNumber === data.personalInfo.ipd || r.admissionNumber === data.personalInfo.ipd || r.uhid === data.personalInfo.uhid)) || null;
-      } catch (e) {
-        return null;
-      }
-    })();
-
-    const newAdvice = {
-      adviceId: `AD-${Date.now()}`,
-      uniqueNumber: data.personalInfo.uhid || data.personalInfo.ipd || '',
-      admissionNo: data.personalInfo.ipd || '',
-      adviceNo,
-      patientName: data.personalInfo.name,
-      phone: data.personalInfo.phone,
-      phoneNumber: data.personalInfo.phone,
-      reason: data.admissionInfo?.reasonForAdmission || data.admissionInfo?.presentingComplaint || '',
-      reasonForVisit: data.admissionInfo?.reasonForAdmission || data.admissionInfo?.presentingComplaint || '',
-      age: data.personalInfo.age,
-      gender: data.personalInfo.gender || '',
-      bedNo: storedForNew?.bedNo || storedForNew?.bed || data.admissionInfo?.bedNo || data.admissionInfo?.bed || data.departmentInfo?.bedNumber || '',
-      location: storedForNew?.location || storedForNew?.bedLocation || data.admissionInfo?.location || data.departmentInfo?.bedLocation || data.departmentInfo?.ward || '',
-      wardType: storedForNew?.ward || storedForNew?.wardType || data.admissionInfo?.wardType || data.admissionInfo?.ward || data.departmentInfo?.ward || '',
-      room: storedForNew?.room || data.admissionInfo?.room || data.departmentInfo?.room || '',
-      priority: labFormData.priority,
-      category: labFormData.category,
-      tests: testsSelected,
-      pathologyTests: labFormData.category === 'Pathology' ? testsSelected : [],
-      radiologyType: labFormData.radiologyType,
-      radiologyTests: labFormData.category === 'Radiology' ? testsSelected : [],
-      remarks: labFormData.remarks,
-      status: 'Pending',
-      requestDate: new Date().toISOString().split('T')[0],
-      reportUrl: null
-    };
-
-    // Add to pending list (prepend so newest is top)
-    const updatedPendingList = [newAdvice, ...pendingList];
-    setPendingList(updatedPendingList);
-
-    // Store in localStorage for Payment Slip page
-    try {
-      localStorage.setItem('labAdviceHistory', JSON.stringify(updatedPendingList));
-      console.log('Saved to localStorage:', updatedPendingList.length, 'pending records');
-    } catch (e) {
-      console.error('Failed to save to localStorage:', e);
+  const handleViewReport = (reportUrl) => {
+    if (!reportUrl) {
+      alert('No report available');
+      return;
     }
-
-    // Show payment slip with data
-    setPaymentData(newAdvice);
-    setShowPaymentSlip(true);
-
-    // Reset form and close modal
-    setShowLabModal(false);
-    setLabFormData({
-      priority: 'Medium',
-      category: '',
-      pathologyTests: [],
-      radiologyType: '',
-      radiologyTests: [],
-      remarks: ''
-    });
+    setSelectedReportImage(reportUrl);
+    setShowReportModal(true);
   };
 
-  const getRadiologyTests = () => {
-    switch(labFormData.radiologyType) {
-      case 'X-ray': return xrayTests;
-      case 'CT-scan': return ctScanTests;
-      case 'USG': return usgTests;
-      default: return [];
-    }
-  };
+  if (!data) return null;
 
-  const handlePaymentConfirm = () => {
-    if (!paymentData) return;
-    
-    // Just close the payment slip modal and keep record in Pending
-    // The record will move to History only when Payment Slip page processes it
-    setShowPaymentSlip(false);
-    setPaymentData(null);
-    setActiveTab('pending');  // Show pending tab
-    
-    console.log('Payment slip closed. Record remains in Pending until processed in Payment Slip page');
-  };
-
-  if (!data) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <p className="text-gray-600 mb-4">No patient data available</p>
-          <button
-            onClick={() => navigate(`/admin/patient-profile/${id}`)}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-          >
-            Back to Overview
-          </button>
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mb-4"></div>
+          <p className="text-gray-600">Loading lab data...</p>
         </div>
       </div>
     );
   }
 
+  const filteredTasks = getFilteredTasks();
+
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-7xl mx-auto">
-        {/* Back Button */}
-        <div className="bg-white px-6 py-4 border-b border-gray-200">
-          <button
-            onClick={() => navigate(`/admin/patient-profile/${id}`)}
-            className="flex items-center gap-2 text-green-600 hover:text-green-700 font-medium"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Patient Overview
-          </button>
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 300px)' }}>
+      {/* Header Section - FIXED DASHBOARD VIEW */}
+      <div className="bg-green-600 text-white p-4 rounded-lg shadow-md flex-shrink-0">
+        {/* Desktop View - Everything inline in one row */}
+        <div className="hidden md:flex items-center justify-between">
+          {/* Left side: Title and icon */}
+          <div className="flex items-center gap-3">
+            <FileText className="w-8 h-8" />
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold">Laboratory Tests</h1>
+              <p className="text-xs opacity-90 mt-1">
+                {data.personalInfo.name} - UHID: {data.personalInfo.uhid}
+              </p>
+            </div>
+          </div>
+          
+          {/* Right side: Tabs, Search, Filter - ALL INLINE */}
+          <div className="flex items-center gap-3">
+            {/* Tabs */}
+            <div className="flex items-center bg-white/20 rounded-lg p-1">
+              <button
+                onClick={() => setActiveTab('complete')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'complete'
+                    ? 'bg-white text-green-600'
+                    : 'text-white hover:bg-white/30'
+                }`}
+              >
+                Complete ({historyList.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('pending')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'pending'
+                    ? 'bg-white text-green-600'
+                    : 'text-white hover:bg-white/30'
+                }`}
+              >
+                Pending ({pendingList.length})
+              </button>
+            </div>
+            
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-300 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-48 pl-9 pr-3 py-2 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-sm"
+              />
+            </div>
+            
+            {/* Category Filter */}
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="px-3 py-2 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent text-white text-sm"
+            >
+              <option value="all" className="text-gray-900">All Categories</option>
+              <option value="Pathology" className="text-gray-900">Pathology</option>
+              <option value="Radiology" className="text-gray-900">Radiology</option>
+            </select>
+          </div>
         </div>
 
-        {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-6">
-          <div className="flex items-center justify-between">
+        {/* Mobile View - Stacked layout */}
+        <div className="md:hidden">
+          <div className="flex flex-col gap-3">
+            {/* Title Row */}
             <div className="flex items-center gap-3">
               <FileText className="w-8 h-8" />
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold">Laboratory Tests</h1>
-                <p className="text-sm opacity-90 mt-1">{data.personalInfo.name} - {data.personalInfo.uhid}</p>
+              <div className="flex-1">
+                <h1 className="text-xl font-bold">Laboratory Tests</h1>
+                <p className="text-xs opacity-90 mt-1">
+                  {data.personalInfo.name} - UHID: {data.personalInfo.uhid}
+                </p>
               </div>
             </div>
-            <button
-              onClick={() => setShowLabModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-green-600 rounded-lg hover:bg-gray-100 font-medium transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Lab Advice
-            </button>
+
+            {/* Tabs, Search and Filter - Compact layout */}
+            <div className="flex flex-col gap-2">
+              {/* Small Tabs */}
+              <div className="flex items-center bg-white/20 rounded-lg p-0.5">
+                <button
+                  onClick={() => setActiveTab('complete')}
+                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    activeTab === 'complete'
+                      ? 'bg-white text-green-600'
+                      : 'text-white hover:bg-white/30'
+                  }`}
+                >
+                  Complete ({historyList.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('pending')}
+                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    activeTab === 'pending'
+                      ? 'bg-white text-green-600'
+                      : 'text-white hover:bg-white/30'
+                  }`}
+                >
+                  Pending ({pendingList.length})
+                </button>
+              </div>
+              
+              {/* Search, Filter in same row */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-300 w-3 h-3" />
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-xs"
+                  />
+                </div>
+                
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="px-2 py-1.5 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent text-white text-xs w-24"
+                >
+                  <option value="all" className="text-gray-900">All</option>
+                  <option value="Pathology" className="text-gray-900">Pathology</option>
+                  <option value="Radiology" className="text-gray-900">Radiology</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Content: Pending and History sections */}
-        <div className="p-6">
-          {/* Pending and History Tabs */}
-          <div className="flex gap-4 mb-6">
-            <button
-              onClick={() => setActiveTab('pending')}
-              className={`flex-1 rounded-lg py-3 px-4 text-center font-bold transition-colors ${
-                activeTab === 'pending' 
-                  ? 'bg-green-600 text-white' 
-                  : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
-              }`}
-            >
-              Pending ({pendingList.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`flex-1 rounded-lg py-3 px-4 text-center font-bold transition-colors ${
-                activeTab === 'history' 
-                  ? 'bg-green-600 text-white' 
-                  : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
-              }`}
-            >
-              History ({historyList.length})
-            </button>
-          </div>
-
-          {/* Pending Section */}
-          {activeTab === 'pending' && (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              {pendingList.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead>
-                      <tr className="bg-gray-100 border-b-2 border-gray-300">
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">UNIQUE NUMBER</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">ADVICE NO</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">PATIENT NAME</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">PHONE NUMBER</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">REASON FOR VISIT</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">AGE</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">BED NO.</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">LOCATION</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">WARD TYPE</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">ROOM</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">PRIORITY</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">CATEGORY</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">TESTS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pendingList.map((p, i) => (
-                        <tr key={i} className="border-b hover:bg-gray-50">
-                          <td className="px-4 py-3 text-gray-700">{p.uniqueNumber}</td>
-                          <td className="px-4 py-3 text-green-600 font-semibold">{p.adviceNo}</td>
-                          <td className="px-4 py-3 text-gray-700">{p.patientName}</td>
-                          <td className="px-4 py-3 text-gray-700">{p.phone}</td>
-                          <td className="px-4 py-3 text-gray-700">{p.reason}</td>
-                          <td className="px-4 py-3 text-gray-700">{p.age}</td>
-                          <td className="px-4 py-3 text-gray-700">{p.bedNo || (fetchStoredAdmissionRecord(p.admissionNo || p.uniqueNumber)?.bedNo) || 'N/A'}</td>
-                          <td className="px-4 py-3 text-gray-700">{p.location || (fetchStoredAdmissionRecord(p.admissionNo || p.uniqueNumber)?.location) || (fetchStoredAdmissionRecord(p.admissionNo || p.uniqueNumber)?.bedLocation) || 'N/A'}</td>
-                          <td className="px-4 py-3 text-gray-700">{p.wardType || (fetchStoredAdmissionRecord(p.admissionNo || p.uniqueNumber)?.ward) || (fetchStoredAdmissionRecord(p.admissionNo || p.uniqueNumber)?.wardType) || 'N/A'}</td>
-                          <td className="px-4 py-3 text-gray-700">{p.room || (fetchStoredAdmissionRecord(p.admissionNo || p.uniqueNumber)?.room) || 'N/A'}</td>
-                          <td className="px-4 py-3">
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                              p.priority === 'High' ? 'bg-red-100 text-red-700' : 
-                              p.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 
-                              'bg-green-100 text-green-700'
-                            }`}>
-                              {p.priority}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-700">{p.category}</td>
-                          <td className="px-4 py-3 text-gray-700 text-xs">{(p.tests || []).join(', ')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-12 px-4">
-                  <div className="mb-4 text-gray-400">
-                    <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+      {/* Mobile Card View */}
+      <div className="md:hidden flex-1 min-h-0 mt-2">
+        <div className="h-full bg-white rounded-lg border border-gray-200 overflow-hidden">
+          {filteredTasks.length > 0 ? (
+            <div className="h-full overflow-y-auto p-4">
+              <div className="space-y-4">
+                {filteredTasks.map((task, i) => (
+                  <div key={i} className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h3 className="font-bold text-green-600 text-sm">{task.adviceNo}</h3>
+                        <p className="text-sm font-medium text-gray-900 mt-1">{task.patientName}</p>
+                        <p className="text-xs text-gray-500">Age: {task.age} | IPD: {task.admissionNo}</p>
+                      </div>
+                      <StatusBadge status={task.status} />
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {/* Priority and Category */}
+                      <div className="flex flex-wrap gap-2">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          task.priority === 'High' ? 'bg-red-100 text-red-700' :
+                          task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          {task.priority}
+                        </span>
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                          {task.category}
+                        </span>
+                      </div>
+                      
+                      {/* Reason */}
+                      {task.reason && (
+                        <div className="text-sm">
+                          <span className="font-medium text-gray-700">Reason: </span>
+                          <span className="text-gray-600">{task.reason}</span>
+                        </div>
+                      )}
+                      
+                      {/* Tests */}
+                      <div className="text-sm">
+                        <span className="font-medium text-gray-700">Tests: </span>
+                        <span className="text-gray-600">
+                          {(task.tests || []).slice(0, 3).join(', ')}
+                          {(task.tests || []).length > 3 && ` +${(task.tests || []).length - 3} more`}
+                        </span>
+                      </div>
+                      
+                      {/* Location */}
+                      <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                        <div>
+                          <span className="font-medium">Bed:</span> {task.bedNo || 'N/A'}
+                        </div>
+                        <div>
+                          <span className="font-medium">Location:</span> {task.location || 'N/A'}
+                        </div>
+                      </div>
+                      
+                      {/* Date and Phone */}
+                      <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                        <div>
+                          <span className="font-medium">Date:</span> {task.requestDate}
+                        </div>
+                        <div>
+                          <span className="font-medium">Phone:</span> {task.phone || 'N/A'}
+                        </div>
+                      </div>
+                      
+                      {/* Report Actions */}
+                      {task.reportUrl && (
+                        <div className="pt-3 border-t border-gray-100">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleViewReport(task.reportUrl)}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                            >
+                              <Eye className="w-3 h-3" />
+                              View Report
+                            </button>
+                            <a
+                              href={task.reportUrl}
+                              download
+                              className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm"
+                            >
+                              <Download className="w-3 h-3" />
+                              Download
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-gray-600 font-medium mb-2">No pending payments</p>
-                  <p className="text-gray-500 text-sm">Records from Lab Advice History will appear here</p>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
-          )}
-
-          {/* History Section */}
-          {activeTab === 'history' && (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              {historyList.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead>
-                      <tr className="bg-gray-100 border-b-2 border-gray-300">
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">ACTION</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">UNIQUE NUMBER</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">ADVICE NO</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">PATIENT NAME</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">PHONE NUMBER</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">REASON FOR VISIT</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">AGE</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">BED NO.</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">LOCATION</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">WARD TYPE</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">ROOM</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">PRIORITY</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">CATEGORY</th>
-                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">TESTS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historyList.map((h, i) => (
-                        <tr key={i} className="border-b hover:bg-gray-50">
-                          <td className="px-4 py-3">
-                            {h.reportUrl ? (
-                              <a 
-                                href={h.reportUrl} 
-                                target="_blank" 
-                                rel="noreferrer" 
-                                className="text-green-600 hover:underline font-semibold"
-                              >
-                                View
-                              </a>
-                            ) : (
-                              <span className="text-gray-400">No Report</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-gray-700">{h.admissionNo}</td>
-                          <td className="px-4 py-3 text-green-600 font-semibold">{h.adviceNo}</td>
-                          <td className="px-4 py-3 text-gray-700">{h.patientName}</td>
-                          <td className="px-4 py-3 text-gray-700">{h.phone}</td>
-                          <td className="px-4 py-3 text-gray-700">{h.reason}</td>
-                          <td className="px-4 py-3 text-gray-700">{h.age}</td>
-                          <td className="px-4 py-3 text-gray-700">{h.bedNo || 'N/A'}</td>
-                          <td className="px-4 py-3 text-gray-700">{h.location || 'N/A'}</td>
-                          <td className="px-4 py-3 text-gray-700">{h.wardType || 'N/A'}</td>
-                          <td className="px-4 py-3 text-gray-700">{h.room || 'N/A'}</td>
-                          <td className="px-4 py-3">
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                              h.priority === 'High' ? 'bg-red-100 text-red-700' : 
-                              h.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 
-                              'bg-green-100 text-green-700'
-                            }`}>
-                              {h.priority}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-700">{h.category}</td>
-                          <td className="px-4 py-3 text-gray-700 text-xs">{(h.tests || []).join(', ')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-12 px-4">
-                  <div className="mb-4 text-gray-400">
-                    <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <p className="text-gray-600 font-medium mb-2">No history available</p>
-                  <p className="text-gray-500 text-sm">Lab advice history will appear here once tests are completed</p>
-                </div>
-              )}
+          ) : (
+            <div className="h-full flex items-center justify-center p-8">
+              <div className="text-center">
+                <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                <p className="text-gray-600 font-medium text-sm">
+                  {activeTab === 'complete' ? 'No completed lab tests found' : 'No pending lab tests found'}
+                </p>
+                <p className="text-gray-500 text-xs mt-1">
+                  {searchTerm ? 'No tests match your search' : 
+                    activeTab === 'complete' ? 'No completed tests available' : 'No pending tests available'
+                  }
+                </p>
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Lab Advice Modal */}
-      {showLabModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">Lab Advice Form</h2>
+      {/* Desktop Table View */}
+      <div className="hidden md:block flex-1 min-h-0 mt-2">
+        <div className="h-full bg-white rounded-lg border border-gray-200 overflow-hidden">
+          {filteredTasks.length > 0 ? (
+            <div className="h-full overflow-auto" style={{ maxHeight: '100%' }}>
+              <table className="w-full text-sm text-left">
+                <thead className="sticky top-0 z-10 bg-gray-100 border-b-2 border-gray-300">
+                  <tr>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">LAB NO</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">PATIENT</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">PHONE</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">REASON</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">BED NO</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">LOCATION</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">PRIORITY</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">CATEGORY</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">TESTS</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">DATE</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">STATUS</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">VIEW</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredTasks.map((task, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <span className="font-semibold text-green-600">{task.adviceNo}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900">{task.patientName}</div>
+                        <div className="text-xs text-gray-500">Age: {task.age}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-gray-700">{task.phone || 'N/A'}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-xs text-gray-500 truncate max-w-xs">{task.reason}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-gray-700">{task.bedNo || 'N/A'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-xs text-gray-500 truncate max-w-xs">{task.location || 'N/A'}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          task.priority === 'High' ? 'bg-red-100 text-red-700' :
+                          task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          {task.priority}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-gray-700">{task.category}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-xs text-gray-500 truncate max-w-xs">
+                          {(task.tests || []).join(', ')}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="text-xs text-gray-500">{task.requestDate}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={task.status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {task.reportUrl ? (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleViewReport(task.reportUrl)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                              title="View Report"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <a
+                              href={task.reportUrl}
+                              download
+                              className="p-1 text-green-600 hover:bg-green-50 rounded"
+                              title="Download Report"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs">No Report</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center p-8">
+              <div className="text-center">
+                <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                <p className="text-gray-600 font-medium text-sm">
+                  {activeTab === 'complete' ? 'No completed lab tests found' : 'No pending lab tests found'}
+                </p>
+                <p className="text-gray-500 text-xs mt-1">
+                  {searchTerm ? 'No tests match your search' : 
+                    activeTab === 'complete' ? 'No completed tests available' : 'No pending tests available'
+                  }
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Report Image Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black bg-opacity-75">
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Lab Report</h3>
               <button
-                onClick={() => setShowLabModal(false)}
+                onClick={() => {
+                  setShowReportModal(false);
+                  setSelectedReportImage(null);
+                }}
                 className="p-1 text-gray-400 rounded-full hover:text-gray-600 hover:bg-gray-100"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            <div className="p-6">
-              {/* Patient Information */}
-              <div className="p-4 mb-6 bg-green-50 rounded-lg border border-green-200">
-                <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
-                <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-                  <div>
-                    <span className="text-gray-600">Admission No:</span>
-                    <div className="font-medium text-gray-900">{data.personalInfo.ipd}</div>
+            <div className="flex-1 p-4 overflow-auto">
+              {selectedReportImage ? (
+                <div className="space-y-4">
+                  <div className="border border-gray-300 rounded-lg overflow-hidden">
+                    <img
+                      src={selectedReportImage}
+                      alt="Lab Report"
+                      className="w-full h-auto object-contain"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2Ij5SZXBvcnQgSW1hZ2UgTm90IEF2YWlsYWJsZTwvdGV4dD48L3N2Zz4=";
+                      }}
+                    />
                   </div>
-                  <div>
-                    <span className="text-gray-600">Name:</span>
-                    <div className="font-medium text-gray-900">{data.personalInfo.name}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Phone:</span>
-                    <div className="font-medium text-gray-900">{data.personalInfo.phone}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Age:</span>
-                    <div className="font-medium text-gray-900">{data.personalInfo.age}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Gender:</span>
-                    <div className="font-medium text-gray-900">{data.personalInfo.gender}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Reason:</span>
-                    <div className="font-medium text-gray-900">{data.admissionInfo.reasonForAdmission}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Bed No.:</span>
-                    <div className="font-medium text-gray-900">{storedRecord?.bedNo || storedRecord?.bed || data.admissionInfo?.bedNo || data.admissionInfo?.bed || '-'}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Location:</span>
-                    <div className="font-medium text-gray-900">{storedRecord?.location || storedRecord?.bedLocation || data.admissionInfo?.location || '-'}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Ward Type:</span>
-                    <div className="font-medium text-gray-900">{storedRecord?.ward || storedRecord?.wardType || data.admissionInfo?.wardType || data.admissionInfo?.ward || '-'}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Room:</span>
-                    <div className="font-medium text-gray-900">{storedRecord?.room || data.admissionInfo?.room || '-'}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Form Fields */}
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="block mb-1 text-sm font-medium text-gray-700">Priority *</label>
-                    <select
-                      name="priority"
-                      value={labFormData.priority}
-                      onChange={handleLabInputChange}
-                      className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    >
-                      <option value="High">High</option>
-                      <option value="Medium">Medium</option>
-                      <option value="Low">Low</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block mb-1 text-sm font-medium text-gray-700">Pathology & Radiology *</label>
-                    <select
-                      name="category"
-                      value={labFormData.category}
-                      onChange={handleLabInputChange}
-                      className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    >
-                      <option value="">Select Category</option>
-                      <option value="Pathology">Pathology</option>
-                      <option value="Radiology">Radiology</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Pathology Tests */}
-                {labFormData.category === 'Pathology' && (
-                  <div>
-                    <label className="block mb-2 text-sm font-medium text-gray-700">
-                      Select Pathology Tests * ({labFormData.pathologyTests.length} selected)
-                    </label>
-                    <div className="p-4 max-h-60 overflow-y-auto bg-gray-50 rounded-lg border border-gray-300">
-                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-                        {pathologyTests.map((test) => (
-                          <label key={test} className="flex items-start gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={labFormData.pathologyTests.includes(test)}
-                              onChange={() => handleCheckboxChange(test, 'pathology')}
-                              className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                            />
-                            <span className="text-sm text-gray-700">{test}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Radiology Section */}
-                {labFormData.category === 'Radiology' && (
-                  <>
+                  <div className="flex justify-between items-center text-sm text-gray-600">
                     <div>
-                      <label className="block mb-1 text-sm font-medium text-gray-700">Radiology Type *</label>
-                      <select
-                        name="radiologyType"
-                        value={labFormData.radiologyType}
-                        onChange={handleLabInputChange}
-                        className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                      <span className="font-medium">Image URL: </span>
+                      <a 
+                        href={selectedReportImage} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline truncate block max-w-xs"
                       >
-                        <option value="">Select Type</option>
-                        <option value="X-ray">X-ray</option>
-                        <option value="CT-scan">CT Scan</option>
-                        <option value="USG">USG</option>
-                      </select>
+                        {selectedReportImage}
+                      </a>
                     </div>
-
-                    {labFormData.radiologyType && (
-                      <div>
-                        <label className="block mb-2 text-sm font-medium text-gray-700">
-                          Select {labFormData.radiologyType} Tests * ({labFormData.radiologyTests.length} selected)
-                        </label>
-                        <div className="p-4 max-h-60 overflow-y-auto bg-gray-50 rounded-lg border border-gray-300">
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                            {getRadiologyTests().map((test) => (
-                              <label key={test} className="flex items-start gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={labFormData.radiologyTests.includes(test)}
-                                  onChange={() => handleCheckboxChange(test, 'radiology')}
-                                  className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                                />
-                                <span className="text-sm text-gray-700">{test}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Remarks */}
-                <div>
-                  <label className="block mb-1 text-sm font-medium text-gray-700">Remarks</label>
-                  <textarea
-                    name="remarks"
-                    value={labFormData.remarks}
-                    onChange={handleLabInputChange}
-                    rows="3"
-                    placeholder="Add any additional notes or instructions..."
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
+                    <div className="flex gap-2">
+                      <a
+                        href={selectedReportImage}
+                        download="lab-report.jpg"
+                        className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-1"
+                      >
+                        <Download className="w-3 h-3" />
+                        Download
+                      </a>
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col gap-3 justify-end mt-6 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => setShowLabModal(false)}
-                  className="px-6 py-2 w-full font-medium text-gray-700 bg-gray-100 rounded-lg transition-colors hover:bg-gray-200 sm:w-auto"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleLabSubmit}
-                  className="px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 sm:w-auto"
-                >
-                  Submit Lab Advice
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Slip Modal (shown after submit) */}
-      {showPaymentSlip && paymentData && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Payment Slip</h3>
-              <button onClick={() => setShowPaymentSlip(false)} className="text-gray-500 px-2 py-1 rounded hover:bg-gray-100">Close</button>
-            </div>
-
-            <div className="text-sm text-gray-700 space-y-2">
-              <div className="flex justify-between"><span className="font-medium">Unique No.</span><span>{paymentData.uniqueNumber}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Advice No</span><span>{paymentData.adviceNo}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Patient</span><span>{paymentData.patientName}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Phone</span><span>{paymentData.phone}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Reason</span><span>{paymentData.reason}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Age</span><span>{paymentData.age}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Bed No.</span><span>{paymentData.bedNo}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Location</span><span>{paymentData.location}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Ward Type</span><span>{paymentData.wardType}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Room</span><span>{paymentData.room}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Priority</span><span>{paymentData.priority}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Category</span><span>{paymentData.category}</span></div>
-              <div className="flex justify-between"><span className="font-medium">Tests</span><span>{(paymentData.tests || []).join(', ')}</span></div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={handlePaymentConfirm}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg"
-              >
-                Confirm & Save
-              </button>
-              <button onClick={() => setShowPaymentSlip(false)} className="px-4 py-2 bg-gray-100 rounded-lg">Close</button>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="mb-4 text-gray-400">
+                    <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-600 font-medium mb-2">No report image available</p>
+                  <p className="text-gray-500 text-sm">The lab report image could not be loaded</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

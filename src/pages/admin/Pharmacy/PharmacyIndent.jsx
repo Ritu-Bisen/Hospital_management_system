@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, X, Save, Trash2, Pill, Eye, Edit, CheckCircle, Search } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, X, Save, Trash2, Pill, Eye, Edit, CheckCircle, Search, Check, AlertCircle } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
 
 const PharmacyIndents = () => {
@@ -11,7 +11,6 @@ const PharmacyIndents = () => {
   const [indents, setIndents] = useState([]);
   const [admissionPatients, setAdmissionPatients] = useState([]);
   const [medicinesList, setMedicinesList] = useState([]);
-  const [staffNurses, setStaffNurses] = useState([]);
   const [investigationTests, setInvestigationTests] = useState({
     Pathology: [],
     'X-ray': [],
@@ -21,19 +20,41 @@ const PharmacyIndents = () => {
   const [loading, setLoading] = useState(false);
   const [successData, setSuccessData] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [popup, setPopup] = useState({ show: false, message: '', type: 'success' });
+  const [medicineSearchTerm, setMedicineSearchTerm] = useState('');
+  const [showMedicineDropdown, setShowMedicineDropdown] = useState(null);
 
-  const [formData, setFormData] = useState({
-    admissionNumber: '',
-    staffName: '',
-    consultantName: '',
-    patientName: '',
-    uhidNumber: '',
-    age: '',
-    gender: '',
-    wardLocation: '',
-    category: '',
-    room: '',
-    diagnosis: ''
+  // Get user name from localStorage
+  const getCurrentUser = () => {
+    try {
+      const storedUser = localStorage.getItem('mis_user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        return user.name || '';
+      }
+    } catch (error) {
+      console.error('Error parsing user from localStorage:', error);
+    }
+    return '';
+  };
+
+  const [formData, setFormData] = useState(() => {
+    // Initialize formData with user name from localStorage
+    const currentUserName = getCurrentUser();
+    
+    return {
+      admissionNumber: '',
+      staffName: currentUserName, // Auto-filled from localStorage
+      consultantName: '',
+      patientName: '',
+      uhidNumber: '',
+      age: '',
+      gender: '',
+      wardLocation: '',
+      category: '',
+      room: '',
+      diagnosis: ''
+    };
   });
 
   const [requestTypes, setRequestTypes] = useState({
@@ -73,14 +94,35 @@ const PharmacyIndents = () => {
     'Biopsy Medium', 'Biopsy Large', 'Serum Homocysteine'
   ];
 
+  // Show popup message
+  const showPopup = (message, type = 'success') => {
+    setPopup({ show: true, message, type });
+    setTimeout(() => {
+      setPopup({ show: false, message: '', type: 'success' });
+    }, 3000);
+  };
+
   // Load data from Supabase
   useEffect(() => {
     loadData();
     loadMedicinesList();
-    loadStaffNurses();
     loadInvestigationTests();
     setupRealtimeSubscription();
   }, []);
+
+  // Add effect to close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Close medicine dropdown if click is outside
+      if (showMedicineDropdown && !event.target.closest('.medicine-dropdown-container')) {
+        setShowMedicineDropdown(null);
+        setMedicineSearchTerm('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMedicineDropdown]);
 
   const loadData = async () => {
     try {
@@ -99,6 +141,8 @@ const PharmacyIndents = () => {
       const { data: patientsData, error: patientsError } = await supabase
         .from('ipd_admissions')
         .select('admission_no, patient_name, consultant_dr, age, gender, ward_type, floor, room, bed_no, ipd_number')
+         .not('planned1', 'is', null)  // planned1 is not null
+        .is('actual1', null)
         .order('admission_no', { ascending: false });
 
       if (patientsError) throw patientsError;
@@ -106,6 +150,7 @@ const PharmacyIndents = () => {
 
     } catch (error) {
       console.error('Error loading data:', error);
+      showPopup('Error loading data from database', 'error');
     } finally {
       setLoading(false);
     }
@@ -159,48 +204,6 @@ const PharmacyIndents = () => {
       }
     } catch (error) {
       console.error('Error loading medicines list:', error);
-    }
-  };
-
-  const loadStaffNurses = async () => {
-    try {
-      // Load staff nurses from all_staff table where designation is 'Staff Nurse'
-      const { data, error } = await supabase
-        .from('all_staff')
-        .select('name')
-        .eq('designation', 'Staff Nurse')
-        .order('name');
-
-      if (error) {
-        console.error('Error loading staff nurses:', error);
-        // Fallback data
-        const fallbackNurses = [
-          'Alice Johnson',
-          'Bob Smith',
-          'Carol Davis',
-          'David Wilson',
-          'Emma Brown'
-        ];
-        setStaffNurses(fallbackNurses);
-        return;
-      }
-
-      if (data && data.length > 0) {
-        const nurseNames = data.map(staff => staff.name).filter(name => name);
-        setStaffNurses(nurseNames);
-      } else {
-        // Fallback if no data
-        const fallbackNurses = [
-          'Alice Johnson',
-          'Bob Smith',
-          'Carol Davis',
-          'David Wilson',
-          'Emma Brown'
-        ];
-        setStaffNurses(fallbackNurses);
-      }
-    } catch (error) {
-      console.error('Error loading staff nurses:', error);
     }
   };
 
@@ -326,7 +329,7 @@ const PharmacyIndents = () => {
     if (selectedPatient) {
       setFormData({
         admissionNumber: selectedPatient.admission_no,
-        staffName: '',
+        staffName: getCurrentUser(), // Keep the staff name from localStorage
         consultantName: selectedPatient.consultant_dr || '',
         patientName: selectedPatient.patient_name || '',
         uhidNumber: '',
@@ -472,52 +475,52 @@ const PharmacyIndents = () => {
 
   const handleSubmit = async () => {
     if (!formData.admissionNumber) {
-      alert('Please select Admission Number');
+      showPopup('Please select Admission Number', 'error');
       return;
     }
 
     // Make diagnosis required - entered manually
     if (!formData.diagnosis.trim()) {
-      alert('Please enter Diagnosis');
+      showPopup('Please enter Diagnosis', 'error');
       return;
     }
 
     const hasRequestType = Object.values(requestTypes).some(value => value);
     if (!hasRequestType) {
-      alert('Please select at least one Request Type');
+      showPopup('Please select at least one Request Type', 'error');
       return;
     }
 
     if (requestTypes.medicineSlip && medicines.length === 0) {
-      alert('Please add at least one medicine');
+      showPopup('Please add at least one medicine', 'error');
       return;
     }
 
     const incompleteMedicines = medicines.some(med => !med.name || !med.quantity);
     if (requestTypes.medicineSlip && incompleteMedicines) {
-      alert('Please fill all medicine details');
+      showPopup('Please fill all medicine details', 'error');
       return;
     }
 
     // Validation for investigation advice
     if (requestTypes.investigation) {
       if (!investigationAdvice.adviceCategory) {
-        alert('Please select Pathology or Radiology for investigation');
+        showPopup('Please select Pathology or Radiology for investigation', 'error');
         return;
       }
 
       if (investigationAdvice.adviceCategory === 'Pathology' && investigationAdvice.pathologyTests.length === 0) {
-        alert('Please select at least one pathology test');
+        showPopup('Please select at least one pathology test', 'error');
         return;
       }
 
       if (investigationAdvice.adviceCategory === 'Radiology') {
         if (!investigationAdvice.radiologyType) {
-          alert('Please select radiology type');
+          showPopup('Please select radiology type', 'error');
           return;
         }
         if (investigationAdvice.radiologyTests.length === 0) {
-          alert('Please select at least one radiology test');
+          showPopup('Please select at least one radiology test', 'error');
           return;
         }
       }
@@ -568,6 +571,7 @@ const PharmacyIndents = () => {
           .eq('id', selectedIndent.id);
 
         if (error) throw error;
+        showPopup('Indent updated successfully!');
       } else {
         // Create new indent
         const { error } = await supabase
@@ -575,6 +579,7 @@ const PharmacyIndents = () => {
           .insert([pharmacyData]);
 
         if (error) throw error;
+        showPopup('Indent created successfully!');
       }
 
       const totalMedicines = requestTypes.medicineSlip ? medicines.reduce((sum, med) => sum + parseInt(med.quantity || 0), 0) : 0;
@@ -596,7 +601,7 @@ const PharmacyIndents = () => {
 
     } catch (error) {
       console.error('Error saving indent:', error);
-      alert(`Failed to save indent: ${error.message}`);
+      showPopup(`Failed to save indent: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -605,7 +610,7 @@ const PharmacyIndents = () => {
   const resetForm = () => {
     setFormData({
       admissionNumber: '',
-      staffName: '',
+      staffName: getCurrentUser(), // Reset with current user name
       consultantName: '',
       patientName: '',
       uhidNumber: '',
@@ -633,6 +638,8 @@ const PharmacyIndents = () => {
       remarks: ''
     });
     setSelectedIndent(null);
+    setMedicineSearchTerm('');
+    setShowMedicineDropdown(null);
   };
 
   const parseJsonField = (field) => {
@@ -653,7 +660,7 @@ const PharmacyIndents = () => {
     setSelectedIndent(indent);
     setFormData({
       admissionNumber: indent.admission_number,
-      staffName: indent.staff_name,
+      staffName: indent.staff_name || getCurrentUser(), // Use stored name or current user
       consultantName: indent.consultant_name,
       patientName: indent.patient_name,
       uhidNumber: indent.uhid_number,
@@ -723,6 +730,20 @@ const PharmacyIndents = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Popup Notification */}
+      {popup.show && (
+        <div className={`fixed top-4 right-4 z-50 animate-slide-in ${
+          popup.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+        } text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2`}>
+          {popup.type === 'success' ? (
+            <Check className="w-5 h-5" />
+          ) : (
+            <AlertCircle className="w-5 h-5" />
+          )}
+          <span className="font-medium">{popup.message}</span>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
@@ -735,7 +756,7 @@ const PharmacyIndents = () => {
               resetForm();
               setShowModal(true);
             }}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium transition-colors"
             disabled={loading}
           >
             <Plus className="w-5 h-5" />
@@ -763,15 +784,15 @@ const PharmacyIndents = () => {
             <table className="min-w-full">
               <thead className="bg-green-600 text-white">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Indent No</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Admission No</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Patient Name</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">IPD No</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Staff Name</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Diagnosis</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Request Type</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Status</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Actions</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Indent No</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Admission No</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Patient Name</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">IPD No</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Staff Name</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Diagnosis</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Request Type</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Status</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -789,13 +810,13 @@ const PharmacyIndents = () => {
                     const requestTypesData = parseJsonField(indent.request_types);
                     return (
                       <tr key={indent.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-medium text-green-700">{indent.indent_no}</td>
-                        <td className="px-6 py-4 text-sm">{indent.admission_number}</td>
-                        <td className="px-6 py-4 text-sm">{indent.patient_name}</td>
-                        <td className="px-6 py-4 text-sm">{indent.ipd_number}</td>
-                        <td className="px-6 py-4 text-sm">{indent.staff_name}</td>
-                        <td className="px-6 py-4 text-sm">{indent.diagnosis}</td>
-                        <td className="px-6 py-4 text-sm">
+                        <td className="px-4 py-2 text-sm font-medium text-green-700">{indent.indent_no}</td>
+                        <td className="px-4 py-2 text-sm">{indent.admission_number}</td>
+                        <td className="px-4 py-2 text-sm">{indent.patient_name}</td>
+                        <td className="px-4 py-2 text-sm">{indent.ipd_number}</td>
+                        <td className="px-4 py-2 text-sm">{indent.staff_name}</td>
+                        <td className="px-4 py-2 text-sm">{indent.diagnosis}</td>
+                        <td className="px-4 py-2 text-sm">
                           <div className="flex flex-wrap gap-1">
                             {requestTypesData?.medicineSlip && (
                               <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Medicine</span>
@@ -977,19 +998,19 @@ const PharmacyIndents = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Updated Staff Name Field - Auto-filled from localStorage */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Staff Name</label>
-                    <select
-                      name="staffName"
+                    <input
+                      type="text"
                       value={formData.staffName}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    >
-                      <option value="">Select Staff Nurse</option>
-                      {staffNurses.map((nurse, index) => (
-                        <option key={index} value={nurse}>{nurse}</option>
-                      ))}
-                    </select>
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 cursor-not-allowed"
+                      placeholder="Auto-filled from your login"
+                    />
+                    <p className="mt-1 text-xs text-green-600">
+                      Auto-filled from your login
+                    </p>
                   </div>
 
                   <div>
@@ -1045,7 +1066,7 @@ const PharmacyIndents = () => {
                 </div>
               </div>
 
-              {/* Medicines Section */}
+              {/* Medicines Section with Search */}
               {requestTypes.medicineSlip && (
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-4">
@@ -1058,19 +1079,70 @@ const PharmacyIndents = () => {
                         <div className="w-8 h-10 flex items-center justify-center bg-green-600 text-white rounded font-semibold">
                           {index + 1}
                         </div>
-                        <div className="flex-1">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Medicine Name</label>
-                          <select
-                            value={medicine.name}
-                            onChange={(e) => updateMedicine(medicine.id, 'name', e.target.value)}
-                            disabled={loading}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                          >
-                            <option value="">Select Medicine</option>
-                            {medicinesList.map((med) => (
-                              <option key={med} value={med}>{med}</option>
-                            ))}
-                          </select>
+                        <div className="flex-1 medicine-dropdown-container">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Medicine Name
+                          </label>
+                          <div className="relative">
+                            <div className="flex items-center">
+                              <Search className="absolute left-3 w-4 h-4 text-gray-400" />
+                              <input
+                                type="text"
+                                value={medicine.name}
+                                onChange={(e) => updateMedicine(medicine.id, 'name', e.target.value)}
+                                onFocus={() => setShowMedicineDropdown(medicine.id)}
+                                placeholder="Search for medicine..."
+                                className="px-3 py-2 pl-10 w-full rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                              />
+                            </div>
+                            
+                            {/* Medicine dropdown */}
+                            {showMedicineDropdown === medicine.id && (
+                              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                <div className="p-2 border-b">
+                                  <div className="relative">
+                                    <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-400" />
+                                    <input
+                                      type="text"
+                                      placeholder="Type to search medicines..."
+                                      className="w-full pl-8 pr-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                      onChange={(e) => setMedicineSearchTerm(e.target.value)}
+                                      value={medicineSearchTerm}
+                                      autoFocus
+                                    />
+                                  </div>
+                                </div>
+                                <div className="max-h-48 overflow-y-auto">
+                                  {medicinesList
+                                    .filter(med => 
+                                      medicineSearchTerm === '' || 
+                                      med.toLowerCase().includes(medicineSearchTerm.toLowerCase())
+                                    )
+                                    .map((med) => (
+                                      <div
+                                        key={med}
+                                        onClick={() => {
+                                          updateMedicine(medicine.id, 'name', med);
+                                          setShowMedicineDropdown(null);
+                                          setMedicineSearchTerm('');
+                                        }}
+                                        className="px-4 py-2 hover:bg-green-50 cursor-pointer border-b border-gray-100 last:border-b-0 text-sm"
+                                      >
+                                        {med}
+                                      </div>
+                                    ))}
+                                  {medicinesList.filter(med => 
+                                    medicineSearchTerm === '' || 
+                                    med.toLowerCase().includes(medicineSearchTerm.toLowerCase())
+                                  ).length === 0 && (
+                                    <div className="px-4 py-3 text-center text-gray-500 text-sm">
+                                      No medicines found
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div className="w-32">
                           <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>

@@ -32,20 +32,57 @@ import Lab from './pages/admin/PatientProfile/Lab';
 import Pharmacy from './pages/admin/PatientProfile/Pharmacy';
 import OT from './pages/admin/PatientProfile/OT';
 
+// Masters Components
+import AllStaff from './pages/admin/masters/AllStaff';
+import Medicine from './pages/admin/masters/Medicine';
+import Department from './pages/admin/masters/Department';
+import Tests from './pages/admin/masters/Tests';
+import FloorBed from './pages/admin/masters/FloorBed';
+import Doctors from './pages/admin/masters/Doctors';
+import ManageUsers from './pages/admin/masters/ManageUsers';
+
+// Nurse Station Components
+import AssignTask from './pages/admin/nurseStation/AssignTask';
+import TaskList from './pages/admin/nurseStation/TaskList';
+import ScoreDashboard from './pages/admin/nurseStation/ScoreDashboard';
+
+// RMO Components
+import RMOAssignTask from './pages/admin/rmo/RMOAssignTask';
+import RMOTaskList from './pages/admin/rmo/RMOTaskList';
+import RMOScoreDashboard from './pages/admin/rmo/RMOScoreDashboard';
+
+// OT Components
+import AssignOtTime from './pages/admin/OT/AssignOtTime';
+import OtStaffAssign from './pages/admin/OT/OtStaffAssign'; // Add import for OtStaffAssign
+// import CompleteOperation from './pages/admin/OT/CompleteOperation';
+
+// Patient Profile Components
+import PatientOverview from './pages/admin/PatientProfile/PatientOverview';
+import GivenTask from './pages/admin/PatientProfile/GivenTask';
+import PMS from './pages/pms';
+
+// Protected Route Component
+import ProtectedRoute from './components/ProtectedRoute';
+import Dressing from './pages/admin/PatientProfile/Dressing';
+
 function App() {
   const { user, loading } = useAuth();
 
   // Show loading spinner while checking authentication
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <Routes>
+      {/* Public Routes */}
       <Route 
         path="/login" 
         element={
@@ -61,87 +98,282 @@ function App() {
       <Route 
         path="/admin/*" 
         element={
-          <RequireAuth role="admin">
+          <ProtectedRoute>
             <AdminLayout />
-          </RequireAuth>
+          </ProtectedRoute>
         }
       >
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="dashboard" element={<AdminDashboard />} />
+        
+        {/* Dashboard */}
+        <Route path="dashboard" element={
+          <ProtectedRoute requiredPage="dashboard">
+            <AdminDashboard />
+          </ProtectedRoute>
+        } />
+
+        {/* PMS */}
+        <Route path="pms" element={
+          <ProtectedRoute requiredPage="pms">
+            <PMS />
+          </ProtectedRoute>
+        } />
         
         {/* Patient Profile Routes */}
-        <Route path="patient-profile" element={<ProfilePatient />} />
-        <Route path="patient-profile/:id" element={<ProfilePatientDetails />} />
-        <Route path="patient-profile/:id/treatment" element={<Treatment />} />
-        <Route path="patient-profile/:id/rmo" element={<RMOTask />} />
-        <Route path="patient-profile/:id/nursing" element={<Nursing />} />
-        <Route path="patient-profile/:id/lab" element={<Lab />} />
-        <Route path="patient-profile/:id/pharmacy" element={<Pharmacy />} />
-        <Route path="patient-profile/:id/ot" element={<OT />} />
+        <Route path="patient-profile" element={
+          <ProtectedRoute requiredPage="patient-profile">
+            <ProfilePatient />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="patient-profile/:id" element={
+          <ProtectedRoute requiredPage="patient-profile">
+            <ProfilePatientDetails />
+          </ProtectedRoute>
+        }>
+          <Route index element={<PatientOverview />} />
+          <Route path="rmo" element={<RMOTask />} />
+          <Route path="nursing" element={<Nursing />} />
+          <Route path="lab" element={<Lab />} />
+          <Route path="pharmacy" element={<Pharmacy />} />
+          <Route path="ot" element={<OT />} />
+          <Route path="assign-tasks" element={<GivenTask />} />
+          <Route path="dressing" element={<Dressing />} />
+        </Route>
         
         {/* Admission Routes */}
-        <Route path="admission/add-patient" element={<Admission />} />
-        <Route path="admission/department-selection" element={<DepartmentSelection />} />
+        <Route path="admission/add-patient" element={
+          <ProtectedRoute requiredPage="admission-add-patient">
+            <Admission />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="admission/department-selection" element={
+          <ProtectedRoute requiredPage="admission-department-selection">
+            <DepartmentSelection />
+          </ProtectedRoute>
+        } />
         
         {/* IPD Routes */}
-        <Route path="ipd/admission" element={<IPDAdmission />} />
+        <Route path="ipd/admission" element={
+          <ProtectedRoute requiredPage="ipd-admission">
+            <IPDAdmission />
+          </ProtectedRoute>
+        } />
+        
+        {/* OT Routes */}
+        <Route path="ot/assign-ot-time" element={
+          <ProtectedRoute requiredPage="ot-assign-ot-time">
+            <AssignOtTime />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="ot/staff-assign" element={ // Add new route for OT Staff Assign
+          <ProtectedRoute requiredPage="ot-staff-assign">
+            <OtStaffAssign />
+          </ProtectedRoute>
+        } />
+        
+        {/* <Route path="ot/complete-operation" element={
+          <ProtectedRoute requiredPage="ot-complete-operation">
+            <CompleteOperation />
+          </ProtectedRoute>
+        } /> */}
+        
+        {/* Nurse Station Routes */}
+        <Route path="nurse-station/assign-task" element={
+          <ProtectedRoute requiredPage="nurse-station-assign-task">
+            <AssignTask />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="nurse-station/task-list" element={
+          <ProtectedRoute requiredPage="nurse-station-task-list">
+            <TaskList />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="nurse-station/score-dashboard" element={
+          <ProtectedRoute requiredPage="nurse-station-score-dashboard">
+            <ScoreDashboard />
+          </ProtectedRoute>
+        } />
+        
+        {/* RMO Routes */}
+        <Route path="rmo/assign-task" element={
+          <ProtectedRoute requiredPage="rmo-assign-task">
+            <RMOAssignTask />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="rmo/task-list" element={
+          <ProtectedRoute requiredPage="rmo-task-list">
+            <RMOTaskList />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="rmo/score-dashboard" element={
+          <ProtectedRoute requiredPage="rmo-score-dashboard">
+            <RMOScoreDashboard />
+          </ProtectedRoute>
+        } />
         
         {/* Lab Routes */}
-        <Route path="lab/advice" element={<AdminLabAdvice />} />
-        <Route path="lab/payment-slip" element={<LabPaymentSlip />} />
-        <Route path="lab/xray" element={<LabXray />} />
-        <Route path="lab/ct-scan" element={<LabCT />} />
-        <Route path="lab/usg" element={<LabUSG />} />
-        <Route path="lab/pathology" element={<Pathology />} />
+        <Route path="lab/advice" element={
+          <ProtectedRoute requiredPage="lab-advice">
+            <AdminLabAdvice />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="lab/payment-slip" element={
+          <ProtectedRoute requiredPage="lab-payment-slip">
+            <LabPaymentSlip />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="lab/xray" element={
+          <ProtectedRoute requiredPage="lab-xray">
+            <LabXray />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="lab/ct-scan" element={
+          <ProtectedRoute requiredPage="lab-ct-scan">
+            <LabCT />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="lab/usg" element={
+          <ProtectedRoute requiredPage="lab-usg">
+            <LabUSG />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="lab/pathology" element={
+          <ProtectedRoute requiredPage="lab-pathology">
+            <Pathology />
+          </ProtectedRoute>
+        } />
         
         {/* Pharmacy Routes */}
-        <Route path="pharmacy/indent" element={<PharmacyIndent />} />
-        <Route path="pharmacy/approval" element={<PharmacyApproval />} />
-        <Route path="pharmacy/store" element={<PharmacyStore />} />
+        <Route path="pharmacy/indent" element={
+          <ProtectedRoute requiredPage="pharmacy-indent">
+            <PharmacyIndent />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="pharmacy/approval" element={
+          <ProtectedRoute requiredPage="pharmacy-approval">
+            <PharmacyApproval />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="pharmacy/store" element={
+          <ProtectedRoute requiredPage="pharmacy-store">
+            <PharmacyStore />
+          </ProtectedRoute>
+        } />
         
         {/* Discharge Routes */}
-        <Route path="discharge/patient" element={<DischargePatient />} />
-        <Route path="discharge/initiation" element={<InitiationRMO />} />
-        <Route path="discharge/complete-file" element={<CompleteFileWork />} />
-        <Route path="discharge/concern-department" element={<ConcernDepartment />} />
-        <Route path="discharge/concern-authority" element={<ConcernAuthority />} />
-        <Route path="discharge/bill" element={<DischargeBill />} />
+        <Route path="discharge/patient" element={
+          <ProtectedRoute requiredPage="discharge-patient">
+            <DischargePatient />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="discharge/initiation" element={
+          <ProtectedRoute requiredPage="discharge-initiation">
+            <InitiationRMO />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="discharge/complete-file" element={
+          <ProtectedRoute requiredPage="discharge-complete-file">
+            <CompleteFileWork />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="discharge/concern-department" element={
+          <ProtectedRoute requiredPage="discharge-concern-department">
+            <ConcernDepartment />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="discharge/concern-authority" element={
+          <ProtectedRoute requiredPage="discharge-concern-authority">
+            <ConcernAuthority />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="discharge/bill" element={
+          <ProtectedRoute requiredPage="discharge-bill">
+            <DischargeBill />
+          </ProtectedRoute>
+        } />
+        
+        {/* Masters Routes */}
+        <Route path="masters/all-staff" element={
+          <ProtectedRoute requiredPage="masters-all-staff">
+            <AllStaff />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="masters/medicine" element={
+          <ProtectedRoute requiredPage="masters-medicine">
+            <Medicine />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="masters/department" element={
+          <ProtectedRoute requiredPage="masters-department">
+            <Department />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="masters/tests" element={
+          <ProtectedRoute requiredPage="masters-tests">
+            <Tests />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="masters/floor-bed" element={
+          <ProtectedRoute requiredPage="masters-floor-bed">
+            <FloorBed />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="masters/doctors" element={
+          <ProtectedRoute requiredPage="masters-doctors">
+            <Doctors />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="masters/manage-users" element={
+          <ProtectedRoute requiredPage="masters-manage-users">
+            <ManageUsers />
+          </ProtectedRoute>
+        } />
+        
+        {/* Catch-all route for admin - redirect to dashboard if route not found */}
+        <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
       </Route>
       
-      {/* Root route */}
+      {/* Root route - redirect based on authentication */}
       <Route 
         path="/" 
         element={
-          <Navigate to={user ? '/admin/dashboard' : '/login'} replace />
+          user ? (
+            <Navigate to="/admin/dashboard" replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
         } 
       />
       
+      {/* 404 Not Found */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
-}
-
-// Authentication guard component
-function RequireAuth({ children, role }) {
-  const { user, loading } = useAuth();
-  
-  if (loading) {
-    return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-  
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  if (role && user.role !== role) {
-    return <Navigate to="/admin/dashboard" replace />;
-  }
-  
-  return children;
 }
 
 export default App;

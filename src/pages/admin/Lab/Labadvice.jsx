@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Eye, FileText } from 'lucide-react';
+import { Plus, X, Eye, FileText, CheckCircle } from 'lucide-react';
 import supabase from '../../../SupabaseClient'; // Adjust import path
 
 const LabAdvice = () => {
@@ -8,11 +8,13 @@ const LabAdvice = () => {
   const [historyAdvices, setHistoryAdvices] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [viewingRecord, setViewingRecord] = useState(null);
   const [modalError, setModalError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [availableTests, setAvailableTests] = useState([]);
+  const [successMessage, setSuccessMessage] = useState('');
   
   const [formData, setFormData] = useState({
     priority: 'Medium',
@@ -55,6 +57,18 @@ const LabAdvice = () => {
       cleanup();
     };
   }, []);
+
+  // Show success popup
+  const showSuccessNotification = (message) => {
+    setSuccessMessage(message);
+    setShowSuccessPopup(true);
+    
+    // Auto hide after 5 seconds
+    setTimeout(() => {
+      setShowSuccessPopup(false);
+      setSuccessMessage('');
+    }, 5000);
+  };
 
   // Fetch tests from investigation table based on category and type
   const fetchTestsFromDatabase = async (category, type = null) => {
@@ -131,8 +145,8 @@ const LabAdvice = () => {
         admission_no: patient.admission_no,
         uniqueNumber: patient.admission_no,
         patientName: patient.patient_name,
-         consultantDr: patient.consultant_dr,
-          referByDr: patient.refer_by_dr,
+        consultantDr: patient.consultant_dr,
+        referByDr: patient.refer_by_dr,
         phoneNumber: patient.phone_no || patient.whatsapp_no,
         fatherHusband: patient.father_husband_name,
         age: patient.age,
@@ -143,7 +157,9 @@ const LabAdvice = () => {
         wardType: patient.ward_type || 'General',
         room: patient.room || 'Not assigned',
         department: patient.department,
-        timestamp: patient.timestamp
+        timestamp: patient.timestamp,
+        ipd_number: patient.ipd_number
+        
       }));
 
       return transformedData;
@@ -190,7 +206,9 @@ const LabAdvice = () => {
         radiologyType: record.radiology_type || '',
         radiologyTests: record.radiology_tests || [],
         remarks: record.remarks || '',
-        completedDate: record.timestamp
+        completedDate: record.timestamp,
+        ipd_number: record.ipd_number
+
       }));
 
       return transformedData;
@@ -335,14 +353,15 @@ const LabAdvice = () => {
         radiology_tests: formData.category === 'Radiology' ? formData.radiologyTests : null,
         remarks: formData.remarks || '',
         status: 'completed',
-         planned1: new Date().toLocaleString("en-CA", { 
+        planned1: new Date().toLocaleString("en-CA", { 
           timeZone: "Asia/Kolkata", 
           hour12: false 
         }).replace(',', ''),
         timestamp: new Date().toLocaleString("en-CA", { 
           timeZone: "Asia/Kolkata", 
           hour12: false 
-        }).replace(',', '')
+        }).replace(',', ''),
+        ipd_number: selectedPatient.ipd_number
       };
 
       // Insert into lab table
@@ -355,29 +374,14 @@ const LabAdvice = () => {
         throw new Error(`Failed to save lab record: ${labError.message}`);
       }
 
-      // // Update actual1 in ipd_admissions table
-      // const { error: updateError } = await supabase
-      //   .from('ipd_admissions')
-      //   .update({ 
-      //     actual1: new Date().toLocaleString("en-CA", { 
-      //       timeZone: "Asia/Kolkata", 
-      //       hour12: false 
-      //     }).replace(',', '')
-      //   })
-      //   .eq('admission_no', selectedPatient.admission_no);
-
-      // if (updateError) {
-      //   console.error('Failed to update actual1:', updateError);
-      //   // Continue anyway since lab record is saved
-      // }
-
       // Reload data
       await loadData();
       
       setShowModal(false);
       resetForm();
       
-      alert(`Lab advice submitted successfully! Lab Number: ${labNumber}`);
+      // Show success popup instead of alert
+      showSuccessNotification(`Lab advice submitted successfully! Lab Number: ${labNumber}`);
       
     } catch (error) {
       console.error('Error submitting lab advice:', error);
@@ -414,6 +418,24 @@ const LabAdvice = () => {
           <div className="bg-white p-6 rounded-lg shadow-xl">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
             <p className="text-gray-700">Loading data...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Success Popup */}
+      {showSuccessPopup && (
+        <div className="fixed top-4 right-4 z-50 animate-fade-in-down">
+          <div className="flex items-center p-4 space-x-3 bg-green-50 border border-green-200 rounded-lg shadow-lg">
+            <CheckCircle className="w-6 h-6 text-green-600" />
+            <div>
+              <p className="font-medium text-green-800">{successMessage}</p>
+            </div>
+            <button
+              onClick={() => setShowSuccessPopup(false)}
+              className="p-1 text-green-400 rounded-full hover:text-green-600 hover:bg-green-100"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
@@ -461,8 +483,8 @@ const LabAdvice = () => {
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Admission No</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone Number</th>
-                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Consultant Dr.</th>
-                 <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Refer By Dr.</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Consultant Dr.</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Refer By Dr.</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Father/Husband</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Reason For Visit</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Age</th>
@@ -491,10 +513,10 @@ const LabAdvice = () => {
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.patientName}</td>
                     
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.phoneNumber}</td>
-                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.consultantDr}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.consultantDr}</td>
                       
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.referByDr}</td>
-                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.fatherHusband || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.fatherHusband || 'N/A'}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{patient.reasonForVisit}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.age}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.gender}</td>

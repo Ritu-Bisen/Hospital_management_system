@@ -130,52 +130,50 @@ const DischargeBill = () => {
     }
   };
 
-  const handleSubmitBill = async () => {
-    if (!billStatus) {
-      setSubmitError('Please select Bill Status');
-      setTimeout(() => setSubmitError(''), 3000);
-      return;
+ const handleSubmitBill = async () => {
+  if (!billStatus) {
+    setSubmitError('Please select Bill Status');
+    setTimeout(() => setSubmitError(''), 3000);
+    return;
+  }
+
+  try {
+    setIsSubmitting(true);
+    setSubmitError('');
+
+    let billImageUrl = null;
+    
+    // Only upload image if provided (now optional)
+    if (billImageFile) {
+      billImageUrl = await uploadImageToStorage(billImageFile);
     }
 
-    if (!billImageFile) {
-      setSubmitError('Please upload Bill Image');
-      setTimeout(() => setSubmitError(''), 3000);
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setSubmitError('');
-
-      // Step 1: Upload image to Supabase Storage
-      const billImageUrl = await uploadImageToStorage(billImageFile);
-
-      // Step 2: Update the record in Supabase database
-      const { error } = await supabase
-        .from('discharge')
-        .update({
-          actual5: new Date().toLocaleString("en-CA", { 
+    // Step 2: Update the record in Supabase database
+    const { error } = await supabase
+      .from('discharge')
+      .update({
+        actual5: new Date().toLocaleString("en-CA", { 
           timeZone: "Asia/Kolkata", 
           hour12: false 
         }).replace(',', ''),
-          bill_status: billStatus,
-          bill_image: billImageUrl,
-        })
-        .eq('admission_no', selectedRecord.admission_no);
+        bill_status: billStatus,
+        bill_image: billImageUrl, // This will be null if no image was uploaded
+      })
+      .eq('admission_no', selectedRecord.admission_no);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      handleCloseBillModal();
-      await loadData();
+    handleCloseBillModal();
+    await loadData();
 
-    } catch (error) {
-      console.error('Error updating Discharge Bill data:', error);
-      setSubmitError(error.message || 'Failed to save. Please try again.');
-      setTimeout(() => setSubmitError(''), 3000);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  } catch (error) {
+    console.error('Error updating Discharge Bill data:', error);
+    setSubmitError(error.message || 'Failed to save. Please try again.');
+    setTimeout(() => setSubmitError(''), 3000);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const calculateDelay = (plannedDate) => {
     if (!plannedDate) return 'On Time';

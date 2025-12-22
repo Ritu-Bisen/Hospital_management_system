@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, X, CheckCircle, Clock, Activity, AlertTriangle, Search } from 'lucide-react';
+import { Building2, Users, X, CheckCircle, Clock, Activity, AlertTriangle, Search, Bell } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
 
 const DepartmentSelection = () => {
@@ -19,7 +19,12 @@ const DepartmentSelection = () => {
     emergency: 0
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [isAssigning, setIsAssigning] = useState(false); // Separate loading state for modal
+  const [isAssigning, setIsAssigning] = useState(false);
+  
+  // New state for notification popup
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationType, setNotificationType] = useState('success'); // 'success' or 'error'
 
   useEffect(() => {
     loadPatients();
@@ -53,6 +58,22 @@ const DepartmentSelection = () => {
     };
   }, []);
 
+  // Auto-hide notification after 3 seconds
+  useEffect(() => {
+    if (showNotification) {
+      const timer = setTimeout(() => {
+        setShowNotification(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showNotification]);
+
+  const showNotificationPopup = (message, type = 'success') => {
+    setNotificationMessage(message);
+    setNotificationType(type);
+    setShowNotification(true);
+  };
+
   const loadPatients = async () => {
     try {
       setIsLoading(true);
@@ -64,6 +85,7 @@ const DepartmentSelection = () => {
 
       if (error) {
         console.error('Error loading patients:', error);
+        showNotificationPopup('Failed to load patients', 'error');
         return;
       }
 
@@ -105,6 +127,7 @@ const DepartmentSelection = () => {
       }
     } catch (error) {
       console.error('Failed to load patients:', error);
+      showNotificationPopup('Failed to load patients', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -152,12 +175,15 @@ const DepartmentSelection = () => {
         setShowAssignModal(false);
         setSelectedPatient(null);
         setSelectedDepartment('');
-        alert(`Patient successfully assigned to ${selectedDepartment}`);
+        
+        // Show success notification instead of alert
+        showNotificationPopup(`Patient successfully assigned to ${selectedDepartment}`, 'success');
       }
       
     } catch (error) {
       console.error('Failed to assign department:', error);
       setAssignError(`Failed to assign department: ${error.message}`);
+      showNotificationPopup('Failed to assign department', 'error');
     } finally {
       setIsAssigning(false);
     }
@@ -246,7 +272,7 @@ const DepartmentSelection = () => {
           <div className="flex flex-col gap-2">
             <div className="flex justify-between items-start">
               <p className="text-xs text-gray-600 md:text-sm">Total IPD</p>
-              <Activity className="w-4 h-4 text-purple-600 md:w-5 md:h-5" />
+              <Activity className="w-4 h-4 text-purple-600 md:w-5 md-h-5" />
             </div>
             <p className="text-xl font-bold text-purple-600 md:text-2xl">{stats.ipd}</p>
           </div>
@@ -735,6 +761,46 @@ const DepartmentSelection = () => {
         </div>
       )}
 
+      {/* Notification Popup */}
+      {showNotification && (
+        <div className={`fixed top-4 right-4 z-50 max-w-md animate-slide-in ${
+          notificationType === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+        } border rounded-lg shadow-lg`}>
+          <div className="p-4">
+            <div className="flex items-start">
+              <div className={`flex-shrink-0 p-1 rounded-full ${
+                notificationType === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+              }`}>
+                <Bell className="w-5 h-5" />
+              </div>
+              <div className="ml-3">
+                <p className={`text-sm font-medium ${
+                  notificationType === 'success' ? 'text-green-800' : 'text-red-800'
+                }`}>
+                  {notificationMessage}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowNotification(false)}
+                className={`ml-4 flex-shrink-0 ${
+                  notificationType === 'success' ? 'text-green-400 hover:text-green-600' : 'text-red-400 hover:text-red-600'
+                }`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          {/* Progress bar */}
+          <div className={`h-1 w-full ${
+            notificationType === 'success' ? 'bg-green-200' : 'bg-red-200'
+          }`}>
+            <div className={`h-full ${
+              notificationType === 'success' ? 'bg-green-500' : 'bg-red-500'
+            } animate-progress`}></div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes scale-in {
           from {
@@ -746,8 +812,37 @@ const DepartmentSelection = () => {
             transform: scale(1);
           }
         }
+        
+        @keyframes slide-in {
+          from {
+            opacity: 0;
+            transform: translateX(100%);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        
+        @keyframes progress {
+          from {
+            width: 100%;
+          }
+          to {
+            width: 0%;
+          }
+        }
+        
         .animate-scale-in {
           animation: scale-in 0.2s ease-out;
+        }
+        
+        .animate-slide-in {
+          animation: slide-in 0.3s ease-out;
+        }
+        
+        .animate-progress {
+          animation: progress 3s linear forwards;
         }
       `}</style>
     </div>

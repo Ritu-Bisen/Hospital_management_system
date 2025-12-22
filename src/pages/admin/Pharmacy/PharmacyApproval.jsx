@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Eye, CheckCircle, XCircle, FileText, X, Download, Edit, Save, Trash2, Plus } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Eye, CheckCircle, XCircle, FileText, X, Download, Edit, Save, Trash2, Plus, Search, ChevronDown } from 'lucide-react';
 import supabase from '../../../SupabaseClient'; // Adjust the path as needed
 
 const DUMMY_MEDICINE_NAMES = [
@@ -12,49 +12,118 @@ const DUMMY_MEDICINE_NAMES = [
   'Aspirin 75mg',
   'Metformin 500mg',
   'Cetirizine 10mg',
-  'Azithromycin 500mg'
+  'Azithromycin 500mg',
+  'Ciprofloxacin 500mg',
+  'Diclofenac 50mg',
+  'Atorvastatin 20mg',
+  'Losartan 50mg',
+  'Levothyroxine 50mcg',
+  'Pantoprazole 40mg',
+  'Clopidogrel 75mg',
+  'Insulin Glargine',
+  'Salbutamol Inhaler',
+  'Prednisolone 5mg',
+  'Metronidazole 400mg',
+  'Ranitidine 150mg',
+  'Furosemide 40mg',
+  'Amlodipine 5mg',
+  'Gabapentin 300mg'
 ];
 
-const pathologyTests = [
-  'LFT', 'RFT', 'Lipid Profile', 'CBC', 'HBA1C', 'Electrolyte', 'PT/INR', 'Blood Group', 
-  'ESR', 'CRP', 'Sugar', 'Urine R/M', 'Viral Marker', 'Malaria', 'Dengue', 'Widal', 
-  'Troponin-I', 'Troponin-T', 'SGOT', 'SGPT', 'Serum Urea', 'Serum Creatinine', 'CT-BT', 
-  'ABG', 'Urine C/S', 'Thyroid Profile', 'UPT', 'HB', 'PPD', 'Sickling', 'Peripheral Smear', 
-  'ASO Titre', 'DS-DNA', 'Serum Amylase', 'TSH', 'D-Dimer', 'Serum Lipase', 'SR Cortisol', 
-  'Serum Magnesium', 'Serum Calcium', 'Urine Culture & Sensitivity', 'Blood Culture & Sensitivity', 
-  'Pus Culture & Sensitivity', 'Pleural Fluid R/M', 'Pleural Fluid Culture & Sensitivity', 
-  'Pleural Fluid ADA', 'Vitamin D3', 'Vitamin B12', 'HIV', 'HBsAg', 'HCV', 'VDRL', 
-  'Ascitic Fluid R/M', 'Ascitic Culture & Sensitivity', 'Ascitic Fluid ADA', 'Urine Sugar Ketone', 
-  'Serum Platelets', 'Serum Potassium', 'Serum Sodium', 'Sputum R/M', 'Sputum AFB', 'Sputum C/S', 
-  'CBNAAT', 'CKMB', 'Cardiac SOB', 'Pro-BNP', 'Serum Uric Acid', 'Platelet Count', 'TB Gold', 
-  'PCT', 'COVID IGG Antibodies', 'ANA Profile', 'Stool R/M', 'eGFR', '24 Hour Urine Protein Ratio', 
-  'IGF-1', 'PTH', 'Serum FSH', 'Serum LH', 'Serum Prolactin', 'APTT', 'HB %', 'Biopsy Small', 
-  'Biopsy Medium', 'Biopsy Large', 'Serum Homocysteine'
-];
+// Custom Medicine Dropdown Component
+const MedicineDropdown = ({ medicine, onUpdate, index, loading }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef(null);
 
-const xrayTests = [
-  'X-Ray', 'Barium Enema', 'Barium Swallow', 'Cologram', 'Nephrostrogram', 'R.G.P.', 
-  'Retrograde Urethrogram', 'Urethogram', 'X Ray Abdomen Upright', 'X Ray Cystogram', 
-  'X Ray Hand Both', 'X Ray LS Spine Extension Flexion', 'X Ray Thoracic Spine', 
-  'X Ray Tibia Fibula AP/Lat (Left/Right)', 'X-Ray Abdomen Erect/Standing/Upright', 
-  'X-Ray Abdomen Flat Plate', 'X-Ray Abdomen KUB', 'X-Ray Ankle Joint AP And Lat (Left/Right)', 
-  'X-Ray Chest PA', 'X-Ray Chest AP', 'X-Ray Chest Lateral View', 'X-Ray KUB', 
-  'X-Ray LS Spine AP/Lat', 'X-Ray Pelvis AP', 'X-Ray Skull AP/Lat'
-];
+  const filteredMedicines = DUMMY_MEDICINE_NAMES.filter(med =>
+    med.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-const ctScanTests = [
-  'CT Scan', '3D CT Ankle', '3D CT Face', '3D CT Head', 'CECT Abdomen', 'CECT Chest', 
-  'CECT Head', 'CECT Neck', 'CT Brain', 'CT Chest', 'HRCT Chest', 'NCCT Head', 
-  'CT Scan Brain Plain', 'CT Angiography', 'CT-Scan - Brain With Contrast', 
-  'CT-Scan - Brain Without Contrast', 'HRCT Chest (COVID)'
-];
+  const handleSelect = (medName) => {
+    onUpdate(medicine.id, 'name', medName);
+    setIsOpen(false);
+    setSearchTerm('');
+  };
 
-const usgTests = [
-  'USG', 'USG Whole Abdomen Male', 'USG Whole Abdomen Female', 'USG KUB Male', 'USG KUB Female', 
-  'USG Pelvis Female', 'TVS', 'USG Upper Abdomen', 'USG Breast', 'USG Thyroid', 'USG Scrotum', 
-  'Fetal Doppler USG', 'Carotid Doppler', 'USG OBS', 'Anomaly Scan', 'Growth Scan', 
-  'USG Guided Biopsy', 'USG Abdomen With Pelvis'
-];
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <div className="relative">
+        <input
+          type="text"
+          value={medicine.name}
+          onChange={(e) => onUpdate(medicine.id, 'name', e.target.value)}
+          onClick={() => setIsOpen(true)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 cursor-pointer"
+          placeholder="Select or type medicine name"
+          readOnly={loading}
+        />
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          disabled={loading}
+        >
+          <ChevronDown className="w-4 h-4" />
+        </button>
+      </div>
+      
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {/* Search Input */}
+          <div className="sticky top-0 bg-white p-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Search medicines..."
+                autoFocus
+              />
+            </div>
+          </div>
+          
+          {/* Medicine List */}
+          <div className="py-1">
+            {filteredMedicines.length > 0 ? (
+              filteredMedicines.map((medName) => (
+                <button
+                  key={medName}
+                  type="button"
+                  onClick={() => handleSelect(medName)}
+                  className={`w-full text-left px-4 py-2 hover:bg-green-50 hover:text-green-700 ${
+                    medicine.name === medName ? 'bg-green-100 text-green-700 font-medium' : 'text-gray-700'
+                  }`}
+                >
+                  {medName}
+                </button>
+              ))
+            ) : (
+              <div className="px-4 py-2 text-gray-500 text-center">
+                No medicines found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const PharmacyApproval = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -68,6 +137,19 @@ const PharmacyApproval = () => {
   const [statusChanges, setStatusChanges] = useState({});
   const [loading, setLoading] = useState(false);
   const [realtimeChannel, setRealtimeChannel] = useState(null);
+  
+  // Popup states
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [showErrorPopup, setShowErrorPopup] = useState(false);
+  const [showWarningPopup, setShowWarningPopup] = useState(false);
+  const [popupMessage, setPopupMessage] = useState('');
+  const [popupType, setPopupType] = useState('');
+  
+  // Investigation tests from Supabase
+  const [pathologyTests, setPathologyTests] = useState([]);
+  const [xrayTests, setXrayTests] = useState([]);
+  const [ctScanTests, setCtScanTests] = useState([]);
+  const [usgTests, setUsgTests] = useState([]);
 
   // Parse JSON fields from Supabase
   const parseJsonField = (field) => {
@@ -76,6 +158,99 @@ const PharmacyApproval = () => {
     } catch (error) {
       console.error('Error parsing JSON field:', error);
       return {};
+    }
+  };
+
+  // Show popup function
+  const showPopup = (message, type = 'success') => {
+    setPopupMessage(message);
+    setPopupType(type);
+    
+    if (type === 'success') {
+      setShowSuccessPopup(true);
+      setTimeout(() => setShowSuccessPopup(false), 5000);
+    } else if (type === 'error') {
+      setShowErrorPopup(true);
+      setTimeout(() => setShowErrorPopup(false), 5000);
+    } else if (type === 'warning') {
+      setShowWarningPopup(true);
+      setTimeout(() => setShowWarningPopup(false), 5000);
+    }
+  };
+
+  // Close popup manually
+  const closePopup = (type) => {
+    if (type === 'success') setShowSuccessPopup(false);
+    if (type === 'error') setShowErrorPopup(false);
+    if (type === 'warning') setShowWarningPopup(false);
+  };
+
+  // Fetch investigation tests from Supabase
+  const fetchInvestigationTests = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch Pathology tests
+      const { data: pathologyData, error: pathologyError } = await supabase
+        .from('investigation')
+        .select('name, type')
+        .eq('type', 'Pathology')
+        .order('name');
+      
+      if (pathologyError) {
+        console.error('Error fetching pathology tests:', pathologyError);
+        showPopup('Error fetching pathology tests', 'error');
+      } else {
+        setPathologyTests(pathologyData.map(item => item.name));
+      }
+      
+      // Fetch CT Scan tests
+      const { data: ctScanData, error: ctScanError } = await supabase
+        .from('investigation')
+        .select('name, type')
+        .eq('type', 'CT Scan')
+        .order('name');
+      
+      if (ctScanError) {
+        console.error('Error fetching CT Scan tests:', ctScanError);
+        showPopup('Error fetching CT Scan tests', 'error');
+      } else {
+        setCtScanTests(ctScanData.map(item => item.name));
+      }
+      
+      // Fetch X-ray tests
+      const { data: xrayData, error: xrayError } = await supabase
+        .from('investigation')
+        .select('name, type')
+        .eq('type', 'X-ray')
+        .order('name');
+      
+      if (xrayError) {
+        console.error('Error fetching X-ray tests:', xrayError);
+        showPopup('Error fetching X-ray tests', 'error');
+      } else {
+        setXrayTests(xrayData.map(item => item.name));
+      }
+      
+      // Fetch USG tests
+      const { data: usgData, error: usgError } = await supabase
+        .from('investigation')
+        .select('name, type')
+        .eq('type', 'USG')
+        .order('name');
+      
+      if (usgError) {
+        console.error('Error fetching USG tests:', usgError);
+        showPopup('Error fetching USG tests', 'error');
+      } else {
+        setUsgTests(usgData.map(item => item.name));
+      }
+      
+    } catch (error) {
+      console.error('Error in fetchInvestigationTests:', error);
+      showPopup('Error loading investigation tests', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -164,15 +339,16 @@ const PharmacyApproval = () => {
 
     } catch (error) {
       console.error('Error loading data:', error);
-      alert(`Error loading data: ${error.message}`);
+      showPopup(`Error loading data: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // Setup realtime subscription
+  // Setup realtime subscription and initial data load
   useEffect(() => {
     loadData();
+    fetchInvestigationTests();
     
     const channel = supabase
       .channel('pharmacy_approval_changes')
@@ -218,7 +394,7 @@ const PharmacyApproval = () => {
       
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
-        .from('slip_image') // Your bucket name
+        .from('slip_image')
         .upload(fileName, blob, {
           contentType: 'image/png',
           upsert: true
@@ -245,7 +421,7 @@ const PharmacyApproval = () => {
   // Save status changes to Supabase
   const handleSaveStatusChanges = async () => {
     if (Object.keys(statusChanges).length === 0) {
-      alert('No changes to save');
+      showPopup('No changes to save', 'warning');
       return;
     }
 
@@ -258,24 +434,21 @@ const PharmacyApproval = () => {
         const updateData = {
           status: status.toLowerCase(),
           actual1:  new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
-        planned2: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
+            timeZone: "Asia/Kolkata", 
+            hour12: false 
+          }).replace(',', ''),
+          planned2: new Date().toLocaleString("en-CA", { 
+            timeZone: "Asia/Kolkata", 
+            hour12: false 
+          }).replace(',', ''),
         };
 
         if (status === 'Approved') {
-          const user=localStorage.getItem("mis_user");
-          updateData.approved_by = user.name;
+          const user = JSON.parse(localStorage.getItem("mis_user"));
+          updateData.approved_by = user?.name || 'Unknown';
           
           // Generate slip image
           const slipImageBase64 = generateSlipImage(indent);
-          
-          // First update with base64 (for immediate use)
-          // updateData.slip_image = slipImageBase64;
           
           // Then upload to storage and update with URL
           try {
@@ -307,11 +480,11 @@ const PharmacyApproval = () => {
       // Reload data
       await loadData();
       
-      alert(`${Object.keys(statusChanges).length} indent(s) processed successfully!`);
+      showPopup(`${Object.keys(statusChanges).length} indent(s) processed successfully!`, 'success');
 
     } catch (error) {
       console.error('Error saving status changes:', error);
-      alert(`Failed to save status changes: ${error.message}`);
+      showPopup(`Failed to save status changes: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -319,6 +492,11 @@ const PharmacyApproval = () => {
 
   // Generate slip image (same as before)
   const generateSlipImage = (indent) => {
+     const userStr =localStorage.getItem("mis_user");
+     const user = JSON.parse(userStr);
+    const username =user.name;
+    
+
     const canvas = document.createElement('canvas');
     canvas.width = 850;
     canvas.height = 1100;
@@ -603,12 +781,12 @@ const PharmacyApproval = () => {
     ctx.textAlign = 'left';
     ctx.fillText('Prepared By', 20, y + 15);
     ctx.font = '11px Arial';
-    ctx.fillText(indent.staffName, 20, y + 32);
+    ctx.fillText("Nikhil", 20, y + 32);
     
     ctx.font = 'bold 12px Arial';
     ctx.fillText('Approved By', 435, y + 15);
     ctx.font = '11px Arial';
-    ctx.fillText(indent.consultantName || 'Pharmacy', 435, y + 32);
+    ctx.fillText(username || 'Pharmacy', 435, y + 32);
 
     return canvas.toDataURL('image/png');
   };
@@ -620,9 +798,16 @@ const PharmacyApproval = () => {
 
   const handleEdit = (indent) => {
     setSelectedIndent(indent);
+    
+    // Clone medicines to ensure they have IDs for editing
+    const medicinesWithIds = (indent.medicines || []).map((med, index) => ({
+      ...med,
+      id: med.id || Date.now() + index // Ensure each medicine has an ID
+    }));
+    
     setEditFormData({
       ...indent,
-      medicines: [...(indent.medicines || [])],
+      medicines: medicinesWithIds,
       investigationAdvice: indent.investigationAdvice ? { ...indent.investigationAdvice } : {
         priority: 'Medium',
         adviceCategory: '',
@@ -720,18 +905,18 @@ const PharmacyApproval = () => {
 
   const handleSaveEdit = async () => {
     if (!editFormData.diagnosis) {
-      alert('Please enter Diagnosis');
+      showPopup('Please enter Diagnosis', 'warning');
       return;
     }
 
     if (editFormData.requestTypes.medicineSlip && editFormData.medicines.length === 0) {
-      alert('Please add at least one medicine');
+      showPopup('Please add at least one medicine', 'warning');
       return;
     }
 
     const incompleteMedicines = editFormData.medicines.some(med => !med.name || !med.quantity);
     if (editFormData.requestTypes.medicineSlip && incompleteMedicines) {
-      alert('Please fill all medicine details');
+      showPopup('Please fill all medicine details', 'warning');
       return;
     }
 
@@ -742,7 +927,7 @@ const PharmacyApproval = () => {
         diagnosis: editFormData.diagnosis,
         medicines: JSON.stringify(editFormData.medicines),
         investigation_advice: JSON.stringify(editFormData.investigationAdvice),
-        updated_at: new Date().toISOString()
+        // updated_at: new Date().toISOString()
       };
 
       const { error } = await supabase
@@ -759,11 +944,11 @@ const PharmacyApproval = () => {
       setEditFormData(null);
       setSelectedIndent(null);
       
-      alert('Indent updated successfully!');
+      showPopup('Indent updated successfully!', 'success');
 
     } catch (error) {
       console.error('Error updating indent:', error);
-      alert(`Failed to update indent: ${error.message}`);
+      showPopup(`Failed to update indent: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -787,76 +972,133 @@ const PharmacyApproval = () => {
       link.download = `Pharmacy_Slip_${indent.indentNumber}.png`;
       link.href = imageUrl;
       link.click();
+      
+      showPopup('Slip downloaded successfully!', 'success');
     } catch (error) {
       console.error('Error downloading slip:', error);
-      alert('Failed to download slip');
+      showPopup('Failed to download slip', 'error');
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-6">
+        
+        {/* Success Popup */}
+        {showSuccessPopup && (
+          <div className="fixed top-4 right-4 z-50 animate-fade-in-down">
+            <div className="flex items-center p-4 space-x-3 bg-green-50 border border-green-200 rounded-lg shadow-lg">
+              <CheckCircle className="w-6 h-6 text-green-600" />
+              <div>
+                <p className="font-medium text-green-800">{popupMessage}</p>
+              </div>
+              <button
+                onClick={() => closePopup('success')}
+                className="p-1 text-green-400 rounded-full hover:text-green-600 hover:bg-green-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Error Popup */}
+        {showErrorPopup && (
+          <div className="fixed top-4 right-4 z-50 animate-fade-in-down">
+            <div className="flex items-center p-4 space-x-3 bg-red-50 border border-red-200 rounded-lg shadow-lg">
+              <XCircle className="w-6 h-6 text-red-600" />
+              <div>
+                <p className="font-medium text-red-800">{popupMessage}</p>
+              </div>
+              <button
+                onClick={() => closePopup('error')}
+                className="p-1 text-red-400 rounded-full hover:text-red-600 hover:bg-red-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Warning Popup */}
+        {showWarningPopup && (
+          <div className="fixed top-4 right-4 z-50 animate-fade-in-down">
+            <div className="flex items-center p-4 space-x-3 bg-amber-50 border border-amber-200 rounded-lg shadow-lg">
+              <XCircle className="w-6 h-6 text-amber-600" />
+              <div>
+                <p className="font-medium text-amber-800">{popupMessage}</p>
+              </div>
+              <button
+                onClick={() => closePopup('warning')}
+                className="p-1 text-amber-400 rounded-full hover:text-amber-600 hover:bg-amber-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-800">Pharmacy Approval</h1>
           <p className="text-gray-600 mt-1">Review and approve pharmacy indent requests</p>
         </div>
 
-        {/* Tabs */}
-        <div className="mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="flex gap-4">
-              <button
-                onClick={() => setActiveTab('pending')}
-                className={`px-6 py-3 font-medium border-b-2 transition-colors ${
-                  activeTab === 'pending'
-                    ? 'border-green-500 text-green-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-                disabled={loading}
-              >
-                Pending ({pendingIndents.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`px-6 py-3 font-medium border-b-2 transition-colors ${
-                  activeTab === 'history'
-                    ? 'border-green-500 text-green-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-                disabled={loading}
-              >
-                History ({historyIndents.length})
-              </button>
-            </nav>
-          </div>
-        </div>
-
-        {/* Save Button for Status Changes */}
-        {activeTab === 'pending' && Object.keys(statusChanges).length > 0 && (
-          <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
-            <span className="text-green-800 font-medium">
-              {Object.keys(statusChanges).length} indent(s) status updated
-            </span>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setStatusChanges({})}
-                className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
-                disabled={loading}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveStatusChanges}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
-                disabled={loading}
-              >
-                <Save className="w-4 h-4" />
-                {loading ? 'Saving...' : 'Save Changes'}
-              </button>
+        {/* Tabs and Submit Button in One Row */}
+        <div className="mb-6 flex items-center justify-between gap-4">
+          {/* Tabs on the left */}
+          <div className="flex-1">
+            <div className="border-b border-gray-200">
+              <nav className="flex gap-4">
+                <button
+                  onClick={() => setActiveTab('pending')}
+                  className={`px-6 py-3 font-medium border-b-2 transition-colors ${
+                    activeTab === 'pending'
+                      ? 'border-green-500 text-green-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                  disabled={loading}
+                >
+                  Pending ({pendingIndents.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`px-6 py-3 font-medium border-b-2 transition-colors ${
+                    activeTab === 'history'
+                      ? 'border-green-500 text-green-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                  disabled={loading}
+                >
+                  History ({historyIndents.length})
+                </button>
+              </nav>
             </div>
           </div>
-        )}
+
+          {/* Submit Button on the right - only show when there are pending status changes */}
+          {activeTab === 'pending' && Object.keys(statusChanges).length > 0 && (
+            <div className="flex-shrink-0">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setStatusChanges({})}
+                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors whitespace-nowrap"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveStatusChanges}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors whitespace-nowrap"
+                  disabled={loading}
+                >
+                  <Save className="w-4 h-4" />
+                  {loading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Loading State */}
         {loading && (
@@ -982,7 +1224,7 @@ const PharmacyApproval = () => {
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full">
-                <thead className=" bg-green-600 text-white">
+                <thead className="bg-green-600 text-white">
                   <tr>
                     <th className="px-6 py-3 text-left text-sm font-semibold">Indent No</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold">Admission No</th>
@@ -1139,17 +1381,12 @@ const PharmacyApproval = () => {
                         </div>
                         <div className="flex-1">
                           <label className="block text-sm font-medium text-gray-700 mb-1">Medicine Name</label>
-                          <select
-                            value={medicine.name}
-                            onChange={(e) => updateMedicine(medicine.id, 'name', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                            disabled={loading}
-                          >
-                            <option value="">Select Medicine</option>
-                            {DUMMY_MEDICINE_NAMES.map((med) => (
-                              <option key={med} value={med}>{med}</option>
-                            ))}
-                          </select>
+                          <MedicineDropdown
+                            medicine={medicine}
+                            onUpdate={updateMedicine}
+                            index={index}
+                            loading={loading}
+                          />
                         </div>
                         <div className="w-32">
                           <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
@@ -1230,20 +1467,26 @@ const PharmacyApproval = () => {
                           Select Pathology Tests * ({editFormData.investigationAdvice.pathologyTests.length} selected)
                         </label>
                         <div className="p-4 max-h-60 overflow-y-auto bg-white rounded-lg border border-gray-300">
-                          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-                            {pathologyTests.map((test) => (
-                              <label key={test} className="flex items-start gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={editFormData.investigationAdvice.pathologyTests.includes(test)}
-                                  onChange={() => handleAdviceCheckboxChange(test, 'pathology')}
-                                  className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                                  disabled={loading}
-                                />
-                                <span className="text-sm text-gray-700">{test}</span>
-                              </label>
-                            ))}
-                          </div>
+                          {pathologyTests.length > 0 ? (
+                            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                              {pathologyTests.map((test) => (
+                                <label key={test} className="flex items-start gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={editFormData.investigationAdvice.pathologyTests.includes(test)}
+                                    onChange={() => handleAdviceCheckboxChange(test, 'pathology')}
+                                    className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                    disabled={loading}
+                                  />
+                                  <span className="text-sm text-gray-700">{test}</span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center text-gray-500 py-8">
+                              <p>Loading pathology tests...</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1273,20 +1516,29 @@ const PharmacyApproval = () => {
                               Select {editFormData.investigationAdvice.radiologyType} Tests * ({editFormData.investigationAdvice.radiologyTests.length} selected)
                             </label>
                             <div className="p-4 max-h-60 overflow-y-auto bg-white rounded-lg border border-gray-300">
-                              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                                {getRadiologyTests().map((test) => (
-                                  <label key={test} className="flex items-start gap-2 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={editFormData.investigationAdvice.radiologyTests.includes(test)}
-                                      onChange={() => handleAdviceCheckboxChange(test, 'radiology')}
-                                      className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                                      disabled={loading}
-                                    />
-                                    <span className="text-sm text-gray-700">{test}</span>
-                                  </label>
-                                ))}
-                              </div>
+                              {(() => {
+                                const tests = getRadiologyTests();
+                                return tests.length > 0 ? (
+                                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                    {tests.map((test) => (
+                                      <label key={test} className="flex items-start gap-2 cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={editFormData.investigationAdvice.radiologyTests.includes(test)}
+                                          onChange={() => handleAdviceCheckboxChange(test, 'radiology')}
+                                          className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                          disabled={loading}
+                                        />
+                                        <span className="text-sm text-gray-700">{test}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-center text-gray-500 py-8">
+                                    <p>Loading {editFormData.investigationAdvice.radiologyType} tests...</p>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         )}

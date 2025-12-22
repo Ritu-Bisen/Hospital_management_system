@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Eye, FileText, Upload, Check } from 'lucide-react';
+import { X, Eye, FileText, Upload, Check, Bell } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
 
 const Payment = () => {
@@ -15,10 +15,31 @@ const Payment = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   
+  // Notification state
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationType, setNotificationType] = useState('success'); // 'success' or 'error'
+  
   const [formData, setFormData] = useState({
     payment: '',
     billImage: null
   });
+
+  // Auto-hide notification after 3 seconds
+  useEffect(() => {
+    if (showNotification) {
+      const timer = setTimeout(() => {
+        setShowNotification(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showNotification]);
+
+  const showNotificationPopup = (message, type = 'success') => {
+    setNotificationMessage(message);
+    setNotificationType(type);
+    setShowNotification(true);
+  };
 
   // Load data from Supabase
   useEffect(() => {
@@ -136,7 +157,7 @@ const Payment = () => {
       setHistoryPayments(formattedHistory);
     } catch (error) {
       console.error('Failed to load data:', error);
-      setModalError('Failed to load data. Please try again.');
+      showNotificationPopup('Failed to load payment data. Please try again.', 'error');
     } finally {
       setInitialLoading(false);
     }
@@ -175,20 +196,25 @@ const Payment = () => {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!formData.payment) {
-      setModalError('Please select payment status');
-      return;
-    }
+const handleSubmit = async () => {
+  if (!formData.payment) {
+    setModalError('Please select payment status');
+    return;
+  }
 
-    if (!formData.billImage) {
-      setModalError('Please upload bill image');
-      return;
-    }
+  // Only require bill image if payment is "Yes"
+  if (formData.payment === 'Yes' && !formData.billImage) {
+    setModalError('Please upload bill image');
+    return;
+  }
 
-    try {
-      setLoading(true);
-      
+  try {
+    setLoading(true);
+    
+    let publicUrl = null;
+    
+    // Only process image upload if payment is "Yes" and billImage exists
+    if (formData.payment === 'Yes' && formData.billImage) {
       // Convert base64 to blob
       const base64Data = formData.billImage.split(',')[1];
       const binaryData = atob(base64Data);
@@ -213,42 +239,57 @@ const Payment = () => {
       if (uploadError) throw uploadError;
 
       // Get public URL
-      const { data: { publicUrl } } = supabase.storage
+      const { data: { publicUrl: url } } = supabase.storage
         .from('bill_image')
         .getPublicUrl(fileName);
-
-      // Update lab record with payment info
-      // Note: Using "kill_image_url" column name as per your schema
-      const { error: updateError } = await supabase
-        .from('lab')
-        .update({
-          payment_status: formData.payment,
-          bill_image_url: publicUrl, // Fixed: Changed to "kill_image_url"
-           planned2: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
-          actual1: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
-        })
-        .eq('id', selectedRecord.id);
-
-      if (updateError) throw updateError;
-
-      // Reload data
-      await loadData();
       
-      setShowModal(false);
-      resetForm();
-    } catch (error) {
-      console.error('Failed to process payment:', error);
-      setModalError('Failed to process payment. Please try again.');
-    } finally {
-      setLoading(false);
+      publicUrl = url;
     }
-  };
+
+    // Prepare update data
+    const updateData = {
+      payment_status: formData.payment,
+      planned2: new Date().toLocaleString("en-CA", { 
+        timeZone: "Asia/Kolkata", 
+        hour12: false 
+      }).replace(',', ''),
+      actual1: new Date().toLocaleString("en-CA", { 
+        timeZone: "Asia/Kolkata", 
+        hour12: false 
+      }).replace(',', ''),
+    };
+
+    // Only include bill_image_url if payment is "Yes" and we have a URL
+    if (formData.payment === 'Yes' && publicUrl) {
+      updateData.bill_image_url = publicUrl;
+    } else if (formData.payment !== 'Yes') {
+      // If payment is not "Yes", set bill_image_url to null or empty string
+      updateData.bill_image_url = null;
+    }
+
+    // Update lab record with payment info
+    const { error: updateError } = await supabase
+      .from('lab')
+      .update(updateData)
+      .eq('id', selectedRecord.id);
+
+    if (updateError) throw updateError;
+
+    // Reload data
+    await loadData();
+    
+    // Show success notification
+    showNotificationPopup('Payment processed successfully!', 'success');
+    
+    setShowModal(false);
+    resetForm();
+  } catch (error) {
+    console.error('Failed to process payment:', error);
+    showNotificationPopup('Failed to process payment. Please try again.', 'error');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const resetForm = () => {
     setFormData({
@@ -267,7 +308,8 @@ const Payment = () => {
 
   const handleViewImage = (imageUrl) => {
     if (!imageUrl) {
-      alert('No bill image available');
+      // Show notification instead of alert
+      showNotificationPopup('No bill image available', 'error');
       return;
     }
     
@@ -303,6 +345,50 @@ const Payment = () => {
 
   return (
     <div className="p-3 space-y-4 md:p-6 bg-gray-50 min-h-screen">
+      {/* Notification Popup */}
+      {showNotification && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className={`relative w-full max-w-md transform transition-all duration-300 ${
+            showNotification ? 'animate-scale-in opacity-100' : 'opacity-0 scale-95'
+          }`}>
+            <div className={`rounded-lg shadow-2xl overflow-hidden ${
+              notificationType === 'success' 
+                ? 'bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200' 
+                : 'bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200'
+            }`}>
+              <div className="p-6 text-center">
+                <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
+                  notificationType === 'success' ? 'bg-green-100' : 'bg-red-100'
+                }`}>
+                  {notificationType === 'success' ? (
+                    <Check className="w-8 h-8 text-green-600" />
+                  ) : (
+                    <X className="w-8 h-8 text-red-600" />
+                  )}
+                </div>
+                <h3 className={`text-lg font-bold mb-2 ${
+                  notificationType === 'success' ? 'text-green-800' : 'text-red-800'
+                }`}>
+                  {notificationType === 'success' ? 'Success!' : 'Error!'}
+                </h3>
+                <p className={`text-sm ${
+                  notificationType === 'success' ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {notificationMessage}
+                </p>
+                <div className={`mt-4 h-1 w-full ${
+                  notificationType === 'success' ? 'bg-green-200' : 'bg-red-200'
+                }`}>
+                  <div className={`h-full ${
+                    notificationType === 'success' ? 'bg-green-500' : 'bg-red-500'
+                  } animate-progress`}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Payment Management</h1>
@@ -964,6 +1050,36 @@ const Payment = () => {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes scale-in {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        
+        @keyframes progress {
+          from {
+            width: 100%;
+          }
+          to {
+            width: 0%;
+          }
+        }
+        
+        .animate-scale-in {
+          animation: scale-in 0.3s ease-out;
+        }
+        
+        .animate-progress {
+          animation: progress 3s linear forwards;
+        }
+      `}</style>
     </div>
   );
 };

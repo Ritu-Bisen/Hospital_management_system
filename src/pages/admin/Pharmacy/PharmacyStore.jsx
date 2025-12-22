@@ -20,6 +20,7 @@ const StoreMedicinePage = () => {
         .from('pharmacy')
         .select('*')
         .not('planned2', 'is', null)
+     .neq('status', 'rejected')
         .order('timestamp', { ascending: false });
 
       if (error) throw error;
@@ -97,11 +98,11 @@ const StoreMedicinePage = () => {
   };
 
   const handleConfirm = async (indent) => {
-    const confirmed = window.confirm(
-      `Confirm medicine dispensing for Indent ${indent.indent_no || indent.id}?`
-    );
+    // const confirmed = window.confirm(
+    //   `Confirm medicine dispensing for Indent ${indent.indent_no || indent.id}?`
+    // );
 
-    if (!confirmed) return;
+    // if (!confirmed) return;
 
     try {
       // Update the pharmacy record with actual2 timestamp
@@ -112,14 +113,14 @@ const StoreMedicinePage = () => {
           timeZone: "Asia/Kolkata", 
           hour12: false 
         }).replace(',', ''),
-          status: 'dispensed'
+          // status: 'dispensed'
         })
         .eq('id', indent.id);
 
       if (error) throw error;
 
       // Show success message
-      alert(`Indent ${indent.indent_no || indent.id} confirmed successfully!`);
+      // alert(`Indent ${indent.indent_no || indent.id} confirmed successfully!`);
       loadData()
       // The real-time subscription will automatically refresh the data
     } catch (error) {

@@ -11,6 +11,8 @@ const DischargePatient = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  
   const [formData, setFormData] = useState({
     admission_no: '',
     patient_name: '',
@@ -21,6 +23,25 @@ const DischargePatient = () => {
   });
 
   useEffect(() => {
+    // Get current user from localStorage
+    const getUserFromLocalStorage = () => {
+      try {
+        const storedUser = localStorage.getItem('mis_user');
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          setCurrentUser(user);
+          // Set staff name from user name
+          setFormData(prev => ({
+            ...prev,
+            staff_name: user.name || ''
+          }));
+        }
+      } catch (error) {
+        console.error('Error parsing user from localStorage:', error);
+      }
+    };
+
+    getUserFromLocalStorage();
     fetchDischargeRecords();
     fetchAvailablePatients();
   }, []);
@@ -86,7 +107,8 @@ const DischargePatient = () => {
       patient_name: patient.patient_name || '',
       department: patient.department || '',
       consultant_name: patient.consultant_dr || '',
-      staff_name: patient.staff_name || ''
+      // Keep the current user's name as staff name
+      staff_name: currentUser ? currentUser.name : ''
     });
     setSearchTerm(`${patient.admission_no} - ${patient.patient_name}`);
     setShowDropdown(false);
@@ -94,6 +116,9 @@ const DischargePatient = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    // Don't allow changing staff_name field
+    if (name === 'staff_name') return;
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -118,20 +143,19 @@ const DischargePatient = () => {
         .from('discharge')
         .insert([{
           timestamp: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
-          // discharge_number: generateDischargeNumber(),
+            timeZone: "Asia/Kolkata", 
+            hour12: false 
+          }).replace(',', ''),
           admission_no: formData.admission_no,
           patient_name: formData.patient_name,
           department: formData.department,
           consultant_name: formData.consultant_name,
           staff_name: formData.staff_name,
           remark: formData.remark,
-          planned1:new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
+          planned1: new Date().toLocaleString("en-CA", { 
+            timeZone: "Asia/Kolkata", 
+            hour12: false 
+          }).replace(',', ''),
         }])
         .select()
         .single();
@@ -142,9 +166,9 @@ const DischargePatient = () => {
         .from('ipd_admissions')
         .update({ 
           actual1: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
+            timeZone: "Asia/Kolkata", 
+            hour12: false 
+          }).replace(',', ''),
         })
         .eq('admission_no', formData.admission_no);
 
@@ -170,7 +194,8 @@ const DischargePatient = () => {
       patient_name: '',
       department: '',
       consultant_name: '',
-      staff_name: '',
+      // Reset staff_name to current user's name
+      staff_name: currentUser ? currentUser.name : '',
       remark: ''
     });
     setSearchTerm('');
@@ -204,9 +229,21 @@ const DischargePatient = () => {
   };
 
   const handleEditChange = (id, field, value) => {
+    // Prevent editing staff_name field
+    if (field === 'staff_name' && !value.trim()) return;
+    
     setDischargeRecords(prev => prev.map(record => 
       record.id === id ? { ...record, [field]: value } : record
     ));
+  };
+
+  const handleOpenModal = () => {
+    // Set staff name from current user when opening modal
+    setFormData(prev => ({
+      ...prev,
+      staff_name: currentUser ? currentUser.name : ''
+    }));
+    setShowModal(true);
   };
 
   const filteredPatients = availablePatients.filter(patient =>
@@ -241,9 +278,14 @@ const DischargePatient = () => {
           <p className="mt-1 text-sm text-gray-600">
             Manage patient discharge records
           </p>
+          {currentUser && (
+            <p className="mt-1 text-xs text-gray-500">
+              Logged in as: <span className="font-medium">{currentUser.name}</span> ({currentUser.role})
+            </p>
+          )}
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={handleOpenModal}
           disabled={loading}
           className="flex gap-2 items-center justify-center px-4 py-2.5 w-full text-white bg-green-600 rounded-lg shadow-sm transition-colors hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed sm:w-auto"
         >
@@ -556,14 +598,18 @@ const DischargePatient = () => {
                   <label className="block mb-1 text-sm font-medium text-gray-700">
                     Staff Name <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    name="staff_name"
-                    value={formData.staff_name}
-                    onChange={handleInputChange}
-                    placeholder="Enter staff name"
-                    className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={formData.staff_name}
+                      readOnly
+                      className="px-3 py-2 w-full rounded-lg border border-gray-300 bg-gray-50 text-gray-600 pl-10"
+                    />
+                    <UserCheck className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Staff name is automatically set from your login information
+                  </p>
                 </div>
                 
                 <div>

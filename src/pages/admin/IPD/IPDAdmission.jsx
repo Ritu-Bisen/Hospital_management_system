@@ -12,6 +12,7 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
+  Bell
 } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
 
@@ -26,6 +27,11 @@ const PatientAdmissionSystem = () => {
   const [dateFilter, setDateFilter] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // New state for notification popup
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationType, setNotificationType] = useState('success'); // 'success' or 'error'
   
   // State for dynamic dropdowns
   const [departmentOptions, setDepartmentOptions] = useState([]);
@@ -110,6 +116,22 @@ const PatientAdmissionSystem = () => {
   const departmentInputRef = useRef(null);
   const doctorInputRef = useRef(null);
 
+  // Auto-hide notification after 3 seconds
+  useEffect(() => {
+    if (showNotification) {
+      const timer = setTimeout(() => {
+        setShowNotification(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showNotification]);
+
+  const showNotificationPopup = (message, type = 'success') => {
+    setNotificationMessage(message);
+    setNotificationType(type);
+    setShowNotification(true);
+  };
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -151,6 +173,7 @@ const PatientAdmissionSystem = () => {
 
       if (error) {
         console.error('Error loading departments:', error);
+        showNotificationPopup('Failed to load departments', 'error');
         return [];
       }
 
@@ -166,6 +189,7 @@ const PatientAdmissionSystem = () => {
       return options;
     } catch (error) {
       console.error('Error loading departments:', error);
+      showNotificationPopup('Failed to load departments', 'error');
       return [];
     }
   };
@@ -187,6 +211,7 @@ const PatientAdmissionSystem = () => {
 
       if (error) {
         console.error('Error loading doctors:', error);
+        showNotificationPopup('Failed to load doctors', 'error');
         return [];
       }
 
@@ -202,6 +227,7 @@ const PatientAdmissionSystem = () => {
       return options;
     } catch (error) {
       console.error('Error loading doctors:', error);
+      showNotificationPopup('Failed to load doctors', 'error');
       return [];
     }
   };
@@ -219,6 +245,7 @@ const PatientAdmissionSystem = () => {
 
       if (error) {
         console.error('Error loading bed data:', error);
+        showNotificationPopup('Failed to load bed data', 'error');
         return;
       }
 
@@ -228,6 +255,7 @@ const PatientAdmissionSystem = () => {
       }
     } catch (error) {
       console.error('Failed to load bed data:', error);
+      showNotificationPopup('Failed to load bed data', 'error');
     }
   };
 
@@ -379,6 +407,7 @@ const PatientAdmissionSystem = () => {
 
       if (ipdError) {
         console.error('Error loading IPD records:', ipdError);
+        showNotificationPopup('Failed to load IPD records', 'error');
       } else {
         setPatients(ipdRecords || []);
       }
@@ -395,6 +424,7 @@ const PatientAdmissionSystem = () => {
 
       if (patientError) {
         console.error('Error loading patient admission data:', patientError);
+        showNotificationPopup('Failed to load patient data', 'error');
       } else {
         if (ipdRecords && patientAdmissionData) {
           const admittedAdmissionNumbers = ipdRecords.map(p => p.admission_no);
@@ -408,6 +438,7 @@ const PatientAdmissionSystem = () => {
       }
     } catch (error) {
       console.error('Failed to load data:', error);
+      showNotificationPopup('Failed to load data', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -528,7 +559,7 @@ const PatientAdmissionSystem = () => {
         adm_purpose: formData.admissionPurpose.trim(),
         location_status: formData.locationStatus,
         floor: formData.floor,
-        ward: formData.ward,
+        // ward: formData.ward,
         room: formData.room,
         bed_no: formData.bedNo,
         bed_location: formData.bedLocation,
@@ -603,7 +634,11 @@ const PatientAdmissionSystem = () => {
       }
 
       if (result && result.length > 0) {
-        alert(`Patient ${editingPatient ? 'updated' : 'admitted'} successfully! IPD Number: ${patientData.ipd_number}`);
+        // Show success notification instead of alert
+        showNotificationPopup(
+          `Patient ${editingPatient ? 'updated' : 'admitted'} successfully! IPD Number: ${patientData.ipd_number}`,
+          'success'
+        );
         
         await loadData();
         
@@ -615,7 +650,10 @@ const PatientAdmissionSystem = () => {
       
     } catch (error) {
       console.error('Error saving patient:', error);
-      alert(`Failed to save patient: ${error.message}`);
+      showNotificationPopup(
+        `Failed to ${editingPatient ? 'update' : 'admit'} patient: ${error.message}`,
+        'error'
+      );
     } finally {
       setIsSaving(false);
     }
@@ -779,6 +817,46 @@ const PatientAdmissionSystem = () => {
         </div>
       )}
 
+      {/* Notification Popup */}
+      {showNotification && (
+        <div className={`fixed top-4 right-4 z-50 max-w-md animate-slide-in ${
+          notificationType === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+        } border rounded-lg shadow-lg`}>
+          <div className="p-4">
+            <div className="flex items-start">
+              <div className={`flex-shrink-0 p-1 rounded-full ${
+                notificationType === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+              }`}>
+                <Bell className="w-5 h-5" />
+              </div>
+              <div className="ml-3">
+                <p className={`text-sm font-medium ${
+                  notificationType === 'success' ? 'text-green-800' : 'text-red-800'
+                }`}>
+                  {notificationMessage}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowNotification(false)}
+                className={`ml-4 flex-shrink-0 ${
+                  notificationType === 'success' ? 'text-green-400 hover:text-green-600' : 'text-red-400 hover:text-red-600'
+                }`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          {/* Progress bar */}
+          <div className={`h-1 w-full ${
+            notificationType === 'success' ? 'bg-green-200' : 'bg-red-200'
+          }`}>
+            <div className={`h-full ${
+              notificationType === 'success' ? 'bg-green-500' : 'bg-red-500'
+            } animate-progress`}></div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto">
         {/* Header Section */}
         <div className="mb-6">
@@ -832,44 +910,46 @@ const PatientAdmissionSystem = () => {
           <div className="hidden md:block overflow-hidden">
             <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+               <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 whitespace-nowrap ">
+
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      IPD Number
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      Admission No
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      Patient Name
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden md:table-cell">
-                      Phone Number
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
-                      Father/Husband
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
-                      WhatsApp No
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
-                      Admission Purpose
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden md:table-cell">
-                      Date of Birth
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
-                      Age
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
-                      Gender
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
-                      Bed No
-                    </th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                     <th className="px-4 py-3  text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Action
                     </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      IPD Number
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Admission No
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Patient Name
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider hidden md:table-cell">
+                      Phone Number
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
+                      Father/Husband
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
+                      WhatsApp No
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
+                      Admission Purpose
+                    </th>
+                    <th className="px-10 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider hidden md:table-cell">
+                      Date of Birth
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
+                      Age
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
+                      Gender
+                    </th>
+                    <th className="px-12 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">
+                      Bed No
+                    </th>
+                   
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -894,40 +974,7 @@ const PatientAdmissionSystem = () => {
                         key={patient.id}
                         className="hover:bg-gray-50 transition-colors border-b border-gray-100"
                       >
-                        <td className="px-6 py-4 text-sm font-semibold text-purple-600">
-                          {patient.ipd_number}
-                        </td>
-                        <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                          {patient.admission_no}
-                        </td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                          {patient.patient_name}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-700 hidden md:table-cell">
-                          {patient.phone_no || '-'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-700 hidden lg:table-cell">
-                          {patient.father_husband_name || '-'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-700 hidden lg:table-cell">
-                          {patient.whatsapp_no || '-'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-700 hidden lg:table-cell">
-                          {patient.adm_purpose || '-'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-700 hidden md:table-cell">
-                          {patient.date_of_birth || '-'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-700 hidden lg:table-cell">
-                          {patient.age || '-'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-700 hidden lg:table-cell">
-                          {patient.gender || '-'}
-                        </td>
-                        <td className="px-6 py-4 text-sm font-semibold text-green-600 hidden lg:table-cell">
-                          {patient.bed_no || 'Not Assigned'}
-                        </td>
-                        <td className="px-6 py-4 text-right">
+                          <td className="px-4 py-3 text-right">
                           <button
                             onClick={() => handleEdit(patient)}
                             disabled={isLoading}
@@ -937,6 +984,40 @@ const PatientAdmissionSystem = () => {
                             Edit
                           </button>
                         </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-green-600">
+                          {patient.ipd_number}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                          {patient.admission_no}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          {patient.patient_name}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 hidden md:table-cell">
+                          {patient.phone_no || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 hidden lg:table-cell">
+                          {patient.father_husband_name || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 hidden lg:table-cell">
+                          {patient.whatsapp_no || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 hidden lg:table-cell">
+                          {patient.adm_purpose || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 hidden md:table-cell">
+                          {patient.date_of_birth || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 hidden lg:table-cell">
+                          {patient.age || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 hidden lg:table-cell">
+                          {patient.gender || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-green-600 hidden lg:table-cell">
+                          {patient.bed_no || 'Not Assigned'}
+                        </td>
+                      
                       </tr>
                     ))
                   )}
@@ -2232,6 +2313,36 @@ const PatientAdmissionSystem = () => {
           </div>
         )}
       </div>
+
+      <style>{`
+        @keyframes slide-in {
+          from {
+            opacity: 0;
+            transform: translateX(100%);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        
+        @keyframes progress {
+          from {
+            width: 100%;
+          }
+          to {
+            width: 0%;
+          }
+        }
+        
+        .animate-slide-in {
+          animation: slide-in 0.3s ease-out;
+        }
+        
+        .animate-progress {
+          animation: progress 3s linear forwards;
+        }
+      `}</style>
     </div>
   );
 };
