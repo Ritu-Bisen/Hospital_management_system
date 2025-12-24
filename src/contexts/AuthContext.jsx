@@ -10,6 +10,7 @@ export const ALL_PAGES = [
   { key: 'dashboard', label: 'Dashboard', path: '/admin/dashboard', icon: 'LayoutDashboard', type: 'single' },
   { key: 'patient-profile', label: 'Patient Profile', path: '/admin/patient-profile', icon: 'User', type: 'single' },
   { key: 'pms', label: 'PMS', path: '/admin/pms', icon: 'FileText', type: 'single' },
+  { key: 'roster', label: 'Roster', path: '/admin/roster', icon: 'Calendar', type: 'single' },
   
   // Admission dropdown
   { key: 'admission', label: 'Admission', type: 'group', icon: 'LineChart' },
@@ -78,7 +79,7 @@ const parseUserPages = (pagesData) => {
   if (!pagesData) return [];
   
   if (pagesData === 'all') {
-    // Return all page keys except groups
+    // Return all page keys (including single pages and group items)
     return ALL_PAGES.filter(page => page.type !== 'group').map(page => page.key);
   }
   
@@ -199,13 +200,9 @@ export function AuthProvider({ children }) {
 
   // Check if user has access to a specific page
   const hasPageAccess = (pageKey) => {
-    if (!userPages || userPages.length === 0) return false;
+    if (!user || !userPages || userPages.length === 0) return false;
     
     // If user has all pages access
-    const allNonGroupPages = ALL_PAGES.filter(page => page.type !== 'group');
-    const allPageKeys = allNonGroupPages.map(page => page.key);
-    
-    // Check if user has 'all' access
     if (userPages.includes('all')) return true;
     
     // Check if user has this specific page
@@ -214,6 +211,8 @@ export function AuthProvider({ children }) {
 
   // Memoize accessible sidebar items
   const accessibleSidebarItems = useMemo(() => {
+    if (!user) return [];
+    
     const items = [];
     
     // Get single pages that user has access to
@@ -240,23 +239,7 @@ export function AuthProvider({ children }) {
     });
     
     return [...singlePages, ...items];
-  }, [userPages]);
-
-  // Memoize accessible group routes
-  const accessibleGroupRoutes = useMemo(() => {
-    const routes = {};
-    
-    // Get all groups
-    const groups = ALL_PAGES.filter(page => page.type === 'group');
-    
-    groups.forEach(group => {
-      routes[group.key] = ALL_PAGES.filter(page => 
-        page.parent === group.key && hasPageAccess(page.key)
-      );
-    });
-    
-    return routes;
-  }, [userPages]);
+  }, [user, userPages]);
 
   // Get accessible sidebar items (for AdminLayout)
   const getAccessibleSidebarItems = () => {
@@ -265,7 +248,9 @@ export function AuthProvider({ children }) {
 
   // Get accessible child routes for a group
   const getAccessibleGroupRoutes = (groupKey) => {
-    return accessibleGroupRoutes[groupKey] || [];
+    return ALL_PAGES.filter(page => 
+      page.parent === groupKey && hasPageAccess(page.key)
+    );
   };
 
   const value = {

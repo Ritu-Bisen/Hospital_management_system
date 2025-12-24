@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, FlaskConical, Pill, UserCheck, 
   User, Users, Stethoscope, Building, Bed, FileText, 
   ClipboardList, CheckSquare, BarChart3, UserCog, Shield, 
-  Scissors, Clock, Key 
+  Scissors, Clock, Key ,Calendar
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Footer from '../components/Footer';
@@ -31,7 +31,8 @@ const iconComponents = {
   Stethoscope,
   Building,
   Bed,
-  Key
+  Key,
+  Calendar
 };
 
 const AdminLayout = () => {

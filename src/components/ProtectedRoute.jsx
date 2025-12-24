@@ -1,25 +1,18 @@
-// components/ProtectedRoute.jsx
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProtectedRoute = ({ children, requiredPage }) => {
-  const { user, hasPageAccess, loading } = useAuth();
-  const location = useLocation();
+  const { user, hasPageAccess } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
+  // If no user, redirect to login
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" replace />;
   }
 
+  // If requiredPage is provided, check if user has access
   if (requiredPage && !hasPageAccess(requiredPage)) {
-    // Simply redirect to dashboard if user doesn't have access
+    // You can redirect to dashboard or show unauthorized page
+    console.warn(`User does not have access to: ${requiredPage}`);
     return <Navigate to="/admin/dashboard" replace />;
   }
 

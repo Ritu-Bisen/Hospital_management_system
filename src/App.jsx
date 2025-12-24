@@ -53,8 +53,7 @@ import RMOScoreDashboard from './pages/admin/rmo/RMOScoreDashboard';
 
 // OT Components
 import AssignOtTime from './pages/admin/OT/AssignOtTime';
-import OtStaffAssign from './pages/admin/OT/OtStaffAssign'; // Add import for OtStaffAssign
-// import CompleteOperation from './pages/admin/OT/CompleteOperation';
+import OtStaffAssign from './pages/admin/OT/OtStaffAssign';
 
 // Patient Profile Components
 import PatientOverview from './pages/admin/PatientProfile/PatientOverview';
@@ -64,6 +63,7 @@ import PMS from './pages/pms';
 // Protected Route Component
 import ProtectedRoute from './components/ProtectedRoute';
 import Dressing from './pages/admin/PatientProfile/Dressing';
+import Roster from './pages/Roster';
 
 function App() {
   const { user, loading } = useAuth();
@@ -118,6 +118,13 @@ function App() {
             <PMS />
           </ProtectedRoute>
         } />
+
+        {/* Roster */}
+        <Route path="roster" element={
+          <ProtectedRoute requiredPage="roster">
+            <Roster />
+          </ProtectedRoute>
+        } />
         
         {/* Patient Profile Routes */}
         <Route path="patient-profile" element={
@@ -168,17 +175,11 @@ function App() {
           </ProtectedRoute>
         } />
         
-        <Route path="ot/staff-assign" element={ // Add new route for OT Staff Assign
+        <Route path="ot/staff-assign" element={
           <ProtectedRoute requiredPage="ot-staff-assign">
             <OtStaffAssign />
           </ProtectedRoute>
         } />
-        
-        {/* <Route path="ot/complete-operation" element={
-          <ProtectedRoute requiredPage="ot-complete-operation">
-            <CompleteOperation />
-          </ProtectedRoute>
-        } /> */}
         
         {/* Nurse Station Routes */}
         <Route path="nurse-station/assign-task" element={
