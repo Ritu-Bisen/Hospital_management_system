@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, Calendar, Clock, User, MapPin, Users, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const OtStaffAssign = () => {
   const [pendingData, setPendingData] = useState([]);
@@ -10,13 +11,14 @@ const OtStaffAssign = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const { showNotification } = useNotification();
+
   const [formData, setFormData] = useState({
     ot_staff: '',
     shift: '',
     reminder: 'Yes'
   });
-  
+
   const [otStaffList, setOtStaffList] = useState([]);
   const shiftOptions = ['Shift A', 'Shift B', 'Shift C'];
   const reminderOptions = ['Yes', 'No'];
@@ -50,7 +52,7 @@ const OtStaffAssign = () => {
     } else {
       // Group tasks by ot_number to show unique assignments
       const groupedTasks = {};
-      
+
       data.forEach(task => {
         const key = task.ot_number || task.Ipd_number;
         if (!groupedTasks[key]) {
@@ -78,7 +80,7 @@ const OtStaffAssign = () => {
           actual1: task.actual1
         });
       });
-      
+
       setHistoryData(Object.values(groupedTasks));
     }
   };
@@ -145,7 +147,7 @@ const OtStaffAssign = () => {
         .insert(tasks);
 
       if (taskError) throw taskError;
-      
+
       console.log('Successfully created 2 tasks in nurse_assign_task table');
       return true;
     } catch (error) {
@@ -168,11 +170,11 @@ const OtStaffAssign = () => {
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (isSubmitting || !selectedRecord) return;
-    
+
     if (!formData.ot_staff || !formData.shift) {
-      alert('Please fill in all required fields');
+      showNotification('Please fill in all required fields', 'error');
       return;
     }
 
@@ -182,12 +184,12 @@ const OtStaffAssign = () => {
       // Update ot_information table with ot_staff
       const { error: updateError } = await supabase
         .from('ot_information')
-        .update({ 
+        .update({
           ot_staff: formData.ot_staff,
-          actual3: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
+          actual3: new Date().toLocaleString("en-CA", {
+            timeZone: "Asia/Kolkata",
+            hour12: false
+          }).replace(',', ''),
         })
         .eq('id', selectedRecord.id);
 
@@ -213,7 +215,7 @@ const OtStaffAssign = () => {
       );
 
       if (!tasksCreated) {
-        alert('OT staff assigned but failed to create nurse tasks. Please check console for details.');
+        showNotification('OT staff assigned but failed to create nurse tasks. Please check console for details.', 'warning');
       }
 
       // Reset form and close modal
@@ -224,17 +226,19 @@ const OtStaffAssign = () => {
       });
       setSelectedRecord(null);
       setShowForm(false);
-      
+
       // Refresh data
       fetchPendingData();
       fetchHistoryData();
-      
-      alert(tasksCreated 
-        ? 'OT staff assigned successfully and nurse tasks created!' 
-        : 'OT staff assigned but nurse tasks creation failed!');
+
+      showNotification(tasksCreated
+        ? 'OT staff assigned successfully and nurse tasks created!'
+        : 'OT staff assigned but nurse tasks creation failed!',
+        tasksCreated ? 'success' : 'error'
+      );
     } catch (error) {
       console.error('Error assigning OT staff:', error);
-      alert(`Error assigning OT staff: ${error.message}`);
+      showNotification(`Error assigning OT staff: ${error.message}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -258,7 +262,7 @@ const OtStaffAssign = () => {
   // Mobile Card Component for Pending Tasks
   const MobilePendingCard = ({ item }) => {
     const isExpanded = expandedCard === item.id;
-    
+
     return (
       <div className="bg-white rounded-lg border border-green-200 p-4 mb-3 shadow-sm">
         <div className="flex justify-between items-start mb-3">
@@ -345,7 +349,7 @@ const OtStaffAssign = () => {
   // Mobile Card Component for History
   const MobileHistoryCard = ({ item }) => {
     const isExpanded = expandedCard === item.id;
-    
+
     return (
       <div className="bg-white rounded-lg border border-green-200 p-4 mb-3 shadow-sm">
         <div className="flex justify-between items-start mb-3">
@@ -468,28 +472,26 @@ const OtStaffAssign = () => {
         <div className="flex mt-6 bg-gray-100 p-1 rounded-lg">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`flex-1 py-2.5 px-4 font-medium text-sm md:text-base rounded-lg transition-colors ${
-              activeTab === 'pending' 
-                ? 'bg-green-600 text-white' 
+            className={`flex-1 py-2.5 px-4 font-medium text-sm md:text-base rounded-lg transition-colors ${activeTab === 'pending'
+                ? 'bg-green-600 text-white'
                 : 'bg-transparent text-gray-600 hover:text-green-600'
-            }`}
+              }`}
           >
             <div className="flex flex-col items-center">
               <span>Pending <span className=" mt-0.5">{pendingData.length}</span> </span>
-             
+
             </div>
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`flex-1 py-2.5 px-4 font-medium text-sm md:text-base rounded-lg transition-colors ${
-              activeTab === 'history' 
-                ? 'bg-green-600 text-white' 
+            className={`flex-1 py-2.5 px-4 font-medium text-sm md:text-base rounded-lg transition-colors ${activeTab === 'history'
+                ? 'bg-green-600 text-white'
                 : 'bg-transparent text-gray-600 hover:text-green-600'
-            }`}
+              }`}
           >
             <div className="flex flex-col items-center">
               <span>History <span className=" mt-0.5">{historyData.length}</span></span>
-             
+
             </div>
           </button>
         </div>
@@ -555,8 +557,8 @@ const OtStaffAssign = () => {
                     </thead>
                     <tbody>
                       {pendingData.map((item, index) => (
-                        <tr 
-                          key={item.id} 
+                        <tr
+                          key={item.id}
                           className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-green-50'}`}
                         >
                           <td className="px-4 py-3 sticky left-0 bg-white">
@@ -617,8 +619,8 @@ const OtStaffAssign = () => {
                     </thead>
                     <tbody>
                       {historyData.map((item, index) => (
-                        <tr 
-                          key={index} 
+                        <tr
+                          key={index}
                           className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-green-50'}`}
                         >
                           <td className="px-4 py-3 sticky left-0 bg-white">{item.ot_number || 'N/A'}</td>
@@ -662,7 +664,7 @@ const OtStaffAssign = () => {
           <div className="bg-white p-4 md:p-6 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto border-2 border-green-600">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg md:text-xl font-semibold text-green-600">Assign OT Staff</h2>
-              <button 
+              <button
                 onClick={() => {
                   setShowForm(false);
                   setSelectedRecord(null);
@@ -673,7 +675,7 @@ const OtStaffAssign = () => {
                 ✕
               </button>
             </div>
-            
+
             {/* Patient Information Summary */}
             <div className="mb-6 p-3 bg-green-50 rounded-lg border border-green-200">
               <h3 className="font-medium text-green-700 mb-2">Patient Information</h3>
@@ -700,7 +702,7 @@ const OtStaffAssign = () => {
                 </div>
               </div>
             </div>
-            
+
             <form onSubmit={handleSubmit}>
               {/* OT Staff Field */}
               <div className="mb-4">
@@ -759,16 +761,15 @@ const OtStaffAssign = () => {
                   ))}
                 </select>
               </div>
-              
+
               <div className="flex gap-3 mt-6">
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`flex-1 py-3 rounded-lg font-medium text-sm transition-colors ${
-                    !isSubmitting
+                  className={`flex-1 py-3 rounded-lg font-medium text-sm transition-colors ${!isSubmitting
                       ? 'bg-green-600 text-white hover:bg-green-700'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
+                    }`}
                 >
                   {isSubmitting ? 'Assigning...' : 'Assign OT Staff'}
                 </button>
@@ -779,11 +780,10 @@ const OtStaffAssign = () => {
                     setSelectedRecord(null);
                   }}
                   disabled={isSubmitting}
-                  className={`flex-1 py-3 rounded-lg font-medium text-sm transition-colors ${
-                    isSubmitting
+                  className={`flex-1 py-3 rounded-lg font-medium text-sm transition-colors ${isSubmitting
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-gray-600 text-white hover:bg-gray-700'
-                  }`}
+                    }`}
                 >
                   Cancel
                 </button>

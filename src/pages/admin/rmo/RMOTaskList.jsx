@@ -19,6 +19,7 @@ import {
     Scissors
 } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 // Separate OtCompletionModal component to prevent re-renders
 const OtCompletionModal = React.memo(({
@@ -36,7 +37,7 @@ const OtCompletionModal = React.memo(({
     setCompletionOtDescription
 }) => {
     const textareaRef = useRef(null);
-    
+
     if (!show || !taskToComplete) return null;
 
     const handleKeyPress = (e) => {
@@ -54,7 +55,7 @@ const OtCompletionModal = React.memo(({
                         <Scissors className="w-6 h-6 text-green-600" />
                         Complete OT Information Task
                     </h2>
-                    <button 
+                    <button
                         onClick={onClose}
                         className="p-2 hover:bg-gray-100 rounded-full transition"
                     >
@@ -73,7 +74,7 @@ const OtCompletionModal = React.memo(({
                                 </div>
                             </div>
                         </div> */}
-                        
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                                 OT Type <span className="text-red-500">*</span>
@@ -82,8 +83,8 @@ const OtCompletionModal = React.memo(({
                                 <button
                                     type="button"
                                     onClick={() => setCompletionOtType('surgical')}
-                                    className={`p-4 rounded-lg border-2 transition-all ${completionOtType === 'surgical' 
-                                        ? 'bg-red-50 border-red-500 text-red-700' 
+                                    className={`p-4 rounded-lg border-2 transition-all ${completionOtType === 'surgical'
+                                        ? 'bg-red-50 border-red-500 text-red-700'
                                         : 'bg-white border-gray-200 hover:border-red-300'}`}
                                 >
                                     <div className="font-medium">Surgical</div>
@@ -91,15 +92,15 @@ const OtCompletionModal = React.memo(({
                                 <button
                                     type="button"
                                     onClick={() => setCompletionOtType('non-surgical')}
-                                    className={`p-4 rounded-lg border-2 transition-all ${completionOtType === 'non-surgical' 
-                                        ? 'bg-blue-50 border-blue-500 text-blue-700' 
+                                    className={`p-4 rounded-lg border-2 transition-all ${completionOtType === 'non-surgical'
+                                        ? 'bg-blue-50 border-blue-500 text-blue-700'
                                         : 'bg-white border-gray-200 hover:border-blue-300'}`}
                                 >
                                     <div className="font-medium">Non-Surgical</div>
                                 </button>
                             </div>
                         </div>
-                        
+
                         {/* Additional fields for surgical type */}
                         {/* {completionOtType === 'surgical' && (
                             <>
@@ -147,7 +148,7 @@ const OtCompletionModal = React.memo(({
                                 </div>
                             </>
                         )} */}
-                        
+
                         {/* <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
                             <div className="flex items-start gap-2">
                                 <Info className="w-4 h-4 text-yellow-600 mt-0.5" />
@@ -207,7 +208,7 @@ const OtInformationModal = React.memo(({
                         <Scissors className="w-6 h-6 text-blue-600" />
                         Select OT Type
                     </h2>
-                    <button 
+                    <button
                         onClick={onClose}
                         className="p-2 hover:bg-gray-100 rounded-full transition"
                     >
@@ -226,8 +227,8 @@ const OtInformationModal = React.memo(({
                                 <button
                                     type="button"
                                     onClick={() => setOtInformationType('surgical')}
-                                    className={`p-4 rounded-lg border-2 transition-all ${otInformationType === 'surgical' 
-                                        ? 'bg-red-50 border-red-500 text-red-700' 
+                                    className={`p-4 rounded-lg border-2 transition-all ${otInformationType === 'surgical'
+                                        ? 'bg-red-50 border-red-500 text-red-700'
                                         : 'bg-white border-gray-200 hover:border-red-300'}`}
                                 >
                                     <div className="font-medium">Surgical</div>
@@ -235,15 +236,15 @@ const OtInformationModal = React.memo(({
                                 <button
                                     type="button"
                                     onClick={() => setOtInformationType('non-surgical')}
-                                    className={`p-4 rounded-lg border-2 transition-all ${otInformationType === 'non-surgical' 
-                                        ? 'bg-blue-50 border-blue-500 text-blue-700' 
+                                    className={`p-4 rounded-lg border-2 transition-all ${otInformationType === 'non-surgical'
+                                        ? 'bg-blue-50 border-blue-500 text-blue-700'
                                         : 'bg-white border-gray-200 hover:border-blue-300'}`}
                                 >
                                     <div className="font-medium">Non-Surgical</div>
                                 </button>
                             </div>
                         </div>
-                        
+
                         <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
                             <div className="flex items-start gap-2">
                                 <Info className="w-4 h-4 text-blue-500 mt-0.5" />
@@ -286,7 +287,7 @@ const CustomTaskModal = React.memo(({
 }) => {
     const [localTask, setLocalTask] = useState(newCustomTask);
     const customTaskInputRef = useRef(null);
-    
+
     useEffect(() => {
         setLocalTask(newCustomTask);
     }, [newCustomTask]);
@@ -326,7 +327,7 @@ const CustomTaskModal = React.memo(({
                         <Plus className="w-6 h-6 text-purple-600" />
                         Add Custom RMO Task
                     </h2>
-                    <button 
+                    <button
                         onClick={onClose}
                         className="p-2 hover:bg-gray-100 rounded-full transition"
                         disabled={addingCustomTask}
@@ -399,7 +400,7 @@ const RMOTaskList = () => {
     const [editingTask, setEditingTask] = useState(null);
     const [predefinedTasks, setPredefinedTasks] = useState([]);
     const [taskSearchQuery, setTaskSearchQuery] = useState('');
-    const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+    const { showNotification } = useNotification();
     const [availableRmos, setAvailableRmos] = useState([]);
     const [rmoSearchQuery, setRmoSearchQuery] = useState('');
     const [showRmoDropdown, setShowRmoDropdown] = useState(false);
@@ -417,12 +418,12 @@ const RMOTaskList = () => {
     const [showCustomTaskModal, setShowCustomTaskModal] = useState(false);
     const [newCustomTask, setNewCustomTask] = useState('');
     const [addingCustomTask, setAddingCustomTask] = useState(false);
-    
+
     // OT Information state for adding new tasks
     const [showOtInformationModal, setShowOtInformationModal] = useState(false);
     const [currentTaskIndex, setCurrentTaskIndex] = useState(null);
     const [otInformationType, setOtInformationType] = useState('surgical');
-    
+
     // OT Information state for completing tasks
     const [showOtCompletionModal, setShowOtCompletionModal] = useState(false);
     const [taskToComplete, setTaskToComplete] = useState(null);
@@ -430,7 +431,7 @@ const RMOTaskList = () => {
     const [completionOtDate, setCompletionOtDate] = useState(new Date().toISOString().split('T')[0]);
     const [completionOtTime, setCompletionOtTime] = useState('09:00');
     const [completionOtDescription, setCompletionOtDescription] = useState('');
-    
+
     const tableRef = useRef(null);
     const refreshIntervalRef = useRef(null);
     const rmoInputRef = useRef(null);
@@ -468,19 +469,11 @@ const RMOTaskList = () => {
             }
         `;
         document.head.appendChild(style);
-        
+
         return () => {
             document.head.removeChild(style);
         };
     }, []);
-
-    // Popup notification
-    const showNotification = (message, type = 'success') => {
-        setNotification({ show: true, message, type });
-        setTimeout(() => {
-            setNotification({ show: false, message: '', type: 'success' });
-        }, 3000);
-    };
 
     // Function to check if a task requires OT Information
     const requiresOtInformation = (taskName) => {
@@ -505,7 +498,7 @@ const RMOTaskList = () => {
                         value: rmo.name,
                         label: rmo.name
                     }));
-                
+
                 setAvailableRmos(rmos);
             } else {
                 // Fallback if no RMOs found
@@ -549,7 +542,7 @@ const RMOTaskList = () => {
                 const bedMap = new Map();
                 data.forEach(record => {
                     if (record.bed_no) {
-                        if (!bedMap.has(record.bed_no) || 
+                        if (!bedMap.has(record.bed_no) ||
                             (record.timestamp && bedMap.get(record.bed_no).timestamp < record.timestamp)) {
                             bedMap.set(record.bed_no, {
                                 bedNo: record.bed_no,
@@ -587,7 +580,7 @@ const RMOTaskList = () => {
                 const taskNames = data
                     .map(item => item.rmo_task)
                     .filter(task => task && task.trim() !== '');
-                
+
                 const uniqueTasks = [...new Set(taskNames)].sort();
                 setPredefinedTasks(uniqueTasks);
             } else {
@@ -639,15 +632,15 @@ const RMOTaskList = () => {
     const addCustomTaskToDatabase = async (taskName) => {
         try {
             setAddingCustomTask(true);
-            
+
             const { data, error } = await supabase
                 .from('master')
                 .insert([
                     {
                         rmo_task: taskName,
-                        created_at: new Date().toLocaleString("en-CA", { 
-                            timeZone: "Asia/Kolkata", 
-                            hour12: false 
+                        created_at: new Date().toLocaleString("en-CA", {
+                            timeZone: "Asia/Kolkata",
+                            hour12: false
                         }).replace(',', '')
                     }
                 ])
@@ -679,7 +672,7 @@ const RMOTaskList = () => {
         }
 
         const taskName = newCustomTask.trim();
-        
+
         // Check if task already exists
         if (predefinedTasks.includes(taskName)) {
             showNotification('This RMO task already exists in the list!', 'info');
@@ -690,7 +683,7 @@ const RMOTaskList = () => {
 
         try {
             await addCustomTaskToDatabase(taskName);
-            
+
             // Update the current task in new task form if we're in add task modal
             if (showAddTaskModal) {
                 const updatedTasks = [...newTaskData.tasks];
@@ -705,7 +698,7 @@ const RMOTaskList = () => {
                     tasks: updatedTasks
                 }));
             }
-            
+
             setNewCustomTask('');
             setShowCustomTaskModal(false);
         } catch (error) {
@@ -714,88 +707,100 @@ const RMOTaskList = () => {
         }
     };
 
-const loadTasks = useCallback(async () => {
-    try {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('rmo_assign_task')
-            .select('*')
-            .order('timestamp', { ascending: false });
+    const loadTasks = useCallback(async () => {
+        try {
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('rmo_assign_task')
+                .select('*')
+                .order('timestamp', { ascending: false });
 
-        if (error) throw error;
+            if (error) throw error;
 
-        if (data) {
-            const transformedTasks = data.map(task => {
-                let taskNames = [];
-                let otInformation = null;
-                
-                // Handle OT Information tasks
-                if (task.task === 'OT Information' && task.ot_information) {
-                    // ot_information is stored as a plain string, not JSON
-                    const otType = task.ot_information; // This will be 'surgical' or 'non-surgical'
-                    taskNames = [`OT Information (${otType})`];
-                    
-                    // Store as simple object with type
-                    otInformation = {
-                        type: otType
+            if (data) {
+                const transformedTasks = data.map(task => {
+                    let taskNames = [];
+                    let otInformation = null;
+
+                    // Handle OT Information tasks
+                    if (task.task === 'OT Information' && task.ot_information) {
+                        // ot_information is stored as a plain string, not JSON
+                        const otType = task.ot_information; // This will be 'surgical' or 'non-surgical'
+                        taskNames = [`OT Information (${otType})`];
+
+                        // Store as simple object with type
+                        otInformation = {
+                            type: otType
+                        };
+                    } else if (task.task && Array.isArray(task.task)) {
+                        taskNames = task.task;
+                    } else if (typeof task.task === 'string') {
+                        taskNames = [task.task];
+                    }
+
+                    // Determine status based on planned1 and actual1
+                    let status = 'Pending';
+                    let displayStatus = 'Pending';
+
+                    if (task.planned1 && !task.actual1) {
+                        status = 'Pending';
+                        displayStatus = 'Pending';
+                    } else if (task.planned1 && task.actual1) {
+                        status = 'Completed';
+                        displayStatus = 'Completed';
+                    } else {
+                        status = 'Pending';
+                        displayStatus = 'Pending';
+                    }
+
+                    return {
+                        id: task.id,
+                        taskId: task.task_no || `TASK-${task.id.toString().padStart(4, '0')}`,
+                        status: status,
+                        displayStatus: displayStatus,
+                        taskStartDate: task.start_date || 'N/A',
+                        ipdNumber: task.ipd_number || 'N/A',
+                        patientName: task.patient_name || 'N/A',
+                        patientLocation: task.patient_location || 'N/A',
+                        bedNo: task.bed_no || 'N/A',
+                        assignRmo: task.assign_rmo || 'N/A',
+                        shift: task.shift || 'N/A',
+                        taskNames: taskNames,
+                        reminder: task.reminder || 'No',
+                        wardType: task.ward_type || 'N/A',
+                        room: task.room || 'N/A',
+                        timestamp: task.timestamp,
+                        planned1: task.planned1,
+                        planned1Date: task.planned1 ? new Date(task.planned1).toLocaleDateString('en-GB') : 'N/A',
+                        planned1Time: task.planned1 ? new Date(task.planned1).toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        }) : 'N/A',
+                        actual1: task.actual1,
+                        actual1Date: task.actual1 ? new Date(task.actual1).toLocaleDateString('en-GB') : 'N/A',
+                        actual1Time: task.actual1 ? new Date(task.actual1).toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        }) : 'N/A',
+                        tasksJson: task.task,
+                        otInformation: otInformation,
+                        otInformationType: task.ot_information, // This is the plain string
+                        otDate: task.ot_date,
+                        otTime: task.ot_time,
+                        otDescription: task.ot_description
                     };
-                } else if (task.task && Array.isArray(task.task)) {
-                    taskNames = task.task;
-                } else if (typeof task.task === 'string') {
-                    taskNames = [task.task];
-                }
-                
-                // Determine status based on planned1 and actual1
-                let status = 'Pending';
-                let displayStatus = 'Pending';
-                
-                if (task.planned1 && !task.actual1) {
-                    status = 'Pending';
-                    displayStatus = 'Pending';
-                } else if (task.planned1 && task.actual1) {
-                    status = 'Completed';
-                    displayStatus = 'Completed';
-                } else {
-                    status = 'Pending';
-                    displayStatus = 'Pending';
-                }
-                
-                return {
-                    id: task.id,
-                    taskId: task.task_no || `TASK-${task.id.toString().padStart(4, '0')}`,
-                    status: status,
-                    displayStatus: displayStatus,
-                    taskStartDate: task.start_date || 'N/A',
-                    ipdNumber: task.ipd_number || 'N/A',
-                    patientName: task.patient_name || 'N/A',
-                    patientLocation: task.patient_location || 'N/A',
-                    bedNo: task.bed_no || 'N/A',
-                    assignRmo: task.assign_rmo || 'N/A',
-                    shift: task.shift || 'N/A',
-                    taskNames: taskNames,
-                    reminder: task.reminder || 'No',
-                    wardType: task.ward_type || 'N/A',
-                    room: task.room || 'N/A',
-                    timestamp: task.timestamp,
-                    planned1: task.planned1,
-                    actual1: task.actual1,
-                    tasksJson: task.task,
-                    otInformation: otInformation,
-                    otInformationType: task.ot_information, // This is the plain string
-                    otDate: task.ot_date,
-                    otTime: task.ot_time,
-                    otDescription: task.ot_description
-                };
-            });
-            setTasks(transformedTasks);
+                });
+                setTasks(transformedTasks);
+            }
+        } catch (error) {
+            console.error('Error loading RMO tasks:', error);
+            showNotification('Error loading RMO tasks from database', 'error');
+        } finally {
+            setLoading(false);
         }
-    } catch (error) {
-        console.error('Error loading RMO tasks:', error);
-        showNotification('Error loading RMO tasks from database', 'error');
-    } finally {
-        setLoading(false);
-    }
-}, []);
+    }, []);
 
     // Handle bed selection
     const handleBedSelect = (bedInfo) => {
@@ -814,7 +819,7 @@ const loadTasks = useCallback(async () => {
     // Handle task item change
     const handleTaskItemChange = useCallback((index, value) => {
         const updatedTasks = [...newTaskData.tasks];
-        
+
         if (value === '__custom__') {
             // Open custom task modal
             setShowCustomTaskModal(true);
@@ -836,7 +841,7 @@ const loadTasks = useCallback(async () => {
     const handleOtInformationSubmit = useCallback(() => {
         const updatedTasks = [...newTaskData.tasks];
         updatedTasks[currentTaskIndex] = `OT Information (${otInformationType})`;
-        
+
         setNewTaskData(prev => ({
             ...prev,
             tasks: updatedTasks
@@ -888,9 +893,9 @@ const loadTasks = useCallback(async () => {
             }
 
             // Get current timestamp
-            const now = new Date().toLocaleString("en-CA", { 
-                timeZone: "Asia/Kolkata", 
-                hour12: false 
+            const now = new Date().toLocaleString("en-CA", {
+                timeZone: "Asia/Kolkata",
+                hour12: false
             }).replace(',', '');
 
             // Get the last task number to generate sequential numbers
@@ -909,11 +914,11 @@ const loadTasks = useCallback(async () => {
             // Prepare task data array - one entry per task
             const taskEntries = validTasks.map((taskName, index) => {
                 const taskNumber = `TASK-${(baseTaskNumber + index).toString().padStart(4, '0')}`;
-                
+
                 // Check if this is an OT Information task
                 const isOtInformation = taskName.toLowerCase().includes('ot information');
                 let otInformationData = null;
-                
+
                 if (isOtInformation) {
                     // Extract OT Information type from the task string
                     const otMatch = taskName.match(/OT Information \((surgical|non-surgical)\)/);
@@ -954,7 +959,7 @@ const loadTasks = useCallback(async () => {
             if (error) throw error;
 
             showNotification(`${validTasks.length} RMO task(s) added successfully!`, 'success');
-            
+
             // Reset form
             setNewTaskData({
                 shift: 'Shift-A',
@@ -966,10 +971,10 @@ const loadTasks = useCallback(async () => {
             setSelectedBed('');
             setSelectedPatientInfo(null);
             setShowAddTaskModal(false);
-            
+
             // Refresh tasks
             loadTasks();
-            
+
         } catch (error) {
             console.error('Error adding new RMO tasks:', error);
             showNotification('Error adding new RMO tasks', 'error');
@@ -991,17 +996,17 @@ const loadTasks = useCallback(async () => {
     }, []);
 
     // Filter predefined tasks based on search query
-    const filteredPredefinedTasks = taskSearchQuery 
+    const filteredPredefinedTasks = taskSearchQuery
         ? predefinedTasks.filter(task =>
             task.toLowerCase().includes(taskSearchQuery.toLowerCase())
-          )
+        )
         : predefinedTasks;
 
     useEffect(() => {
         loadTasks();
         loadPredefinedTasks();
         loadAvailableRmos();
-        
+
         // Refresh every 2 minutes instead of 30 seconds
         refreshIntervalRef.current = setInterval(() => {
             loadTasks();
@@ -1034,7 +1039,7 @@ const loadTasks = useCallback(async () => {
         try {
             // Find the task to check if it's OT Information
             const taskToUpdate = tasks.find(task => task.id === taskId);
-            const isOtInformation = taskToUpdate?.taskNames?.some(taskName => 
+            const isOtInformation = taskToUpdate?.taskNames?.some(taskName =>
                 requiresOtInformation(taskName)
             );
 
@@ -1054,30 +1059,30 @@ const loadTasks = useCallback(async () => {
             }
 
             // For non-OT tasks, update directly
-            const now = new Date().toLocaleString("en-CA", { 
-                timeZone: "Asia/Kolkata", 
-                hour12: false 
+            const now = new Date().toLocaleString("en-CA", {
+                timeZone: "Asia/Kolkata",
+                hour12: false
             }).replace(',', '');
 
             const { error } = await supabase
                 .from('rmo_assign_task')
-                .update({ 
-                    actual1: newStatus === 'Completed' ? now : null 
+                .update({
+                    actual1: newStatus === 'Completed' ? now : null
                 })
                 .eq('task_no', taskNo);
 
             if (error) throw error;
-            
+
             // Update local state without reloading all data
-            setTasks(prevTasks => 
-                prevTasks.map(task => 
-                    task.id === taskId 
-                        ? { 
-                            ...task, 
+            setTasks(prevTasks =>
+                prevTasks.map(task =>
+                    task.id === taskId
+                        ? {
+                            ...task,
                             status: newStatus,
                             displayStatus: newStatus,
-                            actual1: newStatus === 'Completed' ? now : null 
-                        } 
+                            actual1: newStatus === 'Completed' ? now : null
+                        }
                         : task
                 )
             );
@@ -1090,113 +1095,113 @@ const loadTasks = useCallback(async () => {
 
     // Handle OT Information completion
     // Handle OT Information completion
-const handleOtCompletion = async () => {
-    try {
-        const now = new Date().toLocaleString("en-CA", { 
-            timeZone: "Asia/Kolkata", 
-            hour12: false 
-        }).replace(',', '');
+    const handleOtCompletion = async () => {
+        try {
+            const now = new Date().toLocaleString("en-CA", {
+                timeZone: "Asia/Kolkata",
+                hour12: false
+            }).replace(',', '');
 
-        // Prepare update data for rmo_assign_task table
-        let updateData = {
-            actual1: now,
-            ot_information: completionOtType,
-            // ot_information_type: completionOtType // Remove if not needed
-        };
-
-        // For surgical type, add additional fields and post to ot_information table
-        if (completionOtType === 'surgical') {
-            if (!completionOtDate) {
-                showNotification('Please select surgery date', 'error');
-                return;
-            }
-            if (!completionOtTime) {
-                showNotification('Please select surgery time', 'error');
-                return;
-            }
-            
-            // Get the task details to populate ot_information table
-            const taskToUpdate = tasks.find(task => task.id === taskToComplete.id);
-            
-            // First update the rmo_assign_task table
-            updateData = {
-                ...updateData,
-                // ot_date: completionOtDate,
-                // ot_time: completionOtTime,
-                // ot_description: completionOtDescription || null
+            // Prepare update data for rmo_assign_task table
+            let updateData = {
+                actual1: now,
+                ot_information: completionOtType,
+                // ot_information_type: completionOtType // Remove if not needed
             };
 
-            // Then insert into ot_information table
-            const otInformationData = {
-                timestamp: now, // actual1 timestamp from rmo_assign_task
-                // ot_number: null, // As per your requirement, don't post ot_number
-                ipd_number: taskToUpdate.ipdNumber || null,
-                patient_name: taskToUpdate.patientName || null,
-                patient_location: taskToUpdate.patientLocation || null,
-                ward_type: taskToUpdate.wardType || null,
-                room: taskToUpdate.room || null,
-                bed_no: taskToUpdate.bedNo || null,
-                planned1: now, // actual1 timestamp from rmo_assign_task
-                // ot_information: completionOtDescription || null,
-                // ot_date: completionOtDate,
-                // ot_time: completionOtTime,
-                // ot_description: completionOtDescription || null
-            };
+            // For surgical type, add additional fields and post to ot_information table
+            if (completionOtType === 'surgical') {
+                if (!completionOtDate) {
+                    showNotification('Please select surgery date', 'error');
+                    return;
+                }
+                if (!completionOtTime) {
+                    showNotification('Please select surgery time', 'error');
+                    return;
+                }
 
-            // Insert into ot_information table
-            const { error: otError } = await supabase
-                .from('ot_information')
-                .insert([otInformationData]);
+                // Get the task details to populate ot_information table
+                const taskToUpdate = tasks.find(task => task.id === taskToComplete.id);
 
-            if (otError) throw otError;
+                // First update the rmo_assign_task table
+                updateData = {
+                    ...updateData,
+                    // ot_date: completionOtDate,
+                    // ot_time: completionOtTime,
+                    // ot_description: completionOtDescription || null
+                };
+
+                // Then insert into ot_information table
+                const otInformationData = {
+                    timestamp: now, // actual1 timestamp from rmo_assign_task
+                    // ot_number: null, // As per your requirement, don't post ot_number
+                    ipd_number: taskToUpdate.ipdNumber || null,
+                    patient_name: taskToUpdate.patientName || null,
+                    patient_location: taskToUpdate.patientLocation || null,
+                    ward_type: taskToUpdate.wardType || null,
+                    room: taskToUpdate.room || null,
+                    bed_no: taskToUpdate.bedNo || null,
+                    planned1: now, // actual1 timestamp from rmo_assign_task
+                    // ot_information: completionOtDescription || null,
+                    // ot_date: completionOtDate,
+                    // ot_time: completionOtTime,
+                    // ot_description: completionOtDescription || null
+                };
+
+                // Insert into ot_information table
+                const { error: otError } = await supabase
+                    .from('ot_information')
+                    .insert([otInformationData]);
+
+                if (otError) throw otError;
+            }
+
+            // Update the rmo_assign_task table
+            const { error } = await supabase
+                .from('rmo_assign_task')
+                .update(updateData)
+                .eq('task_no', taskToComplete.taskNo);
+
+            if (error) throw error;
+
+            // Update local state
+            setTasks(prevTasks =>
+                prevTasks.map(task =>
+                    task.id === taskToComplete.id
+                        ? {
+                            ...task,
+                            status: 'Completed',
+                            displayStatus: 'Completed',
+                            actual1: now,
+                            otInformation: {
+                                type: completionOtType,
+                                completed_at: now
+                            },
+                            otInformationType: completionOtType,
+                            otDate: completionOtType === 'surgical' ? completionOtDate : null,
+                            otTime: completionOtType === 'surgical' ? completionOtTime : null,
+                            otDescription: completionOtType === 'surgical' ? completionOtDescription : null,
+                            taskNames: [`OT Information (${completionOtType})`]
+                        }
+                        : task
+                )
+            );
+
+            showNotification('OT Information task completed successfully!', 'success');
+
+            // Reset modal
+            setShowOtCompletionModal(false);
+            setTaskToComplete(null);
+            setCompletionOtType('surgical');
+            setCompletionOtDate(new Date().toISOString().split('T')[0]);
+            setCompletionOtTime('09:00');
+            setCompletionOtDescription('');
+
+        } catch (error) {
+            console.error('Error completing OT task:', error);
+            showNotification('Error completing OT task', 'error');
         }
-
-        // Update the rmo_assign_task table
-        const { error } = await supabase
-            .from('rmo_assign_task')
-            .update(updateData)
-            .eq('task_no', taskToComplete.taskNo);
-
-        if (error) throw error;
-        
-        // Update local state
-        setTasks(prevTasks => 
-            prevTasks.map(task => 
-                task.id === taskToComplete.id 
-                    ? { 
-                        ...task, 
-                        status: 'Completed',
-                        displayStatus: 'Completed',
-                        actual1: now,
-                        otInformation: {
-                            type: completionOtType,
-                            completed_at: now
-                        },
-                        otInformationType: completionOtType,
-                        otDate: completionOtType === 'surgical' ? completionOtDate : null,
-                        otTime: completionOtType === 'surgical' ? completionOtTime : null,
-                        otDescription: completionOtType === 'surgical' ? completionOtDescription : null,
-                        taskNames: [`OT Information (${completionOtType})`]
-                    } 
-                    : task
-            )
-        );
-
-        showNotification('OT Information task completed successfully!', 'success');
-        
-        // Reset modal
-        setShowOtCompletionModal(false);
-        setTaskToComplete(null);
-        setCompletionOtType('surgical');
-        setCompletionOtDate(new Date().toISOString().split('T')[0]);
-        setCompletionOtTime('09:00');
-        setCompletionOtDescription('');
-        
-    } catch (error) {
-        console.error('Error completing OT task:', error);
-        showNotification('Error completing OT task', 'error');
-    }
-};
+    };
 
     const handleEditTask = (task) => {
         setEditingTask({
@@ -1216,11 +1221,11 @@ const handleOtCompletion = async () => {
     };
 
     // Filter RMOs based on search query
-    const filteredRmos = rmoSearchQuery 
+    const filteredRmos = rmoSearchQuery
         ? availableRmos.filter(rmo =>
             rmo.label.toLowerCase().includes(rmoSearchQuery.toLowerCase()) ||
             rmo.value.toLowerCase().includes(rmoSearchQuery.toLowerCase())
-          )
+        )
         : availableRmos;
 
     const saveEdit = async () => {
@@ -1232,25 +1237,25 @@ const handleOtCompletion = async () => {
 
             const { error } = await supabase
                 .from('rmo_assign_task')
-                .update({ 
+                .update({
                     assign_rmo: editingTask.assignRmo.trim()
                 })
                 .eq('task_no', editingTask.taskNo);
 
             if (error) throw error;
-            
+
             // Update local state without reloading all data
-            setTasks(prevTasks => 
-                prevTasks.map(task => 
-                    task.id === editingTask.id 
-                        ? { 
-                            ...task, 
+            setTasks(prevTasks =>
+                prevTasks.map(task =>
+                    task.id === editingTask.id
+                        ? {
+                            ...task,
                             assignRmo: editingTask.assignRmo.trim()
-                        } 
+                        }
                         : task
                 )
             );
-            
+
             showNotification('RMO assignment updated successfully!', 'success');
             setEditingTask(null);
             setRmoSearchQuery('');
@@ -1267,7 +1272,7 @@ const handleOtCompletion = async () => {
             task.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             task.ipdNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             task.taskId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            task.taskNames?.some(taskName => 
+            task.taskNames?.some(taskName =>
                 taskName.toLowerCase().includes(searchTerm.toLowerCase())
             );
 
@@ -1298,7 +1303,7 @@ const handleOtCompletion = async () => {
                         Edit Assigned RMO
                     </h2>
 
-                    <button 
+                    <button
                         onClick={() => {
                             setEditingTask(null);
                             setRmoSearchQuery('');
@@ -1427,11 +1432,11 @@ const handleOtCompletion = async () => {
         const [showNewRmoDropdown, setShowNewRmoDropdown] = useState(false);
         const [newRmoSearchQuery, setNewRmoSearchQuery] = useState('');
 
-        const filteredNewRmos = newRmoSearchQuery 
+        const filteredNewRmos = newRmoSearchQuery
             ? availableRmos.filter(rmo =>
                 rmo.label.toLowerCase().includes(newRmoSearchQuery.toLowerCase()) ||
                 rmo.value.toLowerCase().includes(newRmoSearchQuery.toLowerCase())
-              )
+            )
             : availableRmos;
 
         return (
@@ -1442,7 +1447,7 @@ const handleOtCompletion = async () => {
                             <Plus className="w-6 h-6 text-green-600" />
                             Add New RMO Task
                         </h2>
-                        <button 
+                        <button
                             onClick={resetAddTaskForm}
                             className="p-2 hover:bg-gray-100 rounded-full transition"
                         >
@@ -1458,7 +1463,7 @@ const handleOtCompletion = async () => {
                                     <Bed className="w-5 h-5 text-blue-600" />
                                     <h3 className="text-lg font-semibold text-gray-800">Select Occupied Bed</h3>
                                 </div>
-                                
+
                                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto p-2">
                                         {occupiedBeds.length === 0 ? (
@@ -1473,10 +1478,10 @@ const handleOtCompletion = async () => {
                                                     key={bed.bedNo}
                                                     type="button"
                                                     onClick={() => handleBedSelect(bed)}
-                                                    className={`p-3 rounded-lg border transition-all text-left ${selectedBed === bed.bedNo 
-                                                        ? 'bg-blue-100 border-blue-500 shadow-sm' 
+                                                    className={`p-3 rounded-lg border transition-all text-left ${selectedBed === bed.bedNo
+                                                        ? 'bg-blue-100 border-blue-500 shadow-sm'
                                                         : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     <div className="flex items-center justify-between mb-2">
                                                         <span className="font-medium text-gray-800">Bed: {bed.bedNo}</span>
@@ -1558,7 +1563,7 @@ const handleOtCompletion = async () => {
                                         <ClipboardList className="w-5 h-5 text-purple-600" />
                                         <h3 className="text-lg font-semibold text-gray-800">RMO Task Details</h3>
                                     </div>
-                                    
+
                                     <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                             <div>
@@ -1577,7 +1582,7 @@ const handleOtCompletion = async () => {
                                                     <option value="General">General</option>
                                                 </select>
                                             </div>
-                                            
+
                                             <div className="relative">
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Assign RMO
@@ -1597,11 +1602,11 @@ const handleOtCompletion = async () => {
                                                         placeholder="Search or select RMO..."
                                                     />
                                                     <User className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                                                    
+
                                                     {/* RMO Dropdown for Add Task */}
                                                     {showNewRmoDropdown && (
                                                         <>
-                                                            <div 
+                                                            <div
                                                                 className="fixed inset-0 z-0"
                                                                 onClick={() => setShowNewRmoDropdown(false)}
                                                             />
@@ -1645,7 +1650,7 @@ const handleOtCompletion = async () => {
                                                     )}
                                                 </div>
                                             </div>
-                                            
+
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Reminder
@@ -1659,7 +1664,7 @@ const handleOtCompletion = async () => {
                                                     <option value="Yes">Yes</option>
                                                 </select>
                                             </div>
-                                            
+
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Start Date
@@ -1673,7 +1678,7 @@ const handleOtCompletion = async () => {
                                                 />
                                             </div>
                                         </div>
-                                        
+
                                         {/* Tasks List */}
                                         <div>
                                             <div className="flex justify-between items-center mb-3">
@@ -1696,7 +1701,7 @@ const handleOtCompletion = async () => {
                                                     Add RMO Task
                                                 </button>
                                             </div>
-                                            
+
                                             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-60 overflow-y-auto space-y-3">
                                                 {newTaskData.tasks.map((task, index) => (
                                                     <div key={index} className="flex gap-3 items-center">
@@ -1755,7 +1760,7 @@ const handleOtCompletion = async () => {
                         >
                             Cancel
                         </button>
-                        
+
                         <div className="flex items-center gap-3">
                             <span className="text-sm text-gray-500">
                                 {selectedPatientInfo ? `Bed: ${selectedBed}` : 'No bed selected'}
@@ -1775,74 +1780,35 @@ const handleOtCompletion = async () => {
         );
     };
 
-    // Notification Popup Component
-    const NotificationPopup = () => {
-        if (!notification.show) return null;
 
-        const bgColor = notification.type === 'success' 
-            ? 'bg-green-50 border-green-200' 
-            : notification.type === 'error' 
-            ? 'bg-red-50 border-red-200' 
-            : 'bg-yellow-50 border-yellow-200';
-        
-        const textColor = notification.type === 'success' 
-            ? 'text-green-800' 
-            : notification.type === 'error' 
-            ? 'text-red-800' 
-            : 'text-yellow-800';
-        
-        const Icon = notification.type === 'success' 
-            ? CheckCircle 
-            : notification.type === 'error' 
-            ? XCircle 
-            : Info;
-
-        return (
-            <div className="fixed top-4 right-4 z-[100] animate-slide-in">
-                <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg ${bgColor}`}>
-                    <Icon className={`w-5 h-5 ${textColor}`} />
-                    <span className={`font-medium ${textColor}`}>{notification.message}</span>
-                    <button
-                        onClick={() => setNotification({ show: false, message: '', type: 'success' })}
-                        className="ml-4 text-gray-400 hover:text-gray-600"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-        );
-    };
 
     return (
         <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
-            {/* Notification Popup */}
-            <NotificationPopup />
-
             <div className="max-w-7xl mx-auto space-y-6">
                 {/* Header with Add Task Button */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                            <ClipboardList className="w-8 h-8 text-blue-600" />
+                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                            <ClipboardList className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
                             RMO Tasks
                         </h1>
-                        <p className="text-gray-500 text-sm mt-1">Manage and track RMO tasks</p>
+                        <p className="text-gray-500 text-xs sm:text-sm mt-1">Manage and track RMO tasks</p>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <div className="flex bg-white rounded-lg p-1 shadow-sm border border-gray-200">
+                    <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-3 w-full sm:w-auto">
+                        <div className="flex bg-white rounded-lg p-1 shadow-sm border border-gray-200 w-full xs:w-auto">
                             <button
                                 onClick={() => setActiveTab('Pending')}
-                                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'Pending'
+                                className={`flex-1 xs:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-all ${activeTab === 'Pending'
                                     ? 'bg-blue-100 text-blue-700 shadow-sm'
                                     : 'text-gray-600 hover:bg-gray-50'
                                     }`}
                             >
-                                Pending Tasks
+                                Pending
                             </button>
                             <button
                                 onClick={() => setActiveTab('History')}
-                                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'History'
+                                className={`flex-1 xs:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-all ${activeTab === 'History'
                                     ? 'bg-blue-100 text-blue-700 shadow-sm'
                                     : 'text-gray-600 hover:bg-gray-50'
                                     }`}
@@ -1850,14 +1816,14 @@ const handleOtCompletion = async () => {
                                 History
                             </button>
                         </div>
-                        
+
                         {/* Add Task Button */}
                         <button
                             onClick={() => setShowAddTaskModal(true)}
-                            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 shadow-sm"
+                            className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 shadow-sm text-sm"
                         >
                             <Plus className="w-4 h-4" />
-                            Add RMO Task
+                            Add Task
                         </button>
                     </div>
                 </div>
@@ -1893,162 +1859,313 @@ const handleOtCompletion = async () => {
                     </div>
                 )}
 
-                {/* Table */}
+                {/* Table & Card View */}
                 {!loading && (
-                    <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col h-[calc(100vh-240px)]">
-                        <div ref={tableRef} className="overflow-auto flex-1">
-                            <table className="w-full whitespace-nowrap">
-                                <thead className="bg-gray-50 border-b border-gray-200 text-left sticky top-0 z-10 shadow-sm">
-                                    <tr>
-                                        {activeTab === 'Pending' && (
-                                            <>
-                                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-                                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Edit RMO</th>
-                                            </>
-                                        )}
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Task ID</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Start Date</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">IPD No.</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Patient Name</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assigned RMO</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Shift</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">RMO Tasks</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Reminder</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200 text-sm">
-                                    {filteredTasks.length === 0 ? (
+                    <>
+                        {/* Desktop Table View */}
+                        <div className="hidden lg:block bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col h-[calc(100vh-280px)]">
+                            <div ref={tableRef} className="overflow-auto flex-1">
+                                <table className="w-full whitespace-nowrap">
+                                    <thead className="bg-gray-50 border-b border-gray-200 text-left sticky top-0 z-10 shadow-sm">
                                         <tr>
-                                            <td colSpan={activeTab === 'Pending' ? 12 : 10} className="px-6 py-8 text-center text-gray-500">
-                                                <div className="flex flex-col items-center justify-center">
-                                                    <ClipboardList className="w-12 h-12 text-gray-300 mb-2" />
-                                                    <p>No {activeTab.toLowerCase()} RMO tasks found</p>
-                                                    <p className="text-xs text-gray-400 mt-1">
-                                                        {activeTab === 'Pending' 
-                                                            ? 'RMO tasks with planned date but not yet completed' 
-                                                            : 'RMO tasks that have been completed'}
-                                                    </p>
-                                                </div>
-                                            </td>
+                                            {activeTab === 'Pending' && (
+                                                <>
+                                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Edit RMO</th>
+                                                </>
+                                            )}
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Task ID</th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Start Date</th>
+                                            {activeTab === 'Pending' ? (
+                                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Planned Task</th>
+                                            ) : (
+                                                <>
+                                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Planned Task</th>
+                                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actual Task</th>
+                                                </>
+                                            )}
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">IPD No.</th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Patient Name</th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assigned RMO</th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Shift</th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">RMO Tasks</th>
+                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Reminder</th>
                                         </tr>
-                                    ) : (
-                                        filteredTasks.map((task) => (
-                                            <tr key={task.id} className="hover:bg-gray-50 transition-colors">
-                                                {activeTab === 'Pending' && (
-                                                    <>
-                                                        <td className="px-6 py-4">
-                                                            <button
-                                                                onClick={() => handleStatusUpdate(task.id, task.taskId, 'Completed')}
-                                                                className={`px-3 py-1 rounded text-xs transition ${
-                                                                    task.taskNames.some(t => requiresOtInformation(t))
-                                                                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                                                        : 'bg-green-600 hover:bg-green-700 text-white'
-                                                                }`}
-                                                            >
-                                                                {task.taskNames.some(t => requiresOtInformation(t))
-                                                                    ? 'Complete OT Task'
-                                                                    : 'Mark Done'
-                                                                }
-                                                            </button>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <button
-                                                                onClick={() => handleEditTask(task)}
-                                                                className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded"
-                                                            >
-                                                                <Edit className="w-4 h-4" />
-                                                            </button>
-                                                        </td>
-                                                    </>
-                                                )}
-                                                <td className="px-6 py-4 font-medium text-blue-600">{task.taskId}</td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${getStatusColor(task.displayStatus)}`}>
-                                                        {task.displayStatus}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-700">
-                                                    <div className="flex items-center gap-1">
-                                                        <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                                                        {task.taskStartDate}
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200 text-sm">
+                                        {filteredTasks.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={activeTab === 'Pending' ? 13 : 12} className="px-6 py-8 text-center text-gray-500">
+                                                    <div className="flex flex-col items-center justify-center">
+                                                        <ClipboardList className="w-12 h-12 text-gray-300 mb-2" />
+                                                        <p>No {activeTab.toLowerCase()} RMO tasks found</p>
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-900 font-medium">{task.ipdNumber}</td>
-                                                <td className="px-6 py-4 text-gray-700">{task.patientName}</td>
-                                                <td className="px-6 py-4 text-gray-500">
-                                                    <div className="flex flex-col">
-                                                        <span>{task.patientLocation}</span>
-                                                        <span className="text-xs text-gray-400">Bed: {task.bedNo}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-700 flex items-center gap-1.5">
-                                                    <User className="w-3.5 h-3.5 text-gray-400" />
-                                                    {task.assignRmo}
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-700">
-                                                    <span className={`px-2 py-1 rounded text-xs font-medium ${task.shift === 'Shift-A' ? 'bg-blue-100 text-blue-800' : task.shift === 'Shift-B' ? 'bg-green-100 text-green-800' : task.shift === 'Shift-C' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
-                                                        {task.shift}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-700">
-                                                    <div className="max-w-xs">
-                                                        {task.taskNames.map((taskName, index) => {
-                                                            const isOtInfo = requiresOtInformation(taskName);
-                                                            return (
-                                                                <div key={index} className="text-sm mb-1">
-                                                                    {isOtInfo ? (
-                                                                        <div className="flex items-start gap-1">
-                                                                            <Scissors className="w-3.5 h-3.5 text-blue-500 mt-0.5 flex-shrink-0" />
-                                                                            <div>
-                                                                                <span className="font-medium">OT Information:</span>
-                                                                                <span className={`ml-1 px-1.5 py-0.5 text-xs rounded ${task.otInformationType === 'surgical' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
-                                                                                    {task.otInformationType || 'N/A'}
-                                                                                </span>
-                                                                                {task.otDate && (
-                                                                                    <div className="text-xs text-gray-500 mt-0.5">
-                                                                                        Date: {task.otDate} {task.otTime && `| Time: ${task.otTime}`}
-                                                                                    </div>
-                                                                                )}
-                                                                                {task.otDescription && (
-                                                                                    <div className="text-xs text-gray-500 mt-0.5">
-                                                                                        {task.otDescription}
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div>{taskName}</div>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-500">
-                                                    {task.reminder === 'Yes' ? (
-                                                        <span className="flex items-center gap-1 text-orange-600">
-                                                            <AlertCircle className="w-3.5 h-3.5" /> Yes
-                                                        </span>
-                                                    ) : 'No'}
                                                 </td>
                                             </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
+                                        ) : (
+                                            filteredTasks.map((task) => (
+                                                <tr key={task.id} className="hover:bg-gray-50 transition-colors">
+                                                    {activeTab === 'Pending' && (
+                                                        <>
+                                                            <td className="px-6 py-4">
+                                                                <button
+                                                                    onClick={() => handleStatusUpdate(task.id, task.taskId, 'Completed')}
+                                                                    className={`px-3 py-1 rounded text-xs transition ${task.taskNames.some(t => requiresOtInformation(t))
+                                                                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                                                        : 'bg-green-600 hover:bg-green-700 text-white'
+                                                                        }`}
+                                                                >
+                                                                    {task.taskNames.some(t => requiresOtInformation(t))
+                                                                        ? 'Complete OT Task'
+                                                                        : 'Mark Done'
+                                                                    }
+                                                                </button>
+                                                            </td>
+                                                            <td className="px-6 py-4">
+                                                                <button
+                                                                    onClick={() => handleEditTask(task)}
+                                                                    className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded"
+                                                                >
+                                                                    <Edit className="w-4 h-4" />
+                                                                </button>
+                                                            </td>
+                                                        </>
+                                                    )}
+                                                    <td className="px-6 py-4 font-medium text-blue-600">{task.taskId}</td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${getStatusColor(task.displayStatus)}`}>
+                                                            {task.displayStatus}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-gray-700">
+                                                        <div className="flex items-center gap-1">
+                                                            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                                            {task.taskStartDate}
+                                                        </div>
+                                                    </td>
+                                                    {activeTab === 'Pending' ? (
+                                                        <td className="px-6 py-4 text-gray-700 font-medium">
+                                                            {task.planned1Date} {task.planned1Time}
+                                                        </td>
+                                                    ) : (
+                                                        <>
+                                                            <td className="px-6 py-4 text-gray-700 font-medium">
+                                                                {task.planned1Date} {task.planned1Time}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-green-700 font-medium">
+                                                                {task.actual1Date} {task.actual1Time}
+                                                            </td>
+                                                        </>
+                                                    )}
+                                                    <td className="px-6 py-4 text-gray-900 font-medium">{task.ipdNumber}</td>
+                                                    <td className="px-6 py-4 text-gray-700">{task.patientName}</td>
+                                                    <td className="px-6 py-4 text-gray-500">
+                                                        <div className="flex flex-col">
+                                                            <span>{task.patientLocation}</span>
+                                                            <span className="text-xs text-gray-400">Bed: {task.bedNo}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-gray-700 flex items-center gap-1.5">
+                                                        <User className="w-3.5 h-3.5 text-gray-400" />
+                                                        {task.assignRmo}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-gray-700">
+                                                        <span className={`px-2 py-1 rounded text-xs font-medium ${task.shift === 'Shift-A' ? 'bg-blue-100 text-blue-800' : task.shift === 'Shift-B' ? 'bg-green-100 text-green-800' : task.shift === 'Shift-C' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                            {task.shift}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-gray-700">
+                                                        <div className="max-w-xs overflow-hidden text-ellipsis">
+                                                            {task.taskNames.map((taskName, index) => (
+                                                                <div key={index} className="text-sm border-b border-gray-100 last:border-0 py-0.5">
+                                                                    {taskName}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {task.reminder === 'Yes' ? (
+                                                            <span className="text-orange-500"><AlertCircle size={16} /></span>
+                                                        ) : (
+                                                            <span className="text-gray-300">-</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
+
+                        {/* Mobile Card View */}
+                        <div className="lg:hidden space-y-4">
+                            {filteredTasks.length === 0 ? (
+                                <div className="bg-white p-8 rounded-xl border border-gray-200 text-center shadow-sm">
+                                    <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                                    <p className="text-gray-500 font-medium">No tasks found</p>
+                                </div>
+                            ) : (
+                                filteredTasks.map((task) => (
+                                    <div key={task.id} className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden active:scale-[0.98] transition-transform">
+                                        {/* Card Header */}
+                                        <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100 flex justify-between items-center">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">{task.taskId}</span>
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(task.displayStatus)}`}>
+                                                    {task.displayStatus}
+                                                </span>
+                                            </div>
+                                            {task.reminder === 'Yes' && (
+                                                <AlertCircle className="w-4 h-4 text-orange-500 animate-pulse" />
+                                            )}
+                                        </div>
+
+                                        {/* Card Body */}
+                                        <div className="p-4 space-y-4">
+                                            {/* Patient & Location */}
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="space-y-1">
+                                                    <h3 className="font-bold text-gray-800 leading-tight">{task.patientName}</h3>
+                                                    <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
+                                                        <span className="bg-gray-100 px-1.5 py-0.5 rounded">IPD: {task.ipdNumber}</span>
+                                                        <span className="text-gray-300">|</span>
+                                                        <span>{task.patientLocation}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <span className="block text-[10px] uppercase tracking-tighter text-gray-400 font-bold">Bed No</span>
+                                                    <span className="text-sm font-bold text-gray-700 bg-yellow-50 px-2 py-0.5 rounded border border-yellow-100">{task.bedNo}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Assignment & Time */}
+                                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-50">
+                                                <div className="space-y-1 text-xs">
+                                                    <span className="text-gray-400 font-bold uppercase tracking-tighter">Assigned RMO</span>
+                                                    <div className="flex items-center gap-1.5 font-semibold text-gray-700">
+                                                        <User className="w-3.5 h-3.5 text-blue-500" />
+                                                        <span className="truncate max-w-[100px]">{task.assignRmo}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1 text-xs text-right">
+                                                    <span className="text-gray-400 font-bold uppercase tracking-tighter">Shift</span>
+                                                    <div>
+                                                        <span className={`inline-block px-2 py-0.5 rounded font-bold ${task.shift === 'Shift-A' ? 'bg-blue-50 text-blue-600' : task.shift === 'Shift-B' ? 'bg-green-50 text-green-600' : 'bg-purple-50 text-purple-600'}`}>
+                                                            {task.shift}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Tasks List Content */}
+                                            <div className="bg-gray-50/50 p-3 rounded-lg border border-gray-100 space-y-2">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">RMO Task List</span>
+                                                {task.taskNames.map((taskName, index) => {
+                                                    const isOtInfo = requiresOtInformation(taskName);
+                                                    return (
+                                                        <div key={index} className="flex items-start gap-2 text-sm">
+                                                            <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0"></div>
+                                                            <div className="flex-1">
+                                                                {isOtInfo ? (
+                                                                    <div className="space-y-1">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="font-bold text-gray-700">OT Information:</span>
+                                                                            <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded uppercase ${task.otInformationType === 'surgical' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-sky-50 text-sky-600 border border-sky-100'}`}>
+                                                                                {task.otInformationType || 'N/A'}
+                                                                            </span>
+                                                                        </div>
+                                                                        {task.otDate && (
+                                                                            <p className="text-[11px] text-gray-500 italic">
+                                                                                Scheduled: {task.otDate} {task.otTime && `at ${task.otTime}`}
+                                                                            </p>
+                                                                        )}
+                                                                        {task.otDescription && (
+                                                                            <p className="text-[11px] text-gray-500 leading-tight line-clamp-2">"{task.otDescription}"</p>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-gray-700 font-medium">{taskName}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Task Dates Mapping */}
+                                            <div className="flex justify-between items-center bg-white p-2.5 rounded-lg border border-gray-100 shadow-sm">
+                                                <div className="space-y-0.5">
+                                                    <span className="text-[9px] uppercase font-bold text-gray-400">Planned Date</span>
+                                                    <div className="flex items-center gap-1 text-[11px] font-bold text-gray-700">
+                                                        <Calendar className="w-3 h-3 text-gray-400" />
+                                                        {task.planned1Date}
+                                                        <span className="text-gray-300 ml-1">|</span>
+                                                        <Clock className="w-3 h-3 text-gray-400 ml-1" />
+                                                        {task.planned1Time}
+                                                    </div>
+                                                </div>
+                                                {activeTab === 'History' && task.actual1 && (
+                                                    <div className="text-right space-y-0.5 border-l border-gray-100 pl-3">
+                                                        <span className="text-[9px] uppercase font-bold text-emerald-500">Completed Date</span>
+                                                        <div className="flex items-center justify-end gap-1 text-[11px] font-bold text-emerald-600">
+                                                            <CheckCircle className="w-3 h-3" />
+                                                            {task.actual1Date}
+                                                            <span className="text-emerald-200 ml-1">|</span>
+                                                            {task.actual1Time}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Action Buttons (Mobile) */}
+                                            {activeTab === 'Pending' && (
+                                                <div className="grid grid-cols-2 gap-3 pt-2">
+                                                    <button
+                                                        onClick={() => handleEditTask(task)}
+                                                        className="flex items-center justify-center gap-2 py-2.5 bg-white border border-blue-200 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-50 transition-colors shadow-sm"
+                                                    >
+                                                        <Edit className="w-3.5 h-3.5" />
+                                                        Edit RMO
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleStatusUpdate(task.id, task.taskId, 'Completed')}
+                                                        className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 transition-all ${task.taskNames.some(t => requiresOtInformation(t))
+                                                            ? 'bg-blue-600 hover:bg-blue-700'
+                                                            : 'bg-green-600 hover:bg-green-700'
+                                                            }`}
+                                                    >
+                                                        {task.taskNames.some(t => requiresOtInformation(t)) ? (
+                                                            <>
+                                                                <Scissors className="w-3.5 h-3.5" />
+                                                                Complete OT
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <CheckCircle className="w-3.5 h-3.5" />
+                                                                Mark Done
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </>
                 )}
             </div>
 
             {/* Edit Modal - Simplified to only edit assign_rmo */}
             {editingTask && <EditModal />}
-            
+
             {/* Add Task Modal */}
             {showAddTaskModal && <AddTaskModal />}
-            
+
             {/* Custom Task Modal */}
             <CustomTaskModal
                 show={showCustomTaskModal}
@@ -2061,7 +2178,7 @@ const handleOtCompletion = async () => {
                 setNewCustomTask={setNewCustomTask}
                 addingCustomTask={addingCustomTask}
             />
-            
+
             {/* OT Information Modal (for adding new OT tasks) */}
             <OtInformationModal
                 show={showOtInformationModal}
@@ -2070,7 +2187,7 @@ const handleOtCompletion = async () => {
                 otInformationType={otInformationType}
                 setOtInformationType={setOtInformationType}
             />
-            
+
             {/* OT Completion Modal (for completing OT tasks) */}
             <OtCompletionModal
                 show={showOtCompletionModal}

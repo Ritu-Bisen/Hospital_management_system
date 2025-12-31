@@ -16,19 +16,21 @@ import {
     ChevronDown
 } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const AssignTask = () => {
     const [showBedModal, setShowBedModal] = useState(false);
     const [bedFilterType, setBedFilterType] = useState('All');
     const [occupiedBeds, setOccupiedBeds] = useState([]);
     const [nurses, setNurses] = useState([]);
+    const { showNotification } = useNotification();
     const [predefinedTasks, setPredefinedTasks] = useState([]);
-    
+
     // State for new task input in dropdown
     const [newTaskValue, setNewTaskValue] = useState('');
     const [showCustomTaskInput, setShowCustomTaskInput] = useState(false);
     const [currentTaskContext, setCurrentTaskContext] = useState({ shiftKey: null, taskId: null });
-    
+
     // Loading states
     const [loadingTasks, setLoadingTasks] = useState(true);
     const [loadingBeds, setLoadingBeds] = useState(false);
@@ -87,7 +89,7 @@ const AssignTask = () => {
             try {
                 setLoadingTasks(true);
                 console.log("Loading tasks from Supabase...");
-                
+
                 const { data, error } = await supabase
                     .from('master')
                     .select('nurse_task')
@@ -96,7 +98,7 @@ const AssignTask = () => {
                     .order('created_at', { ascending: false });
 
                 console.log("Supabase response for tasks:", data);
-                
+
                 if (error) {
                     console.error("Supabase error:", error);
                     throw error;
@@ -108,7 +110,7 @@ const AssignTask = () => {
                         .filter(task => task && task.trim() !== '');
 
                     const uniqueTasks = [...new Set(taskNames)].sort();
-                    
+
                     setPredefinedTasks(uniqueTasks);
                     console.log("Loaded tasks:", uniqueTasks);
                 } else {
@@ -131,24 +133,24 @@ const AssignTask = () => {
         if (!newTaskValue.trim()) return;
 
         const taskName = newTaskValue.trim();
-        
+
         // Check if task already exists
         if (predefinedTasks.includes(taskName)) {
-            alert('This task already exists in the list!');
+            showNotification('This task already exists in the list!', 'info');
             return;
         }
 
         try {
             setSavingNewTask(true);
-            
+
             const { data, error } = await supabase
                 .from('master')
                 .insert([
                     {
                         nurse_task: taskName,
-                        created_at: new Date().toLocaleString("en-CA", { 
-                            timeZone: "Asia/Kolkata", 
-                            hour12: false 
+                        created_at: new Date().toLocaleString("en-CA", {
+                            timeZone: "Asia/Kolkata",
+                            hour12: false
                         }).replace(',', '')
                     }
                 ])
@@ -157,7 +159,7 @@ const AssignTask = () => {
             if (error) throw error;
 
             setPredefinedTasks(prev => [taskName, ...prev].sort());
-            
+
             // If we have a context (shiftKey and taskId), update the specific task
             if (currentTaskContext.shiftKey && currentTaskContext.taskId) {
                 setShifts({
@@ -165,8 +167,8 @@ const AssignTask = () => {
                     [currentTaskContext.shiftKey]: {
                         ...shifts[currentTaskContext.shiftKey],
                         tasks: shifts[currentTaskContext.shiftKey].tasks.map(task =>
-                            task.id === currentTaskContext.taskId 
-                                ? { ...task, taskName: taskName } 
+                            task.id === currentTaskContext.taskId
+                                ? { ...task, taskName: taskName }
                                 : task
                         )
                     }
@@ -176,12 +178,12 @@ const AssignTask = () => {
             setNewTaskValue('');
             setShowCustomTaskInput(false);
             setCurrentTaskContext({ shiftKey: null, taskId: null });
-            
-            alert('New task added successfully!');
+
+            showNotification('New task added successfully!', 'success');
 
         } catch (error) {
             console.error('Error saving new task to Supabase:', error);
-            alert('Error saving new task to database');
+            showNotification('Error saving new task to database', 'error');
         } finally {
             setSavingNewTask(false);
         }
@@ -214,7 +216,7 @@ const AssignTask = () => {
                 }
             } catch (error) {
                 console.error('Error loading nurses:', error);
-                alert('Error loading nurse data');
+                showNotification('Error loading nurse data', 'error');
                 setNurses([]);
             } finally {
                 setLoadingNurses(false);
@@ -229,7 +231,7 @@ const AssignTask = () => {
         const loadOccupiedBeds = async () => {
             try {
                 setLoadingBeds(true);
-                
+
                 const { data: occupiedBedsData, error: bedsError } = await supabase
                     .from('all_floor_bed')
                     .select('*')
@@ -251,7 +253,7 @@ const AssignTask = () => {
                 if (ipdError) throw ipdError;
 
                 const combinedData = occupiedBedsData.map(bed => {
-                    const matchingAdmission = ipdAdmissions?.find(admission => 
+                    const matchingAdmission = ipdAdmissions?.find(admission =>
                         admission.bed_no === bed.bed &&
                         admission.floor === bed.floor &&
                         (admission.ward_type === bed.ward || admission.location_status === bed.ward) &&
@@ -297,7 +299,7 @@ const AssignTask = () => {
                 setOccupiedBeds(combinedData);
             } catch (error) {
                 console.error('Error loading occupied beds:', error);
-                alert('Error loading occupied beds data');
+                showNotification('Error loading occupied beds data', 'error');
             } finally {
                 setLoadingBeds(false);
             }
@@ -310,7 +312,7 @@ const AssignTask = () => {
     useEffect(() => {
         const handleClickOutside = (event) => {
             // Check if click is outside all shift dropdowns
-            const isOutsideAllDropdowns = 
+            const isOutsideAllDropdowns =
                 (shiftARef.current && !shiftARef.current.contains(event.target)) &&
                 (shiftBRef.current && !shiftBRef.current.contains(event.target)) &&
                 (shiftCRef.current && !shiftCRef.current.contains(event.target));
@@ -371,7 +373,7 @@ const AssignTask = () => {
                 [field]: value
             }
         });
-        
+
         if (field === 'assignNurse') {
             // Only close the dropdown for this specific shift
             handleDropdownStateChange(shift, 'showNurseDropdown', false);
@@ -453,7 +455,7 @@ const AssignTask = () => {
 
         // Validate patient details
         if (!patientDetails.ipdNumber) {
-            alert("Please select a patient bed first");
+            showNotification("Please select a patient bed first", "info");
             return;
         }
 
@@ -469,17 +471,17 @@ const AssignTask = () => {
         });
 
         if (errors.length > 0) {
-            alert(errors.join('\n'));
+            showNotification(errors.join(', '), 'error');
             return;
         }
 
         try {
             // Generate a single task number for all tasks in this assignment
             const baseTaskNo = await generateTaskNo();
-            
+
             // Get the base number for incrementing
             const baseNum = parseInt(baseTaskNo.replace('TASK-', '')) || 0;
-            
+
             // Counter for task numbering
             let taskCounter = 0;
 
@@ -497,7 +499,7 @@ const AssignTask = () => {
                 for (let i = 0; i < validTasks.length; i++) {
                     taskCounter++;
                     const taskNo = `TASK-${String(baseNum + taskCounter).padStart(4, '0')}`;
-                    
+
                     const { error } = await supabase
                         .from('nurse_assign_task')
                         .insert([
@@ -513,13 +515,13 @@ const AssignTask = () => {
                                 reminder: shiftData.reminder,
                                 start_date: shiftData.startDate,
                                 task: validTasks[i], // Store as single task string
-                                timestamp: new Date().toLocaleString("en-CA", { 
-                                    timeZone: "Asia/Kolkata", 
-                                    hour12: false 
+                                timestamp: new Date().toLocaleString("en-CA", {
+                                    timeZone: "Asia/Kolkata",
+                                    hour12: false
                                 }).replace(',', ''),
-                                planned1: new Date().toLocaleString("en-CA", { 
-                                    timeZone: "Asia/Kolkata", 
-                                    hour12: false 
+                                planned1: new Date().toLocaleString("en-CA", {
+                                    timeZone: "Asia/Kolkata",
+                                    hour12: false
                                 }).replace(',', ''),
                             }
                         ]);
@@ -528,7 +530,7 @@ const AssignTask = () => {
                 }
             }
 
-            alert("Tasks assigned successfully!");
+            showNotification("Tasks assigned successfully!", "success");
 
             // Reset form
             setPatientDetails({
@@ -563,7 +565,7 @@ const AssignTask = () => {
 
         } catch (error) {
             console.error('Error saving tasks:', error);
-            alert('Error saving tasks to database');
+            showNotification('Error saving tasks to database', 'error');
         }
     };
 
@@ -616,20 +618,20 @@ const AssignTask = () => {
                                 <Users className="w-4 h-4" />
                                 PATIENT DETAILS
                             </h3>
-                            
+
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {Object.keys(patientDetails).map((field) => (
                                     <div key={field}>
                                         <label className="block text-xs font-medium text-gray-700 mb-1 capitalize">
                                             {field.replace(/([A-Z])/g, ' $1')}
                                         </label>
-                                        <input 
-                                            type="text" 
+                                        <input
+                                            type="text"
                                             name={field}
                                             value={patientDetails[field]}
                                             onChange={handlePatientDetailsChange}
                                             readOnly
-                                            className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent" 
+                                            className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-700 text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                         />
                                     </div>
                                 ))}
@@ -644,11 +646,10 @@ const AssignTask = () => {
                                         key={shiftKey}
                                         type="button"
                                         onClick={() => setActiveShift(shiftKey)}
-                                        className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all ${
-                                            activeShift === shiftKey
+                                        className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all ${activeShift === shiftKey
                                                 ? `bg-gradient-to-r ${config.color} text-gray-800 border-t border-l border-r ${config.border}`
                                                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                                        }`}
+                                            }`}
                                     >
                                         {config.label}
                                     </button>
@@ -701,7 +702,7 @@ const AssignTask = () => {
                                                             <ChevronDown className="w-4 h-4 text-gray-400" />
                                                         </div>
                                                     </div>
-                                                    
+
                                                     {dropdownStates[shiftKey].showNurseDropdown && (
                                                         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                                                             <div className="sticky top-0 bg-white p-2 border-b">
@@ -787,7 +788,7 @@ const AssignTask = () => {
                                                 Add Task
                                             </button>
                                         </div>
-                                        
+
                                         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-60 overflow-y-auto space-y-3">
                                             {shifts[shiftKey].tasks.map((task, taskIndex) => (
                                                 <div key={taskIndex} className="flex gap-3 items-center">
@@ -891,8 +892,8 @@ const AssignTask = () => {
                                 <BedDouble className="w-6 h-6 text-green-600" />
                                 Select Occupied Bed
                             </h2>
-                            <button 
-                                onClick={() => setShowBedModal(false)} 
+                            <button
+                                onClick={() => setShowBedModal(false)}
                                 className="p-2 hover:bg-gray-100 rounded-full transition"
                             >
                                 <X className="w-5 h-5 text-gray-600" />
@@ -987,18 +988,18 @@ const AssignTask = () => {
                                 <Plus className="w-5 h-5 text-blue-600" />
                                 Add New Task
                             </h2>
-                            <button 
+                            <button
                                 onClick={() => {
                                     setShowCustomTaskInput(false);
                                     setCurrentTaskContext({ shiftKey: null, taskId: null });
-                                }} 
+                                }}
                                 className="p-2 hover:bg-gray-100 rounded-full transition"
                                 disabled={savingNewTask}
                             >
                                 <X className="w-5 h-5 text-gray-600" />
                             </button>
                         </div>
-                        
+
                         <div className="p-6">
                             <div className="mb-4">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1015,7 +1016,7 @@ const AssignTask = () => {
                                     disabled={savingNewTask}
                                 />
                             </div>
-                            
+
                             <div className="flex gap-3">
                                 <button
                                     type="button"

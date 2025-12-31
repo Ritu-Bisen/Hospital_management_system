@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 
 import Login from './pages/Login';
 import AdminDashboard from './pages/admin/Dashboard/Dashboard';
@@ -8,6 +9,7 @@ import Admission from './pages/admin/Admission/Admission';
 import DepartmentSelection from './pages/admin/Admission/DepartmentSelection';
 import IPDAdmission from './pages/admin/IPD/IPDAdmission';
 import LabPaymentSlip from './pages/admin/Lab/Labpaymentslip';
+import ReceiveSample from './pages/admin/Lab/ReceiveSample';
 import LabXray from './pages/admin/Lab/Labxray';
 import LabCT from './pages/admin/Lab/LabCT';
 import LabUSG from './pages/admin/Lab/Labusg';
@@ -53,13 +55,11 @@ import RMOScoreDashboard from './pages/admin/rmo/RMOScoreDashboard';
 
 // OT Components
 import AssignOtTime from './pages/admin/OT/AssignOtTime';
-import OtStaffAssign from './pages/admin/OT/OtStaffAssign';
+
 
 // Patient Profile Components
 import PatientOverview from './pages/admin/PatientProfile/PatientOverview';
 import GivenTask from './pages/admin/PatientProfile/GivenTask';
-import PMS from './pages/pms';
-
 // Protected Route Component
 import ProtectedRoute from './components/ProtectedRoute';
 import Dressing from './pages/admin/PatientProfile/Dressing';
@@ -81,299 +81,283 @@ function App() {
   }
 
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route 
-        path="/login" 
-        element={
-          user ? (
-            <Navigate to="/admin/dashboard" replace />
-          ) : (
-            <Login />
-          )
-        } 
-      />
-      
-      {/* Admin Routes */}
-      <Route 
-        path="/admin/*" 
-        element={
-          <ProtectedRoute>
-            <AdminLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Navigate to="/admin/dashboard" replace />} />
-        
-        {/* Dashboard */}
-        <Route path="dashboard" element={
-          <ProtectedRoute requiredPage="dashboard">
-            <AdminDashboard />
-          </ProtectedRoute>
-        } />
+    <NotificationProvider>
+      <Routes>
+        {/* Public Routes */}
+        <Route
+          path="/login"
+          element={
+            user ? (
+              <Navigate to="/admin/dashboard" replace />
+            ) : (
+              <Login />
+            )
+          }
+        />
 
-        {/* PMS */}
-        <Route path="pms" element={
-          <ProtectedRoute requiredPage="pms">
-            <PMS />
-          </ProtectedRoute>
-        } />
+        {/* Admin Routes */}
+        <Route
+          path="/admin/*"
+          element={
+            <ProtectedRoute>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
 
-        {/* Roster */}
-        <Route path="roster" element={
-          <ProtectedRoute requiredPage="roster">
-            <Roster />
-          </ProtectedRoute>
-        } />
-        
-        {/* Patient Profile Routes */}
-        <Route path="patient-profile" element={
-          <ProtectedRoute requiredPage="patient-profile">
-            <ProfilePatient />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="patient-profile/:id" element={
-          <ProtectedRoute requiredPage="patient-profile">
-            <ProfilePatientDetails />
-          </ProtectedRoute>
-        }>
-          <Route index element={<PatientOverview />} />
-          <Route path="rmo" element={<RMOTask />} />
-          <Route path="nursing" element={<Nursing />} />
-          <Route path="lab" element={<Lab />} />
-          <Route path="pharmacy" element={<Pharmacy />} />
-          <Route path="ot" element={<OT />} />
-          <Route path="assign-tasks" element={<GivenTask />} />
-          <Route path="dressing" element={<Dressing />} />
+          {/* Dashboard */}
+          <Route path="dashboard" element={
+            <ProtectedRoute requiredPage="dashboard">
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
+
+
+
+          {/* Roster */}
+          <Route path="roster" element={
+            <ProtectedRoute requiredPage="roster">
+              <Roster />
+            </ProtectedRoute>
+          } />
+
+          {/* Patient Profile Routes */}
+          <Route path="patient-profile" element={
+            <ProtectedRoute requiredPage="patient-profile">
+              <ProfilePatient />
+            </ProtectedRoute>
+          } />
+
+          <Route path="patient-profile/:id" element={
+            <ProtectedRoute requiredPage="patient-profile">
+              <ProfilePatientDetails />
+            </ProtectedRoute>
+          }>
+            <Route index element={<PatientOverview />} />
+            <Route path="rmo" element={<RMOTask />} />
+            <Route path="nursing" element={<Nursing />} />
+            <Route path="lab" element={<Lab />} />
+            <Route path="pharmacy" element={<Pharmacy />} />
+            <Route path="ot" element={<OT />} />
+            <Route path="assign-tasks" element={<GivenTask />} />
+            <Route path="dressing" element={<Dressing />} />
+          </Route>
+
+          {/* Admission Routes */}
+          <Route path="admission/add-patient" element={
+            <ProtectedRoute requiredPage="admission-add-patient">
+              <Admission />
+            </ProtectedRoute>
+          } />
+
+          <Route path="admission/department-selection" element={
+            <ProtectedRoute requiredPage="admission-department-selection">
+              <DepartmentSelection />
+            </ProtectedRoute>
+          } />
+
+          {/* IPD Routes */}
+          <Route path="ipd/admission" element={
+            <ProtectedRoute requiredPage="ipd-admission">
+              <IPDAdmission />
+            </ProtectedRoute>
+          } />
+
+          {/* OT Routes */}
+          <Route path="ot/assign-ot-time" element={
+            <ProtectedRoute requiredPage="ot-assign-ot-time">
+              <AssignOtTime />
+            </ProtectedRoute>
+          } />
+
+
+
+          {/* Nurse Station Routes */}
+          <Route path="nurse-station/assign-task" element={
+            <ProtectedRoute requiredPage="nurse-station-assign-task">
+              <AssignTask />
+            </ProtectedRoute>
+          } />
+
+          <Route path="nurse-station/task-list" element={
+            <ProtectedRoute requiredPage="nurse-station-task-list">
+              <TaskList />
+            </ProtectedRoute>
+          } />
+
+          <Route path="nurse-station/score-dashboard" element={
+            <ProtectedRoute requiredPage="nurse-station-score-dashboard">
+              <ScoreDashboard />
+            </ProtectedRoute>
+          } />
+
+          {/* RMO Routes */}
+          <Route path="rmo/assign-task" element={
+            <ProtectedRoute requiredPage="rmo-assign-task">
+              <RMOAssignTask />
+            </ProtectedRoute>
+          } />
+
+          <Route path="rmo/task-list" element={
+            <ProtectedRoute requiredPage="rmo-task-list">
+              <RMOTaskList />
+            </ProtectedRoute>
+          } />
+
+          <Route path="rmo/score-dashboard" element={
+            <ProtectedRoute requiredPage="rmo-score-dashboard">
+              <RMOScoreDashboard />
+            </ProtectedRoute>
+          } />
+
+          {/* Lab Routes */}
+          <Route path="lab/advice" element={
+            <ProtectedRoute requiredPage="lab-advice">
+              <AdminLabAdvice />
+            </ProtectedRoute>
+          } />
+
+          <Route path="lab/payment-slip" element={
+            <ProtectedRoute requiredPage="lab-payment-slip">
+              <LabPaymentSlip />
+            </ProtectedRoute>
+          } />
+
+          <Route path="lab/receive-sample" element={
+            <ProtectedRoute requiredPage="lab-receive-sample">
+              <ReceiveSample />
+            </ProtectedRoute>
+          } />
+
+          <Route path="lab/xray" element={
+            <ProtectedRoute requiredPage="lab-xray">
+              <LabXray />
+            </ProtectedRoute>
+          } />
+
+          <Route path="lab/ct-scan" element={
+            <ProtectedRoute requiredPage="lab-ct-scan">
+              <LabCT />
+            </ProtectedRoute>
+          } />
+
+          <Route path="lab/usg" element={
+            <ProtectedRoute requiredPage="lab-usg">
+              <LabUSG />
+            </ProtectedRoute>
+          } />
+
+          <Route path="lab/pathology" element={
+            <ProtectedRoute requiredPage="lab-pathology">
+              <Pathology />
+            </ProtectedRoute>
+          } />
+
+          {/* Pharmacy Routes */}
+          <Route path="pharmacy/indent" element={
+            <ProtectedRoute requiredPage="pharmacy-indent">
+              <PharmacyIndent />
+            </ProtectedRoute>
+          } />
+
+          <Route path="pharmacy/approval" element={
+            <ProtectedRoute requiredPage="pharmacy-approval">
+              <PharmacyApproval />
+            </ProtectedRoute>
+          } />
+
+          <Route path="pharmacy/store" element={
+            <ProtectedRoute requiredPage="pharmacy-store">
+              <PharmacyStore />
+            </ProtectedRoute>
+          } />
+
+          {/* Discharge Routes */}
+          <Route path="discharge/patient" element={
+            <ProtectedRoute requiredPage="discharge-patient">
+              <DischargePatient />
+            </ProtectedRoute>
+          } />
+
+          <Route path="discharge/initiation" element={
+            <ProtectedRoute requiredPage="discharge-initiation">
+              <InitiationRMO />
+            </ProtectedRoute>
+          } />
+
+          <Route path="discharge/complete-file" element={
+            <ProtectedRoute requiredPage="discharge-complete-file">
+              <CompleteFileWork />
+            </ProtectedRoute>
+          } />
+
+          <Route path="discharge/concern-department" element={
+            <ProtectedRoute requiredPage="discharge-concern-department">
+              <ConcernDepartment />
+            </ProtectedRoute>
+          } />
+
+          <Route path="discharge/concern-authority" element={
+            <ProtectedRoute requiredPage="discharge-concern-authority">
+              <ConcernAuthority />
+            </ProtectedRoute>
+          } />
+
+          <Route path="discharge/bill" element={
+            <ProtectedRoute requiredPage="discharge-bill">
+              <DischargeBill />
+            </ProtectedRoute>
+          } />
+
+          {/* Masters Routes */}
+          <Route path="masters/all-staff" element={
+            <ProtectedRoute requiredPage="masters-all-staff">
+              <AllStaff />
+            </ProtectedRoute>
+          } />
+
+          <Route path="masters/medicine" element={
+            <ProtectedRoute requiredPage="masters-medicine">
+              <Medicine />
+            </ProtectedRoute>
+          } />
+
+          <Route path="masters/department" element={
+            <ProtectedRoute requiredPage="masters-department">
+              <Department />
+            </ProtectedRoute>
+          } />
+
+          <Route path="masters/tests" element={
+            <ProtectedRoute requiredPage="masters-tests">
+              <Tests />
+            </ProtectedRoute>
+          } />
+
+          <Route path="masters/floor-bed" element={
+            <ProtectedRoute requiredPage="masters-floor-bed">
+              <FloorBed />
+            </ProtectedRoute>
+          } />
+
+          <Route path="masters/doctors" element={
+            <ProtectedRoute requiredPage="masters-doctors">
+              <Doctors />
+            </ProtectedRoute>
+          } />
+
+          <Route path="masters/manage-users" element={
+            <ProtectedRoute requiredPage="masters-manage-users">
+              <ManageUsers />
+            </ProtectedRoute>
+          } />
         </Route>
-        
-        {/* Admission Routes */}
-        <Route path="admission/add-patient" element={
-          <ProtectedRoute requiredPage="admission-add-patient">
-            <Admission />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="admission/department-selection" element={
-          <ProtectedRoute requiredPage="admission-department-selection">
-            <DepartmentSelection />
-          </ProtectedRoute>
-        } />
-        
-        {/* IPD Routes */}
-        <Route path="ipd/admission" element={
-          <ProtectedRoute requiredPage="ipd-admission">
-            <IPDAdmission />
-          </ProtectedRoute>
-        } />
-        
-        {/* OT Routes */}
-        <Route path="ot/assign-ot-time" element={
-          <ProtectedRoute requiredPage="ot-assign-ot-time">
-            <AssignOtTime />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="ot/staff-assign" element={
-          <ProtectedRoute requiredPage="ot-staff-assign">
-            <OtStaffAssign />
-          </ProtectedRoute>
-        } />
-        
-        {/* Nurse Station Routes */}
-        <Route path="nurse-station/assign-task" element={
-          <ProtectedRoute requiredPage="nurse-station-assign-task">
-            <AssignTask />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="nurse-station/task-list" element={
-          <ProtectedRoute requiredPage="nurse-station-task-list">
-            <TaskList />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="nurse-station/score-dashboard" element={
-          <ProtectedRoute requiredPage="nurse-station-score-dashboard">
-            <ScoreDashboard />
-          </ProtectedRoute>
-        } />
-        
-        {/* RMO Routes */}
-        <Route path="rmo/assign-task" element={
-          <ProtectedRoute requiredPage="rmo-assign-task">
-            <RMOAssignTask />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="rmo/task-list" element={
-          <ProtectedRoute requiredPage="rmo-task-list">
-            <RMOTaskList />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="rmo/score-dashboard" element={
-          <ProtectedRoute requiredPage="rmo-score-dashboard">
-            <RMOScoreDashboard />
-          </ProtectedRoute>
-        } />
-        
-        {/* Lab Routes */}
-        <Route path="lab/advice" element={
-          <ProtectedRoute requiredPage="lab-advice">
-            <AdminLabAdvice />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="lab/payment-slip" element={
-          <ProtectedRoute requiredPage="lab-payment-slip">
-            <LabPaymentSlip />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="lab/xray" element={
-          <ProtectedRoute requiredPage="lab-xray">
-            <LabXray />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="lab/ct-scan" element={
-          <ProtectedRoute requiredPage="lab-ct-scan">
-            <LabCT />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="lab/usg" element={
-          <ProtectedRoute requiredPage="lab-usg">
-            <LabUSG />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="lab/pathology" element={
-          <ProtectedRoute requiredPage="lab-pathology">
-            <Pathology />
-          </ProtectedRoute>
-        } />
-        
-        {/* Pharmacy Routes */}
-        <Route path="pharmacy/indent" element={
-          <ProtectedRoute requiredPage="pharmacy-indent">
-            <PharmacyIndent />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="pharmacy/approval" element={
-          <ProtectedRoute requiredPage="pharmacy-approval">
-            <PharmacyApproval />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="pharmacy/store" element={
-          <ProtectedRoute requiredPage="pharmacy-store">
-            <PharmacyStore />
-          </ProtectedRoute>
-        } />
-        
-        {/* Discharge Routes */}
-        <Route path="discharge/patient" element={
-          <ProtectedRoute requiredPage="discharge-patient">
-            <DischargePatient />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="discharge/initiation" element={
-          <ProtectedRoute requiredPage="discharge-initiation">
-            <InitiationRMO />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="discharge/complete-file" element={
-          <ProtectedRoute requiredPage="discharge-complete-file">
-            <CompleteFileWork />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="discharge/concern-department" element={
-          <ProtectedRoute requiredPage="discharge-concern-department">
-            <ConcernDepartment />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="discharge/concern-authority" element={
-          <ProtectedRoute requiredPage="discharge-concern-authority">
-            <ConcernAuthority />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="discharge/bill" element={
-          <ProtectedRoute requiredPage="discharge-bill">
-            <DischargeBill />
-          </ProtectedRoute>
-        } />
-        
-        {/* Masters Routes */}
-        <Route path="masters/all-staff" element={
-          <ProtectedRoute requiredPage="masters-all-staff">
-            <AllStaff />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="masters/medicine" element={
-          <ProtectedRoute requiredPage="masters-medicine">
-            <Medicine />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="masters/department" element={
-          <ProtectedRoute requiredPage="masters-department">
-            <Department />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="masters/tests" element={
-          <ProtectedRoute requiredPage="masters-tests">
-            <Tests />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="masters/floor-bed" element={
-          <ProtectedRoute requiredPage="masters-floor-bed">
-            <FloorBed />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="masters/doctors" element={
-          <ProtectedRoute requiredPage="masters-doctors">
-            <Doctors />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="masters/manage-users" element={
-          <ProtectedRoute requiredPage="masters-manage-users">
-            <ManageUsers />
-          </ProtectedRoute>
-        } />
-        
+
         {/* Catch-all route for admin - redirect to dashboard if route not found */}
-        <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
-      </Route>
-      
-      {/* Root route - redirect based on authentication */}
-      <Route 
-        path="/" 
-        element={
-          user ? (
-            <Navigate to="/admin/dashboard" replace />
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        } 
-      />
-      
-      {/* 404 Not Found */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </NotificationProvider>
   );
 }
 

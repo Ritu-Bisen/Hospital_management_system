@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Save, User, Phone, Mail, Briefcase, Building } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const Doctors = () => {
   const [doctors, setDoctors] = useState([]);
@@ -8,7 +9,8 @@ const Doctors = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState(null);
-  
+  const { showNotification } = useNotification();
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -31,7 +33,7 @@ const Doctors = () => {
       setDoctors(data || []);
     } catch (error) {
       console.error('Error fetching doctors:', error);
-      alert('Error loading doctors data');
+      showNotification('Error loading doctors data', 'error');
     } finally {
       setLoading(false);
     }
@@ -95,19 +97,19 @@ const Doctors = () => {
   // Validate form
   const validateForm = () => {
     if (!formData.name.trim()) {
-      alert('Doctor name is required');
+      showNotification('Doctor name is required', 'error');
       return false;
     }
 
     // Phone number validation
     if (formData.phone_number.trim() && !/^\d{10}$/.test(formData.phone_number.trim())) {
-      alert('Please enter a valid 10-digit phone number');
+      showNotification('Please enter a valid 10-digit phone number', 'error');
       return false;
     }
 
     // Email validation
     if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      alert('Please enter a valid email address');
+      showNotification('Please enter a valid email address', 'error');
       return false;
     }
 
@@ -135,7 +137,7 @@ const Doctors = () => {
           .eq('id', editingDoctor.id);
 
         if (error) throw error;
-        alert('Doctor updated successfully!');
+        showNotification('Doctor updated successfully!', 'success');
       } else {
         // Insert new doctor
         const { error } = await supabase
@@ -143,14 +145,14 @@ const Doctors = () => {
           .insert([doctorData]);
 
         if (error) throw error;
-        alert('Doctor added successfully!');
+        showNotification('Doctor added successfully!', 'success');
       }
 
       fetchDoctors();
       closeModal();
     } catch (error) {
       console.error('Error saving doctor:', error);
-      alert('Error saving doctor');
+      showNotification('Error saving doctor', 'error');
     }
   };
 
@@ -167,11 +169,11 @@ const Doctors = () => {
         .eq('id', id);
 
       if (error) throw error;
-      alert('Doctor deleted successfully!');
+      showNotification('Doctor deleted successfully!', 'success');
       fetchDoctors();
     } catch (error) {
       console.error('Error deleting doctor:', error);
-      alert('Error deleting doctor');
+      showNotification('Error deleting doctor', 'error');
     }
   };
 
@@ -278,7 +280,7 @@ const Doctors = () => {
         />
       </div>
 
-   
+
 
       {/* Fixed Height Scrollable Table */}
       <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
@@ -505,8 +507,8 @@ const Doctors = () => {
                 </select>
               </div>
 
-          
-        
+
+
             </div>
 
             <div className="p-6 border-t flex justify-end gap-3">

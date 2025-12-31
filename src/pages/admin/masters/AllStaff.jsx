@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Save, User, Tag, Building, ChevronDown, ChevronUp } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const AllStaff = () => {
   const [staff, setStaff] = useState([]);
@@ -8,7 +9,8 @@ const AllStaff = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
-  
+  const { showNotification } = useNotification();
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -20,15 +22,15 @@ const AllStaff = () => {
 
   // Designation and Department management
   const [designations, setDesignations] = useState([
-    'Doctor', 'Nurse', 'Receptionist', 'Lab Technician', 
+    'Doctor', 'Nurse', 'Receptionist', 'Lab Technician',
     'Pharmacist', 'Administrator', 'Accountant', 'Cleaner', 'Security', 'Other'
   ]);
   const [departments, setDepartments] = useState([
-    'Emergency', 'ICU', 'Cardiology', 'Neurology', 'Orthopedics', 
-    'Pediatrics', 'Gynecology', 'Radiology', 'Pathology', 
+    'Emergency', 'ICU', 'Cardiology', 'Neurology', 'Orthopedics',
+    'Pediatrics', 'Gynecology', 'Radiology', 'Pathology',
     'Pharmacy', 'Administration', 'Housekeeping', 'Security'
   ]);
-  
+
   // State for new designation/department inputs
   const [newDesignation, setNewDesignation] = useState('');
   const [newDepartment, setNewDepartment] = useState('');
@@ -46,20 +48,20 @@ const AllStaff = () => {
 
       if (error) throw error;
       setStaff(data || []);
-      
+
       // Extract unique designations and departments from existing staff
       const uniqueDesignations = [...new Set(data?.map(s => s.designation).filter(Boolean))];
       const uniqueDepartments = [...new Set(data?.map(s => s.department).filter(Boolean))];
-      
+
       // Merge with default options
       const allDesignations = [...new Set([...designations, ...uniqueDesignations])];
       const allDepartments = [...new Set([...departments, ...uniqueDepartments])];
-      
+
       setDesignations(allDesignations);
       setDepartments(allDepartments);
     } catch (error) {
       console.error('Error fetching staff:', error);
-      alert('Error loading staff data');
+      showNotification('Error loading staff data', 'error');
     } finally {
       setLoading(false);
     }
@@ -151,7 +153,7 @@ const AllStaff = () => {
     try {
       // Basic validation
       if (!formData.name.trim()) {
-        alert('Name is required');
+        showNotification('Name is required', 'error');
         return;
       }
 
@@ -163,7 +165,7 @@ const AllStaff = () => {
           .eq('id', editingStaff.id);
 
         if (error) throw error;
-        alert('Staff member updated successfully!');
+        showNotification('Staff member updated successfully!', 'success');
       } else {
         // Insert new staff
         const { error } = await supabase
@@ -171,14 +173,14 @@ const AllStaff = () => {
           .insert([formData]);
 
         if (error) throw error;
-        alert('Staff member added successfully!');
+        showNotification('Staff member added successfully!', 'success');
       }
 
       fetchStaff();
       closeModal();
     } catch (error) {
       console.error('Error saving staff:', error);
-      alert('Error saving staff member');
+      showNotification('Error saving staff member', 'error');
     }
   };
 
@@ -195,11 +197,11 @@ const AllStaff = () => {
         .eq('id', id);
 
       if (error) throw error;
-      alert('Staff member deleted successfully!');
+      showNotification('Staff member deleted successfully!', 'success');
       fetchStaff();
     } catch (error) {
       console.error('Error deleting staff:', error);
-      alert('Error deleting staff member');
+      showNotification('Error deleting staff member', 'error');
     }
   };
 
@@ -299,13 +301,12 @@ const AllStaff = () => {
                       {staffMember.email || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        staffMember.designation === 'Doctor' 
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${staffMember.designation === 'Doctor'
                           ? 'bg-blue-100 text-blue-800'
                           : staffMember.designation === 'Nurse'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
+                            ? 'bg-purple-100 text-purple-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
                         {staffMember.designation || 'N/A'}
                       </span>
                     </td>
@@ -413,7 +414,7 @@ const AllStaff = () => {
                     Add New
                   </button>
                 </div>
-                
+
                 {showCustomDesignation ? (
                   <div className="space-y-2">
                     <div className="flex gap-2">
@@ -468,7 +469,7 @@ const AllStaff = () => {
                     Add New
                   </button>
                 </div>
-                
+
                 {showCustomDepartment ? (
                   <div className="space-y-2">
                     <div className="flex gap-2">

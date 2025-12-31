@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, User, Stethoscope, Scissors, Search, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { CheckCircle, User, Stethoscope, Scissors, Search, ChevronDown, ChevronUp, X, Syringe, Clock, Info } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
 import { useOutletContext } from 'react-router-dom';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const StatusBadge = ({ status }) => {
   const getColors = () => {
@@ -23,7 +24,8 @@ const MobileTaskCard = ({ task, activeTab, onComplete, completingTask, getTableN
   const getAssignedPerson = () => {
     if (activeTab === 'nurse') return task.assign_nurse;
     if (activeTab === 'rmo') return task.assign_rmo;
-    if (activeTab === 'ot') return task.staff || task.assign_nurse;
+    if (activeTab === 'ot') return task.assign_nurse || task.staff;
+    if (activeTab === 'dressing') return task.assign_nurse || task.assign_rmo;
     return '';
   };
 
@@ -92,7 +94,7 @@ const MobileTaskCard = ({ task, activeTab, onComplete, completingTask, getTableN
             <div>
               <p className="text-xs text-gray-500">Planned Time</p>
               <p className="text-sm font-medium">
-                {task.planned1 ? new Date(task.planned1).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                {task.plannedTimeFormatted || 'N/A'}
               </p>
             </div>
           </div>
@@ -103,9 +105,8 @@ const MobileTaskCard = ({ task, activeTab, onComplete, completingTask, getTableN
       <button
         onClick={() => onComplete(task.id, getTableName())}
         disabled={completingTask === task.id}
-        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors ${
-          completingTask === task.id ? 'opacity-50 cursor-not-allowed' : ''
-        }`}
+        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors ${completingTask === task.id ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
       >
         {completingTask === task.id ? (
           <>
@@ -124,20 +125,37 @@ const MobileTaskCard = ({ task, activeTab, onComplete, completingTask, getTableN
 };
 
 export default function GivenTask() {
+  const { showNotification } = useNotification();
   const [activeTab, setActiveTab] = useState('nurse');
   const [nurseTasks, setNurseTasks] = useState([]);
   const [rmoTasks, setRmoTasks] = useState([]);
   const [otTasks, setOtTasks] = useState([]);
+  const [dressingTasks, setDressingTasks] = useState([]);
   const [loading, setLoading] = useState({
     nurse: true,
     rmo: true,
-    ot: true
+    ot: true,
+    dressing: true
   });
   const [completingTask, setCompletingTask] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [userRole, setUserRole] = useState('');
   const [showMobileSearch, setShowMobileSearch] = useState(false);
-  
+  const [showOtCompletionModal, setShowOtCompletionModal] = useState(false);
+  const [selectedOtTask, setSelectedOtTask] = useState(null);
+  const [otCompletionType, setOtCompletionType] = useState('surgical');
+
+  // Vitals Check Modal State
+  const [showVitalsModal, setShowVitalsModal] = useState(false);
+  const [selectedVitalsTask, setSelectedVitalsTask] = useState(null);
+  const [vitalsData, setVitalsData] = useState({
+    "Blood Pressure": false,
+    "Pulse rate": false,
+    "Temperature": false,
+    "SPO2": false,
+    "RR": false
+  });
+
   // Get IPD number from parent component context
   const { ipdNumber } = useOutletContext();
 
@@ -148,13 +166,14 @@ export default function GivenTask() {
       try {
         const user = JSON.parse(storedUser);
         setUserRole(user.role || '');
-        
+
         // Set initial active tab based on role
         if (user.role) {
           const role = user.role.toLowerCase();
           if (role === 'nurse') setActiveTab('nurse');
           else if (role === 'rmo') setActiveTab('rmo');
           else if (role === 'ot' || role === 'ot staff') setActiveTab('ot');
+          else if (role === 'dressing') setActiveTab('dressing');
         }
       } catch (error) {
         console.error('Error parsing user from localStorage:', error);
@@ -167,42 +186,51 @@ export default function GivenTask() {
     if (!userRole) {
       // If no role, show all tabs (fallback)
       return [
-        { key: 'nurse', label: 'Nurse Tasks', icon: User, count: nurseTasks.length },
-        { key: 'rmo', label: 'RMO Tasks', icon: Stethoscope, count: rmoTasks.length },
-        { key: 'ot', label: 'OT Tasks', icon: Scissors, count: otTasks.length }
+        { key: 'nurse', label: 'Nurse ', icon: User, count: nurseTasks.length },
+        { key: 'rmo', label: 'RMO ', icon: Stethoscope, count: rmoTasks.length },
+        { key: 'ot', label: 'OT ', icon: Scissors, count: otTasks.length },
+
+
+
+        { key: 'dressing', label: 'Dressing ', icon: Syringe, count: dressingTasks.length }
       ];
     }
 
     const role = userRole.toLowerCase();
-    
+
     // Return only ONE tab based on role
     if (role === 'nurse') {
-      return [{ key: 'nurse', label: 'Nurse Tasks', icon: User, count: nurseTasks.length }];
+      return [{ key: 'nurse', label: 'Nurse', icon: User, count: nurseTasks.length }];
     }
-    
+
     if (role === 'rmo') {
-      return [{ key: 'rmo', label: 'RMO Tasks', icon: Stethoscope, count: rmoTasks.length }];
+      return [{ key: 'rmo', label: 'RMO ', icon: Stethoscope, count: rmoTasks.length }];
     }
-    
+
     if (role === 'ot' || role === 'ot staff') {
-      return [{ key: 'ot', label: 'OT Tasks', icon: Scissors, count: otTasks.length }];
+      return [{ key: 'ot', label: 'OT ', icon: Scissors, count: otTasks.length }];
+    }
+
+    if (role === 'dressing') {
+      return [{ key: 'dressing', label: 'Dressing ', icon: Syringe, count: dressingTasks.length }];
     }
 
     // If no specific role match, show all tabs
     return [
-      { key: 'nurse', label: 'Nurse Tasks', icon: User, count: nurseTasks.length },
-      { key: 'rmo', label: 'RMO Tasks', icon: Stethoscope, count: rmoTasks.length },
-      { key: 'ot', label: 'OT Tasks', icon: Scissors, count: otTasks.length }
+      { key: 'nurse', label: 'Nurse ', icon: User, count: nurseTasks.length },
+      { key: 'rmo', label: 'RMO ', icon: Stethoscope, count: rmoTasks.length },
+      { key: 'ot', label: 'OT ', icon: Scissors, count: otTasks.length },
+      { key: 'dressing', label: 'Dressing ', icon: Syringe, count: dressingTasks.length }
     ];
   };
 
   // Calculate delay status
   const calculateDelayStatus = (task) => {
     if (!task.planned1) return 'No Delay';
-    
+
     const planned = new Date(task.planned1);
     const now = new Date();
-    
+
     if (task.actual1) {
       const actual = new Date(task.actual1);
       const diffHours = (actual - planned) / (1000 * 60 * 60);
@@ -218,15 +246,17 @@ export default function GivenTask() {
   };
 
   // Fetch nurse tasks with IPD filter
+  // Fetch nurse tasks with IPD filter
   const fetchNurseTasks = async () => {
     try {
       setLoading(prev => ({ ...prev, nurse: true }));
-      
+
       let query = supabase
         .from('nurse_assign_task')
         .select('*')
         .not('planned1', 'is', null)
         .is('actual1', null)
+        .or('staff.is.null,staff.eq.nurse')  // ← ADD THIS LINE to exclude OT Staff
         .order('planned1', { ascending: true });
 
       // Add IPD filter only if we have a valid IPD number
@@ -251,8 +281,10 @@ export default function GivenTask() {
         planned1: task.planned1,
         actual1: task.actual1,
         ward_type: task.ward_type,
+        patient_location: task.patient_location,
         room: task.room,
         bed_no: task.bed_no,
+        plannedTimeFormatted: task.planned1 ? new Date(task.planned1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
         delayStatus: calculateDelayStatus(task),
         status: task.actual1 ? 'Completed' : 'Pending'
       }));
@@ -270,7 +302,7 @@ export default function GivenTask() {
   const fetchRmoTasks = async () => {
     try {
       setLoading(prev => ({ ...prev, rmo: true }));
-      
+
       let query = supabase
         .from('rmo_assign_task')
         .select('*')
@@ -300,8 +332,10 @@ export default function GivenTask() {
         planned1: task.planned1,
         actual1: task.actual1,
         ward_type: task.ward_type,
+        patient_location: task.patient_location,
         room: task.room,
         bed_no: task.bed_no,
+        plannedTimeFormatted: task.planned1 ? new Date(task.planned1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
         delayStatus: calculateDelayStatus(task),
         status: task.actual1 ? 'Completed' : 'Pending'
       }));
@@ -319,7 +353,7 @@ export default function GivenTask() {
   const fetchOtTasks = async () => {
     try {
       setLoading(prev => ({ ...prev, ot: true }));
-      
+
       let query = supabase
         .from('nurse_assign_task')
         .select('*')
@@ -351,8 +385,10 @@ export default function GivenTask() {
         planned1: task.planned1,
         actual1: task.actual1,
         ward_type: task.ward_type,
+        patient_location: task.patient_location,
         room: task.room,
         bed_no: task.bed_no,
+        plannedTimeFormatted: task.planned1 ? new Date(task.planned1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
         delayStatus: calculateDelayStatus(task),
         status: task.actual1 ? 'Completed' : 'Pending'
       }));
@@ -366,6 +402,58 @@ export default function GivenTask() {
     }
   };
 
+  // Fetch Dressing tasks with IPD filter
+  const fetchDressingTasks = async () => {
+    try {
+      setLoading(prev => ({ ...prev, dressing: true }));
+
+      let query = supabase
+        .from('dressing')
+        .select('*')
+        .not('planned1', 'is', null)
+        .is('actual1', null)
+        .order('planned1', { ascending: true });
+
+      // Add IPD filter only if we have a valid IPD number
+      if (ipdNumber && ipdNumber !== 'N/A') {
+        query = query.eq('ipd_number', ipdNumber);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      const formattedTasks = (data || []).map(task => ({
+        id: task.id,
+        task_no: task.task_no || `DR-${task.id.toString().padStart(3, '0')}`,
+        ipd_number: task.ipd_number,
+        patient_name: task.patient_name,
+        task: task.task,
+        assign_nurse: task.assign_nurse,
+        assign_rmo: task.assign_rmo,
+        shift: task.shift,
+        reminder: task.reminder,
+        start_date: task.start_date,
+        planned1: task.planned1,
+        actual1: task.actual1,
+        status: task.status || 'Pending',
+        ward_type: task.ward_type,
+        patient_location: task.patient_location,
+        room: task.room,
+        bed_no: task.bed_no,
+        plannedTimeFormatted: task.planned1 ? new Date(task.planned1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+        delayStatus: calculateDelayStatus(task)
+      }));
+
+      setDressingTasks(formattedTasks);
+    } catch (error) {
+      console.error('Error fetching dressing tasks:', error);
+      setDressingTasks([]);
+    } finally {
+      setLoading(prev => ({ ...prev, dressing: false }));
+    }
+  };
+
   // Fetch tasks based on user role
   useEffect(() => {
     if (!userRole) {
@@ -373,46 +461,93 @@ export default function GivenTask() {
       fetchNurseTasks();
       fetchRmoTasks();
       fetchOtTasks();
+      fetchDressingTasks();
       return;
     }
 
     const role = userRole.toLowerCase();
     console.log('Fetching tasks for role:', role);
-    
+
     // Fetch only tasks relevant to user role
     if (role === 'nurse') {
       fetchNurseTasks();
-      // Still fetch others but don't show them
+      fetchDressingTasks(); // Nurses might have dressing tasks too
       fetchRmoTasks();
       fetchOtTasks();
     } else if (role === 'rmo') {
       fetchRmoTasks();
+      fetchDressingTasks(); // RMOs might have dressing tasks too
       fetchNurseTasks();
       fetchOtTasks();
     } else if (role === 'ot' || role === 'ot staff') {
       fetchOtTasks();
       fetchNurseTasks();
       fetchRmoTasks();
+      fetchDressingTasks();
+    } else if (role === 'dressing') {
+      fetchDressingTasks();
+      fetchNurseTasks();
+      fetchRmoTasks();
+      fetchOtTasks();
     } else {
       // Unknown role, fetch all
       fetchNurseTasks();
       fetchRmoTasks();
       fetchOtTasks();
+      fetchDressingTasks();
     }
   }, [userRole, ipdNumber]);
 
   // Handle completing a task
   const handleCompleteTask = async (taskId, tableName) => {
     try {
-      setCompletingTask(taskId);
-      
-      const currentTimestamp = new Date().toISOString().replace('T', ' ').split('.')[0];
-      
-      const updateData = { actual1: currentTimestamp };
-      
-      if (tableName === 'nurse_assign_task') {
-        updateData.status = 'Completed';
+      // Check if this is a Vitals Check task in the nurse section
+      const taskToCheck = getCurrentTasks().find(t => t.id === taskId);
+
+      // Trigger Vitals Modal for Nurse Vitals Check tasks
+      if (activeTab === 'nurse' && taskToCheck && (
+        taskToCheck.task?.toLowerCase().includes("vitals check") ||
+        taskToCheck.task?.toLowerCase().includes("bp, pulse, temp,spo2,rr")
+      )) {
+        setSelectedVitalsTask(taskToCheck);
+        setVitalsData({
+          bloodPressure: '',
+          pulseRate: '',
+          temperature: '',
+          spo2: '',
+          rr: ''
+        });
+        setShowVitalsModal(true);
+        return;
       }
+
+      // Check if this is an OT Information task in the RMO section
+      if (activeTab === 'rmo' && taskToCheck && (taskToCheck.task === "OT Information" || taskToCheck.task?.toLowerCase().includes("ot information"))) {
+        setSelectedOtTask(taskToCheck);
+        setOtCompletionType('surgical');
+        setShowOtCompletionModal(true);
+        return;
+      }
+
+      setCompletingTask(taskId);
+
+      // Create update data with Indian timezone format
+      const updateData = {
+        // status: 'Completed',
+        actual1: new Date().toLocaleString("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour12: false
+        }).replace(',', ''),
+      };
+
+      // Special handling for different tables
+      // if (tableName === 'nurse_assign_task') {
+      //   updateData.status = 'Completed';
+      // } else if (tableName === 'rmo_assign_task') {
+      //   // RMO table might have different field names
+      //   updateData.status = 'Completed';
+      // }
+      // For dressing table, we're already setting status above
 
       const { error } = await supabase
         .from(tableName)
@@ -428,15 +563,127 @@ export default function GivenTask() {
         setRmoTasks(prev => prev.filter(task => task.id !== taskId));
       } else if (activeTab === 'ot') {
         setOtTasks(prev => prev.filter(task => task.id !== taskId));
+      } else if (activeTab === 'dressing') {
+        setDressingTasks(prev => prev.filter(task => task.id !== taskId));
       }
 
-      alert('Task marked as completed successfully!');
+      showNotification('Task marked as completed successfully!', 'success');
     } catch (error) {
       console.error('Error completing task:', error);
-      alert('Failed to complete task. Please try again.');
+      showNotification('Failed to complete task. Please try again.', 'error');
     } finally {
       setCompletingTask(null);
     }
+  };
+
+  // Handle Vitals Form Submission
+  const handleSubmitVitals = async () => {
+    if (!selectedVitalsTask) return;
+
+    // Validate that at least one field is filled
+    const hasAnyValue = Object.values(vitalsData).some(value => value.trim() !== '');
+    if (!hasAnyValue) {
+      showNotification('Please enter at least one vital sign value', 'error');
+      return;
+    }
+
+    try {
+      setCompletingTask(selectedVitalsTask.id);
+
+      const timestamp = new Date().toLocaleString("en-CA", {
+        timeZone: "Asia/Kolkata",
+        hour12: false
+      }).replace(',', '');
+
+      const { error } = await supabase
+        .from('nurse_assign_task')
+        .update({
+          check_up: vitalsData,
+          actual1: timestamp
+        })
+        .eq('id', selectedVitalsTask.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setNurseTasks(prev => prev.filter(task => task.id !== selectedVitalsTask.id));
+
+      showNotification('Vitals Check saved successfully!', 'success');
+      setShowVitalsModal(false);
+      setSelectedVitalsTask(null);
+    } catch (error) {
+      console.error('Error saving vitals:', error);
+      showNotification('Failed to save vitals. Please try again.', 'error');
+    } finally {
+      setCompletingTask(null);
+    }
+  };
+
+  // Handle OT Information Completion
+  const handleOtCompletion = async () => {
+    if (!selectedOtTask) return;
+
+    try {
+      setCompletingTask(selectedOtTask.id);
+
+      const timestamp = new Date().toLocaleString("en-CA", {
+        timeZone: "Asia/Kolkata",
+        hour12: false
+      }).replace(',', '');
+
+      // Prepare update data for rmo_assign_task table
+      let updateData = {
+        actual1: timestamp,
+        ot_information: otCompletionType
+      };
+
+      // For surgical type, post to ot_information table
+      if (otCompletionType === 'surgical') {
+        const otInformationData = {
+          timestamp: timestamp,
+          ipd_number: selectedOtTask.ipd_number || null,
+          patient_name: selectedOtTask.patient_name || null,
+          patient_location: selectedOtTask.patient_location || null,
+          ward_type: selectedOtTask.ward_type || null,
+          room: selectedOtTask.room || null,
+          bed_no: selectedOtTask.bed_no || null,
+          planned1: timestamp
+        };
+
+        const { error: otError } = await supabase
+          .from('ot_information')
+          .insert([otInformationData]);
+
+        if (otError) throw otError;
+      }
+
+      // Update the rmo_assign_task table
+      const { error } = await supabase
+        .from('rmo_assign_task')
+        .update(updateData)
+        .eq('id', selectedOtTask.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setRmoTasks(prev => prev.filter(task => task.id !== selectedOtTask.id));
+
+      showNotification('OT Information task completed successfully!', 'success');
+      setShowOtCompletionModal(false);
+      setSelectedOtTask(null);
+    } catch (error) {
+      console.error('Error completing OT task:', error);
+      showNotification('Failed to complete OT task. Please try again.', 'error');
+    } finally {
+      setCompletingTask(null);
+    }
+  };
+
+  const handleVitalsCheckboxChange = (field) => {
+    setVitalsData(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
   };
 
   // Get current tasks based on active tab
@@ -444,13 +691,14 @@ export default function GivenTask() {
     if (activeTab === 'nurse') return nurseTasks;
     if (activeTab === 'rmo') return rmoTasks;
     if (activeTab === 'ot') return otTasks;
+    if (activeTab === 'dressing') return dressingTasks;
     return [];
   };
 
   // Filter tasks based on search
   const getFilteredTasks = () => {
     const tasks = getCurrentTasks();
-    
+
     return tasks.filter(task => {
       return (
         task.task_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -465,6 +713,7 @@ export default function GivenTask() {
     if (activeTab === 'nurse') return loading.nurse;
     if (activeTab === 'rmo') return loading.rmo;
     if (activeTab === 'ot') return loading.ot;
+    if (activeTab === 'dressing') return loading.dressing;
     return false;
   };
 
@@ -472,6 +721,7 @@ export default function GivenTask() {
     if (activeTab === 'nurse') return 'nurse_assign_task';
     if (activeTab === 'rmo') return 'rmo_assign_task';
     if (activeTab === 'ot') return 'nurse_assign_task';
+    if (activeTab === 'dressing') return 'dressing';
     return '';
   };
 
@@ -480,9 +730,10 @@ export default function GivenTask() {
   const currentLoading = getCurrentLoading();
 
   // Don't show loading spinner for all tabs, only for the current role's tab
-  const showLoading = (loading.nurse && activeTab === 'nurse') || 
-                     (loading.rmo && activeTab === 'rmo') || 
-                     (loading.ot && activeTab === 'ot');
+  const showLoading = (loading.nurse && activeTab === 'nurse') ||
+    (loading.rmo && activeTab === 'rmo') ||
+    (loading.ot && activeTab === 'ot') ||
+    (loading.dressing && activeTab === 'dressing');
 
   if (showLoading) {
     return (
@@ -501,89 +752,121 @@ export default function GivenTask() {
   return (
     <div className="flex flex-col h-screen">
       {/* Fixed Header Section */}
-      <div className="flex-shrink-0 bg-green-600 text-white p-4 rounded-b-lg shadow-md">
-        <div className="flex flex-col gap-4">
-          {/* Title and Icon */}
-          <div className="flex items-center gap-3">
-            <CheckCircle className="w-8 h-8 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold truncate">Task Completion</h1>
-              <p className="text-xs opacity-90 mt-1 truncate">
-                {ipdNumber && ipdNumber !== 'N/A' 
-                  ? `${userRole ? userRole.toUpperCase() + ' - ' : ''}IPD: ${ipdNumber}` 
-                  : userRole 
-                    ? `${userRole.toUpperCase()} Tasks`
-                    : 'Complete assigned tasks'}
-              </p>
-            </div>
-          </div>
-
-          {/* Search Bar - Mobile Toggle */}
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
-              {showMobileSearch ? (
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-300 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Search tasks..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-10 py-2 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-sm"
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => setShowMobileSearch(false)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white p-1"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between">
-                  <button
-                    onClick={() => setShowMobileSearch(true)}
-                    className="flex items-center gap-2 px-3 py-2 bg-white/10 rounded-lg text-sm w-full"
-                  >
-                    <Search className="w-4 h-4" />
-                    <span className="text-green-300 truncate">Search tasks...</span>
-                    {searchTerm && (
-                      <span className="ml-auto bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
-                        {filteredTasks.length}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Tab Navigation - Horizontal Scroll on Mobile */}
-          {availableTabs.length > 0 && (
-            <div className="overflow-x-auto pb-1 -mx-1 px-1">
-              <div className="flex gap-1 min-w-max">
-                {availableTabs.map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                      activeTab === tab.key
-                        ? 'bg-white text-green-600'
-                        : 'text-white hover:bg-white/30'
-                    }`}
-                  >
-                    <tab.icon className="w-4 h-4" />
-                    <span>{tab.label}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full min-w-5 ${
-                      activeTab === tab.key ? 'bg-green-600 text-white' : 'bg-white/20 text-white'
-                    }`}>
-                      {tab.count}
-                    </span>
-                  </button>
-                ))}
+      <div className="flex-shrink-0 bg-green-600 text-white p-4 rounded-lg shadow-md">
+        {/* Desktop View */}
+        <div className="hidden md:block">
+          <div className="flex items-center justify-between gap-4">
+            {/* Left side: Heading and icon */}
+            <div className="flex items-center gap-3 min-w-0">
+              <CheckCircle className="w-8 h-8 flex-shrink-0" />
+              <div className="min-w-0">
+                <h1 className="text-xl md:text-2xl font-bold truncate">Task Completion</h1>
+                <p className="text-xs opacity-90 mt-1 truncate">
+                  {ipdNumber && ipdNumber !== 'N/A'
+                    ? `${userRole ? userRole.toUpperCase() + ' - ' : ''}IPD: ${ipdNumber}`
+                    : userRole
+                      ? `${userRole.toUpperCase()} Tasks`
+                      : 'Complete assigned tasks'}
+                </p>
               </div>
             </div>
-          )}
+
+            {/* Right side: Tabs and Search */}
+            <div className="flex items-center gap-3 flex-1 justify-end">
+              {/* Tabs */}
+              {availableTabs.length > 0 && (
+                <div className="flex items-center bg-white/20 rounded-lg p-1 overflow-x-auto">
+                  <div className="flex items-center gap-1 flex-nowrap whitespace-nowrap">
+                    {availableTabs.map((tab) => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm font-medium transition-colors flex-shrink-0 ${activeTab === tab.key
+                          ? 'bg-white text-green-600'
+                          : 'text-white hover:bg-white/30'
+                          }`}
+                      >
+                        <tab.icon className="w-4 h-4" />
+                        <span>{tab.label}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full min-w-5 ${activeTab === tab.key ? 'bg-green-600 text-white' : 'bg-white/20 text-white'
+                          }`}>
+                          {tab.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Search Input */}
+              <div className="relative flex-shrink-0">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-300 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search tasks..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-48 pl-9 pr-3 py-2 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-sm"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile View */}
+        <div className="md:hidden">
+          <div className="flex flex-col gap-3">
+            {/* Title Row */}
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-8 h-8 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <h1 className="text-xl font-bold truncate">Task Completion</h1>
+                <p className="text-xs opacity-90 mt-1 truncate">
+                  {ipdNumber && ipdNumber !== 'N/A'
+                    ? `${userRole ? userRole.toUpperCase() + ' - ' : ''}IPD: ${ipdNumber}`
+                    : userRole
+                      ? `${userRole.toUpperCase()} Tasks`
+                      : 'Complete assigned tasks'}
+                </p>
+              </div>
+            </div>
+
+            {/* Mobile Tabs and Search */}
+            <div className="flex flex-col gap-2">
+              {availableTabs.length > 0 && (
+                <div className="flex overflow-x-auto bg-white/20 rounded-lg p-1 gap-1">
+                  {availableTabs.map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveTab(tab.key)}
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${activeTab === tab.key
+                        ? 'bg-white text-green-600'
+                        : 'text-white hover:bg-white/30'
+                        }`}
+                    >
+                      <tab.icon className="w-3 h-3" />
+                      <span>{tab.label}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full min-w-5 ${activeTab === tab.key ? 'bg-green-600 text-white' : 'bg-white/20 text-white'
+                        }`}>
+                        {tab.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-300 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search tasks..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-sm"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -600,7 +883,9 @@ export default function GivenTask() {
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Task No</th>
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Patient</th>
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">IPD No</th>
-                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Task</th>
+                    {activeTab !== 'dressing' && (
+                      <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Task</th>
+                    )}
                     {activeTab === 'nurse' && (
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Nurse</th>
                     )}
@@ -608,12 +893,18 @@ export default function GivenTask() {
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">RMO</th>
                     )}
                     {activeTab === 'ot' && (
-                      <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Staff</th>
+                      <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Assigned Nurse</th>
                     )}
-                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Shift</th>
+
+                    {activeTab !== 'dressing' && (
+                      <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Shift</th>
+                    )}
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Ward</th>
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Bed</th>
-                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Start Date</th>
+                    {activeTab !== 'dressing' && (
+                      <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Start Date</th>
+                    )}
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Planned Time</th>
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Status</th>
                   </tr>
                 </thead>
@@ -624,9 +915,8 @@ export default function GivenTask() {
                         <button
                           onClick={() => handleCompleteTask(task.id, getTableName())}
                           disabled={completingTask === task.id}
-                          className={`flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs font-medium transition-colors ${
-                            completingTask === task.id ? 'opacity-50 cursor-not-allowed' : ''
-                          }`}
+                          className={`flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs font-medium transition-colors ${completingTask === task.id ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
                         >
                           {completingTask === task.id ? (
                             <>
@@ -642,42 +932,52 @@ export default function GivenTask() {
                         </button>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-semibold text-green-600">{task.task_no}</span>
+                        <span className="font-semibold text-green-600 whitespace-nowrap">{task.task_no}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">{task.patient_name}</div>
+                        <div className="font-medium text-gray-900 whitespace-nowrap">{task.patient_name}</div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-medium text-gray-700">{task.ipd_number}</span>
+                        <span className="font-medium text-gray-700 whitespace-nowrap">{task.ipd_number}</span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="text-gray-700">{task.task}</div>
-                        {task.reminder && (
-                          <div className="text-xs text-gray-500 truncate max-w-xs mt-1">
-                            {task.reminder}
-                          </div>
-                        )}
-                      </td>
+                      {activeTab !== 'dressing' && (
+                        <td className="px-4 py-3">
+                          <div className="text-gray-700">{task.task}</div>
+                          {task.reminder && (
+                            <div className="text-xs text-gray-500 truncate max-w-xs mt-1">
+                              {task.reminder}
+                            </div>
+                          )}
+                        </td>
+                      )}
                       {activeTab === 'nurse' && (
-                        <td className="px-4 py-3 text-gray-700">{task.assign_nurse}</td>
+                        <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{task.assign_nurse}</td>
                       )}
                       {activeTab === 'rmo' && (
-                        <td className="px-4 py-3 text-gray-700">{task.assign_rmo}</td>
+                        <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{task.assign_rmo}</td>
                       )}
                       {activeTab === 'ot' && (
-                        <td className="px-4 py-3 text-gray-700">{task.staff || task.assign_nurse}</td>
+                        <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{task.assign_nurse || task.staff}</td>
                       )}
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium">
-                          {task.shift}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">{task.ward_type}</td>
-                      <td className="px-4 py-3 text-gray-700">{task.bed_no}</td>
-                      <td className="px-4 py-3">
-                        <div className="text-xs text-gray-500">
-                          {task.start_date ? new Date(task.start_date).toLocaleDateString() : 'N/A'}
-                        </div>
+
+                      {activeTab !== 'dressing' && (
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium whitespace-nowrap">
+                            {task.shift}
+                          </span>
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{task.ward_type}</td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{task.bed_no}</td>
+                      {activeTab !== 'dressing' && (
+                        <td className="px-4 py-3">
+                          <div className="text-xs text-gray-500 whitespace-nowrap">
+                            {task.start_date ? new Date(task.start_date).toLocaleDateString() : 'N/A'}
+                          </div>
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {task.plannedTimeFormatted}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={task.status} />
@@ -692,14 +992,15 @@ export default function GivenTask() {
               {activeTab === 'nurse' && <User className="w-12 h-12 text-gray-300 mb-3" />}
               {activeTab === 'rmo' && <Stethoscope className="w-12 h-12 text-gray-300 mb-3" />}
               {activeTab === 'ot' && <Scissors className="w-12 h-12 text-gray-300 mb-3" />}
+              {activeTab === 'dressing' && <Syringe className="w-12 h-12 text-gray-300 mb-3" />}
               <p className="text-gray-600 font-medium text-center">
-                No pending {activeTab === 'nurse' ? 'nurse' : activeTab === 'rmo' ? 'RMO' : 'OT'} tasks found
+                No pending {activeTab === 'nurse' ? 'nurse' : activeTab === 'rmo' ? 'RMO' : activeTab === 'ot' ? 'OT' : 'dressing'} tasks found
               </p>
               <p className="text-gray-500 text-xs text-center mt-1 max-w-md">
                 {ipdNumber && ipdNumber !== 'N/A'
-                  ? `No ${activeTab === 'nurse' ? 'nurse' : activeTab === 'rmo' ? 'RMO' : 'OT'} tasks found for IPD: ${ipdNumber}`
-                  : searchTerm 
-                    ? 'No tasks match your search' 
+                  ? `No ${activeTab === 'nurse' ? 'nurse' : activeTab === 'rmo' ? 'RMO' : activeTab === 'ot' ? 'OT' : 'dressing'} tasks found for IPD: ${ipdNumber}`
+                  : searchTerm
+                    ? 'No tasks match your search'
                     : 'All tasks are completed or no tasks assigned'}
               </p>
             </div>
@@ -740,14 +1041,15 @@ export default function GivenTask() {
                 {activeTab === 'nurse' && <User className="w-16 h-16 text-gray-300 mb-4 mx-auto" />}
                 {activeTab === 'rmo' && <Stethoscope className="w-16 h-16 text-gray-300 mb-4 mx-auto" />}
                 {activeTab === 'ot' && <Scissors className="w-16 h-16 text-gray-300 mb-4 mx-auto" />}
+                {activeTab === 'dressing' && <Syringe className="w-16 h-16 text-gray-300 mb-4 mx-auto" />}
                 <p className="text-gray-600 font-medium text-center text-sm">
-                  No pending {activeTab === 'nurse' ? 'nurse' : activeTab === 'rmo' ? 'RMO' : 'OT'} tasks found
+                  No pending {activeTab === 'nurse' ? 'nurse' : activeTab === 'rmo' ? 'RMO' : activeTab === 'ot' ? 'OT' : 'dressing'} tasks found
                 </p>
                 <p className="text-gray-500 text-xs text-center mt-2">
                   {ipdNumber && ipdNumber !== 'N/A'
                     ? `No tasks found for IPD: ${ipdNumber}`
-                    : searchTerm 
-                      ? 'No tasks match your search' 
+                    : searchTerm
+                      ? 'No tasks match your search'
                       : 'All tasks are completed'}
                 </p>
                 {searchTerm && (
@@ -778,6 +1080,206 @@ export default function GivenTask() {
               <X className="w-3 h-3" />
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Vitals Check Modal */}
+      {showVitalsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm animate-in fade-in duration-200">
+            <div className="p-4 border-b flex justify-between items-center bg-green-50 rounded-t-lg">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <h3 className="font-bold text-lg text-gray-800">Vitals Check</h3>
+              </div>
+              <button
+                onClick={() => setShowVitalsModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                disabled={completingTask === selectedVitalsTask?.id}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-gray-600 font-medium">Record performed vitals:</p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Blood Pressure
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., 120/80"
+                    value={vitalsData.bloodPressure}
+                    onChange={(e) => setVitalsData(prev => ({ ...prev, bloodPressure: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    disabled={completingTask === selectedVitalsTask?.id}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Pulse Rate (bpm)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., 72"
+                    value={vitalsData.pulseRate}
+                    onChange={(e) => setVitalsData(prev => ({ ...prev, pulseRate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    disabled={completingTask === selectedVitalsTask?.id}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Temperature (°F)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., 98.6"
+                    value={vitalsData.temperature}
+                    onChange={(e) => setVitalsData(prev => ({ ...prev, temperature: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    disabled={completingTask === selectedVitalsTask?.id}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    SPO2 (%)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., 98"
+                    value={vitalsData.spo2}
+                    onChange={(e) => setVitalsData(prev => ({ ...prev, spo2: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    disabled={completingTask === selectedVitalsTask?.id}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Respiratory Rate (breaths/min)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., 16"
+                    value={vitalsData.rr}
+                    onChange={(e) => setVitalsData(prev => ({ ...prev, rr: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    disabled={completingTask === selectedVitalsTask?.id}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t flex gap-3 bg-gray-50 rounded-b-lg">
+              <button
+                onClick={() => setShowVitalsModal(false)}
+                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
+                disabled={completingTask === selectedVitalsTask?.id}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitVitals}
+                disabled={completingTask === selectedVitalsTask?.id}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold text-sm transition-all disabled:opacity-50 shadow-sm shadow-green-200"
+              >
+                {completingTask === selectedVitalsTask?.id ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent"></div>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Submit</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OT Completion Modal */}
+      {showOtCompletionModal && selectedOtTask && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-xl shadow-2xl overflow-hidden animate-fade-in">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-100">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <Scissors className="w-6 h-6 text-green-600" />
+                Complete OT Information Task
+              </h2>
+              <button
+                onClick={() => setShowOtCompletionModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    OT Type <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setOtCompletionType('surgical')}
+                      className={`p-4 rounded-lg border-2 transition-all ${otCompletionType === 'surgical'
+                        ? 'bg-red-50 border-red-500 text-red-700'
+                        : 'bg-white border-gray-200 hover:border-red-300'}`}
+                    >
+                      <div className="font-medium">Surgical</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOtCompletionType('non-surgical')}
+                      className={`p-4 rounded-lg border-2 transition-all ${otCompletionType === 'non-surgical'
+                        ? 'bg-blue-50 border-blue-500 text-blue-700'
+                        : 'bg-white border-gray-200 hover:border-blue-300'}`}
+                    >
+                      <div className="font-medium">Non-Surgical</div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => setShowOtCompletionModal(false)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleOtCompletion}
+                disabled={completingTask !== null}
+                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {completingTask !== null ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Completing...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Complete Task
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

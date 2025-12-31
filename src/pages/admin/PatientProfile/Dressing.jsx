@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Heart, Search, ChevronDown, ChevronUp, User, Calendar, Clock } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const StatusBadge = ({ status }) => {
   const getColors = () => {
@@ -27,7 +28,7 @@ const StatusBadge = ({ status }) => {
 
 export default function Dressing() {
   const { data } = useOutletContext();
-  
+
   const [pendingList, setPendingList] = useState([]);
   const [historyList, setHistoryList] = useState([]);
   const [activeTab, setActiveTab] = useState('history');
@@ -40,6 +41,7 @@ export default function Dressing() {
   const [allPatients, setAllPatients] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const { showNotification } = useNotification();
 
   const [formData, setFormData] = useState({
     admission_number: '',
@@ -57,7 +59,7 @@ export default function Dressing() {
   // Function to get patient details from ipd_admissions table by matching IPD number
   const getPatientFromIPD = async (ipdNumber) => {
     if (!ipdNumber || ipdNumber === 'N/A') return null;
-    
+
     try {
       const { data: patientData, error } = await supabase
         .from('ipd_admissions')
@@ -75,12 +77,12 @@ export default function Dressing() {
         `)
         .eq('ipd_number', ipdNumber)
         .single();
-      
+
       if (error) {
         console.error('Error fetching patient details:', error);
         return null;
       }
-      
+
       return {
         admission_number: patientData.admission_no, // Map admission_no to admission_number
         patient_name: patientData.patient_name,
@@ -132,7 +134,7 @@ export default function Dressing() {
   const fetchDressingRecords = async () => {
     try {
       setLoading(true);
-      
+
       let query = supabase
         .from('dressing')
         .select('*')
@@ -141,7 +143,7 @@ export default function Dressing() {
       // If we have a specific patient from context, get their details first
       if (data?.personalInfo?.ipd && data.personalInfo.ipd !== 'N/A') {
         const patientInfo = await getPatientFromIPD(data.personalInfo.ipd);
-        
+
         if (patientInfo?.admission_number) {
           // Filter by admission number
           query = query.eq('admission_number', patientInfo.admission_number);
@@ -173,8 +175,8 @@ export default function Dressing() {
         status: record.status || 'Pending',
         date: record.timestamp ? new Date(record.timestamp).toISOString().split('T')[0] : 'N/A',
         supabaseData: record,
-        plannedTime: record.planned1 ? new Date(record.planned1).toLocaleString() : '',
-        actualTime: record.actual1 ? new Date(record.actual1).toLocaleString() : '',
+        plannedTime: record.planned1 ? new Date(record.planned1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+        actualTime: record.actual1 ? new Date(record.actual1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
         plannedDate: record.planned1,
         actualDate: record.actual1
       }));
@@ -233,22 +235,22 @@ export default function Dressing() {
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.admission_number || !formData.status) {
-      alert('Please fill in Admission Number and Status');
+      showNotification('Please fill in Admission Number and Status', 'error');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-    //   const taskNo = generateTaskNumber();
-    //   const now = new Date().toISOString();
+      //   const taskNo = generateTaskNumber();
+      //   const now = new Date().toISOString();
 
       const dressingData = {
-        timestamp:new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
+        timestamp: new Date().toLocaleString("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour12: false
         }).replace(',', ''),
         admission_number: formData.admission_number,
         ipd_number: formData.ipd_number,
@@ -258,9 +260,9 @@ export default function Dressing() {
         ward_type: formData.ward_type,
         room: formData.room,
         bed_no: formData.bed_no,
-        planned1: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
+        planned1: new Date().toLocaleString("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour12: false
         }).replace(',', ''),
         actual1: null,
         remarks: formData.remarks || null,
@@ -290,10 +292,10 @@ export default function Dressing() {
 
       setShowForm(false);
       fetchDressingRecords();
-      alert('Dressing record added successfully!');
+      showNotification('Dressing record added successfully!', 'success');
     } catch (error) {
       console.error('Error adding dressing record:', error);
-      alert('Failed to add dressing record');
+      showNotification('Failed to add dressing record', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -315,10 +317,10 @@ export default function Dressing() {
       if (error) throw error;
 
       fetchDressingRecords();
-      alert(`Dressing marked as ${status === 'Yes' ? 'Completed' : 'Cancelled'}`);
+      showNotification(`Dressing marked as ${status === 'Yes' ? 'Completed' : 'Cancelled'}`, 'success');
     } catch (error) {
       console.error('Error updating dressing status:', error);
-      alert('Failed to update dressing status');
+      showNotification('Failed to update dressing status', 'error');
     }
   };
 
@@ -344,7 +346,7 @@ export default function Dressing() {
 
     // Fetch patient details from ipd_admissions using IPD number
     const patientInfo = await getPatientFromIPD(data.personalInfo.ipd);
-    
+
     if (patientInfo) {
       setFormData({
         admission_number: patientInfo.admission_number || data.personalInfo.uhid || '',
@@ -391,9 +393,9 @@ export default function Dressing() {
 
   const getFilteredTasks = () => {
     const tasks = activeTab === 'pending' ? pendingList : historyList;
-    
+
     return tasks.filter(task => {
-      const matchesSearch = 
+      const matchesSearch =
         task.admissionNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.taskNo?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -407,7 +409,7 @@ export default function Dressing() {
   // Filter patients for dropdown - using correct column names
   const filteredPatients = allPatients.filter(patient => {
     if (!searchQuery) return false;
-    
+
     return (
       (patient.admission_no && patient.admission_no.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (patient.patient_name && patient.patient_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -428,7 +430,7 @@ export default function Dressing() {
 
     return (
       <div className="bg-white rounded-lg border border-gray-200 mb-3">
-        <div 
+        <div
           className="p-3 cursor-pointer"
           onClick={() => toggleCardExpansion(task.id)}
         >
@@ -440,9 +442,9 @@ export default function Dressing() {
                   {task.taskNo}
                 </span>
               </div>
-              
+
               <h3 className="font-bold text-gray-800 text-sm mb-1">{task.taskName}</h3>
-              
+
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div className="flex items-center gap-1 text-xs text-gray-600">
                   <span className="font-medium">Patient:</span>
@@ -453,7 +455,7 @@ export default function Dressing() {
                   <span className="text-gray-800">{task.admissionNo}</span>
                 </div>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   <User className="w-3 h-3 text-gray-400" />
@@ -518,7 +520,7 @@ export default function Dressing() {
                 )}
               </div>
 
-              {activeTab === 'pending' && (
+              {/* {activeTab === 'pending' && (
                 <div className="flex gap-2 pt-2">
                   <button
                     onClick={(e) => {
@@ -539,7 +541,7 @@ export default function Dressing() {
                     Cancel
                   </button>
                 </div>
-              )}
+              )} */}
             </div>
           </div>
         )}
@@ -576,33 +578,31 @@ export default function Dressing() {
               </p>
             </div>
           </div>
-          
+
           {/* Right side: Tabs, Search, Filter and Add Button */}
           <div className="flex items-center gap-3">
             {/* Tabs */}
             <div className="flex items-center bg-white/20 rounded-lg p-1">
               <button
                 onClick={() => setActiveTab('history')}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'history'
-                    ? 'bg-white text-green-600'
-                    : 'text-white hover:bg-white/30'
-                }`}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${activeTab === 'history'
+                  ? 'bg-white text-green-600'
+                  : 'text-white hover:bg-white/30'
+                  }`}
               >
                 Complete ({historyList.length})
               </button>
               <button
                 onClick={() => setActiveTab('pending')}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'pending'
-                    ? 'bg-white text-green-600'
-                    : 'text-white hover:bg-white/30'
-                }`}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${activeTab === 'pending'
+                  ? 'bg-white text-green-600'
+                  : 'text-white hover:bg-white/30'
+                  }`}
               >
                 Pending ({pendingList.length})
               </button>
             </div>
-            
+
             {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-300 w-4 h-4" />
@@ -614,7 +614,7 @@ export default function Dressing() {
                 className="w-48 pl-9 pr-3 py-2 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-sm"
               />
             </div>
-            
+
             {/* Status Filter */}
             <select
               value={filterStatus}
@@ -628,7 +628,7 @@ export default function Dressing() {
             </select>
 
             {/* Add New Button */}
-            <button 
+            <button
               onClick={() => setShowForm(true)}
               className="px-4 py-2 bg-white text-green-600 rounded-lg font-medium hover:bg-green-50 transition-colors shadow-sm text-sm whitespace-nowrap"
             >
@@ -657,26 +657,24 @@ export default function Dressing() {
               <div className="flex items-center bg-white/20 rounded-lg p-0.5">
                 <button
                   onClick={() => setActiveTab('history')}
-                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                    activeTab === 'history'
-                      ? 'bg-white text-green-600'
-                      : 'text-white hover:bg-white/30'
-                  }`}
+                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${activeTab === 'history'
+                    ? 'bg-white text-green-600'
+                    : 'text-white hover:bg-white/30'
+                    }`}
                 >
                   Complete ({historyList.length})
                 </button>
                 <button
                   onClick={() => setActiveTab('pending')}
-                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                    activeTab === 'pending'
-                      ? 'bg-white text-green-600'
-                      : 'text-white hover:bg-white/30'
-                  }`}
+                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${activeTab === 'pending'
+                    ? 'bg-white text-green-600'
+                    : 'text-white hover:bg-white/30'
+                    }`}
                 >
                   Pending ({pendingList.length})
                 </button>
               </div>
-              
+
               {/* Search, Filter and Add Button in same row */}
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
@@ -689,7 +687,7 @@ export default function Dressing() {
                     className="w-full pl-8 pr-3 py-1.5 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-xs"
                   />
                 </div>
-                
+
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
@@ -702,7 +700,7 @@ export default function Dressing() {
                 </select>
 
                 {/* Add New Button for mobile */}
-                <button 
+                <button
                   onClick={() => setShowForm(true)}
                   className="px-3 py-1.5 bg-white text-green-600 rounded-lg font-medium hover:bg-green-50 transition-colors shadow-sm text-xs whitespace-nowrap"
                 >
@@ -727,7 +725,7 @@ export default function Dressing() {
                     {activeTab === 'pending' ? 'No pending dressing found' : 'No completed dressing found'}
                   </p>
                   <p className="text-gray-500 text-xs mt-1">
-                    {searchTerm ? 'No records match your search' : 
+                    {searchTerm ? 'No records match your search' :
                       activeTab === 'pending' ? 'No pending dressing available' : 'No completed dressing available'
                     }
                   </p>
@@ -761,9 +759,11 @@ export default function Dressing() {
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Location</th>
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Ward/Bed</th>
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Planned Time</th>
-                      <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Actual Time</th>
+                      {activeTab === 'history' && (
+                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Actual Time</th>
+                      )}
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Status</th>
-                      <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Actions</th>
+                      {/* <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Actions</th> */}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -789,20 +789,40 @@ export default function Dressing() {
                           </div>
                           <div className="text-xs text-gray-500">Bed: {task.bedNo || 'N/A'}</div>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="text-xs text-gray-500 max-w-xs truncate">
-                            {task.plannedTime || 'N/A'}
-                          </div>
+
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {task.plannedTime}
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="text-xs text-gray-500 max-w-xs truncate">
-                            {task.actualTime || 'Not completed'}
-                          </div>
-                        </td>
+                        {activeTab === 'history' && (
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {task.actualTime}
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <StatusBadge status={task.status} />
                         </td>
-                        <td className="px-4 py-3">
+                        {/* <td className="px-4 py-3">
+                          {activeTab === 'pending' && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => updateDressingStatus(task.id, 'Yes')}
+                                className="px-3 py-1 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700 transition-colors"
+                              >
+                                Complete
+                              </button>
+                              <button
+                                onClick={() => updateDressingStatus(task.id, 'No')}
+                                className="px-3 py-1 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                        </td> */}
+                        {/* <td className="px-4 py-3">
+                          <StatusBadge status={task.status} />
+                        </td> */}
+                        {/* <td className="px-4 py-3">
                           {activeTab === 'pending' && (
                             <div className="flex gap-1">
                               <button
@@ -819,7 +839,7 @@ export default function Dressing() {
                               </button>
                             </div>
                           )}
-                        </td>
+                        </td> */}
                       </tr>
                     ))}
                   </tbody>
@@ -833,7 +853,7 @@ export default function Dressing() {
                     {activeTab === 'pending' ? 'No pending dressing found' : 'No completed dressing found'}
                   </p>
                   <p className="text-gray-500 text-xs mt-1">
-                    {searchTerm ? 'No records match your search' : 
+                    {searchTerm ? 'No records match your search' :
                       activeTab === 'pending' ? 'No pending dressing available' : 'No completed dressing available'
                     }
                   </p>
@@ -850,7 +870,7 @@ export default function Dressing() {
           <div className="bg-white p-4 md:p-6 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto border-2 border-green-600">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg md:text-xl font-semibold text-green-600">Add New Dressing Record</h2>
-              <button 
+              <button
                 onClick={() => {
                   setShowForm(false);
                   setFormData({
@@ -872,7 +892,7 @@ export default function Dressing() {
                 ✕
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit}>
               {/* Admission Number Search */}
               <div className="mb-4 relative">
@@ -893,7 +913,7 @@ export default function Dressing() {
                     className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-green-600 outline-none text-sm"
                   />
                 </div>
-                
+
                 {showPatientDropdown && searchQuery && filteredPatients.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-green-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                     {filteredPatients.map((patient) => (
@@ -912,9 +932,9 @@ export default function Dressing() {
                     ))}
                   </div>
                 )}
-                
+
                 <p className="text-xs text-gray-500 mt-2">
-                  {data?.personalInfo?.name 
+                  {data?.personalInfo?.name
                     ? `Current Patient: ${data.personalInfo.name} (${data.personalInfo.uhid})`
                     : 'Search for a patient to auto-fill details'
                   }
@@ -1019,7 +1039,7 @@ export default function Dressing() {
                   </select>
                 </div>
               </div>
-              
+
               <div className="mb-4">
                 <label className="block mb-2 text-green-600 font-medium text-sm">
                   Remarks (Optional)
@@ -1032,16 +1052,15 @@ export default function Dressing() {
                   placeholder="Enter any remarks about the dressing..."
                 />
               </div>
-              
+
               <div className="flex gap-3 mt-6">
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`flex-1 py-3 rounded-lg font-medium text-sm transition-colors ${
-                    isSubmitting
-                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      : 'bg-green-600 text-white hover:bg-green-700'
-                  }`}
+                  className={`flex-1 py-3 rounded-lg font-medium text-sm transition-colors ${isSubmitting
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    : 'bg-green-600 text-white hover:bg-green-700'
+                    }`}
                 >
                   {isSubmitting ? 'Submitting...' : 'Add Dressing Record'}
                 </button>
@@ -1064,11 +1083,10 @@ export default function Dressing() {
                     setSearchQuery('');
                   }}
                   disabled={isSubmitting}
-                  className={`flex-1 py-3 rounded-lg font-medium text-sm transition-colors ${
-                    isSubmitting
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-600 text-white hover:bg-gray-700'
-                  }`}
+                  className={`flex-1 py-3 rounded-lg font-medium text-sm transition-colors ${isSubmitting
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-600 text-white hover:bg-gray-700'
+                    }`}
                 >
                   Cancel
                 </button>

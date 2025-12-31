@@ -30,7 +30,7 @@ const Admission = () => {
   const loadPatients = async () => {
     try {
       setIsLoading(true);
-      
+
       // Fetch data from Supabase patient_admission table
       const { data, error } = await supabase
         .from('patient_admission')
@@ -57,12 +57,13 @@ const Admission = () => {
           age: patient.age || calculateAge(patient.date_of_birth),
           gender: patient.gender || 'Male',
           status: patient.status || 'pending',
-          timestamp: patient.timestamp || ''
+          timestamp: patient.timestamp || '',
+          timestampFormatted: patient.timestamp ? patient.timestamp : '-'
         }));
-        
+
         setPatients(transformedPatients);
       }
-      
+
     } catch (error) {
       console.error('Failed to load patients:', error);
       setModalError('An error occurred while loading patient data.');
@@ -78,11 +79,11 @@ const Admission = () => {
     const birthDate = new Date(dob);
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    
+
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
       age--;
     }
-    
+
     return age;
   };
 
@@ -98,36 +99,36 @@ const Admission = () => {
     if (patients.length === 0) {
       return 'ADM-001';
     }
-    
+
     const admissionNumbers = patients
       .map(p => p.admissionNo)
       .filter(num => num && num.startsWith('ADM-'))
       .map(num => parseInt(num.replace('ADM-', ''), 10))
       .filter(num => !isNaN(num));
-    
+
     const maxNumber = admissionNumbers.length > 0 ? Math.max(...admissionNumbers) : 0;
     const nextNumber = maxNumber + 1;
-    
+
     return `ADM-${String(nextNumber).padStart(3, '0')}`;
   };
 
   // Filter patients based on search query and date filter
   const filteredPatients = patients.filter(patient => {
-    const matchesSearch = searchQuery === '' || 
+    const matchesSearch = searchQuery === '' ||
       patient.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       patient.phoneNumber.includes(searchQuery) ||
       patient.admissionNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
       patient.attenderName.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     const matchesDate = filterDate === '' || patient.dateOfBirth === filterDate;
-    
+
     return matchesSearch && matchesDate;
   });
 
   // Updates form data state on input change
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    
+
     if (name === 'dateOfBirth') {
       const calculatedAge = calculateAge(value);
       setFormData(prev => ({
@@ -145,8 +146,8 @@ const Admission = () => {
 
   // Submit new patient to Supabase
   const handleSubmit = async () => {
-    if (!formData.patientName || !formData.phoneNumber || !formData.attenderName || 
-        !formData.attenderMobile || !formData.reasonForVisit || !formData.dateOfBirth) {
+    if (!formData.patientName || !formData.phoneNumber || !formData.attenderName ||
+      !formData.attenderMobile || !formData.reasonForVisit || !formData.dateOfBirth) {
       setModalError('Please fill all required fields marked with *');
       return;
     }
@@ -155,42 +156,63 @@ const Admission = () => {
     setModalError('');
 
     try {
-      const timestamp = new Date().toLocaleString("en-CA", { 
-        timeZone: "Asia/Kolkata", 
-        hour12: false 
-      }).replace(',', '');
-      
-      const patientData = {
-        timestamp: timestamp,
-        admission_no: generateAdmissionNo(),
-        patient_name: formData.patientName.trim(),
-        phone_no: formData.phoneNumber.trim(),
-        attender_name: formData.attenderName.trim(),
-        attender_mobile_no: formData.attenderMobile.trim(),
-        reason_for_visit: formData.reasonForVisit.trim(),
-        date_of_birth: formData.dateOfBirth,
-        age: formData.age,
-        gender: formData.gender,
-        status: 'pending',
-        planned1: timestamp
-      };
+      if (editingId) {
+        // Update existing patient
+        const updateData = {
+          patient_name: formData.patientName.trim(),
+          phone_no: formData.phoneNumber.trim(),
+          attender_name: formData.attenderName.trim(),
+          attender_mobile_no: formData.attenderMobile.trim(),
+          reason_for_visit: formData.reasonForVisit.trim(),
+          date_of_birth: formData.dateOfBirth,
+          age: formData.age,
+          gender: formData.gender
+        };
 
-      const { data, error } = await supabase
-        .from('patient_admission')
-        .insert(patientData)
-        .select();
+        const { error } = await supabase
+          .from('patient_admission')
+          .update(updateData)
+          .eq('id', editingId);
 
-      if (error) {
-        throw error;
+        if (error) {
+          throw error;
+        }
+      } else {
+        // Create new patient
+        const timestamp = new Date().toLocaleString("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour12: false
+        }).replace(',', '');
+
+        const patientData = {
+          timestamp: timestamp,
+          admission_no: generateAdmissionNo(),
+          patient_name: formData.patientName.trim(),
+          phone_no: formData.phoneNumber.trim(),
+          attender_name: formData.attenderName.trim(),
+          attender_mobile_no: formData.attenderMobile.trim(),
+          reason_for_visit: formData.reasonForVisit.trim(),
+          date_of_birth: formData.dateOfBirth,
+          age: formData.age,
+          gender: formData.gender,
+          status: 'pending',
+          planned1: timestamp
+        };
+
+        const { error } = await supabase
+          .from('patient_admission')
+          .insert(patientData);
+
+        if (error) {
+          throw error;
+        }
       }
 
-      if (data && data.length > 0) {
-        // Refresh the patient list
-        await loadPatients();
-        setShowModal(false);
-        resetForm();
-      }
-      
+      // Refresh the patient list and reset state
+      await loadPatients();
+      setShowModal(false);
+      resetForm();
+
     } catch (error) {
       console.error('Error submitting patient:', error);
       setModalError(`Failed to save patient: ${error.message}`);
@@ -211,80 +233,27 @@ const Admission = () => {
       age: '',
       gender: 'Male'
     });
+    setEditingId(null);
     setModalError('');
   };
 
-  // Sets the editingId to enable inline editing for a patient
-  const handleEdit = (id) => {
-    setEditingId(id);
+  // Sets the patient data and opens modal for editing
+  const handleEdit = (patient) => {
+    setEditingId(patient.id);
+    setFormData({
+      patientName: patient.patientName,
+      phoneNumber: patient.phoneNumber,
+      attenderName: patient.attenderName,
+      attenderMobile: patient.attenderMobile,
+      reasonForVisit: patient.reasonForVisit,
+      dateOfBirth: patient.dateOfBirth,
+      age: patient.age,
+      gender: patient.gender
+    });
+    setShowModal(true);
   };
 
-  // Saves the changes after inline editing to Supabase
-  const handleSaveEdit = async (id) => {
-    setIsLoading(true);
-    
-    try {
-      const patientToUpdate = patients.find(p => p.id === id);
-      
-      if (patientToUpdate) {
-        const updateData = {
-          patient_name: patientToUpdate.patientName.trim(),
-          phone_no: patientToUpdate.phoneNumber.trim(),
-          attender_name: patientToUpdate.attenderName.trim(),
-          attender_mobile_no: patientToUpdate.attenderMobile.trim(),
-          reason_for_visit: patientToUpdate.reasonForVisit.trim(),
-          date_of_birth: patientToUpdate.dateOfBirth,
-          age: patientToUpdate.age,
-          gender: patientToUpdate.gender
-        };
 
-        const { error } = await supabase
-          .from('patient_admission')
-          .update(updateData)
-          .eq('id', id);
-
-        if (error) {
-          throw error;
-        }
-
-        // Refresh data from Supabase
-        await loadPatients();
-        setEditingId(null);
-      }
-    } catch (error) {
-      console.error('Error updating patient:', error);
-      setModalError('Failed to update patient. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Updates the patient data in state as the user types in the inline edit fields
-  const handleEditChange = (id, field, value) => {
-    if (field === 'dateOfBirth') {
-      const calculatedAge = calculateAge(value);
-      setPatients(prev => prev.map(patient => 
-        patient.id === id ? { ...patient, [field]: value, age: calculatedAge } : patient
-      ));
-    } else {
-      setPatients(prev => prev.map(patient => 
-        patient.id === id ? { ...patient, [field]: value } : patient
-      ));
-    }
-  };
-
-  // Helper component for an editable field (used in mobile view)
-  const EditableField = ({ label, value, onChange, type = 'text' }) => (
-    <div className="flex justify-between items-center">
-      <span className="text-gray-600">{label}:</span>
-      <input
-        type={type}
-        value={value}
-        onChange={onChange}
-        className="px-2 py-1 w-1/2 text-right font-medium text-gray-900 border border-gray-300 rounded"
-      />
-    </div>
-  );
 
   return (
     <div className="p-1 space-y-2 md:p-0 bg-gray-50 min-h-[75vh]">
@@ -296,7 +265,10 @@ const Admission = () => {
           {isLoading && <p className="text-sm text-gray-600 mt-1">Loading...</p>}
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            resetForm();
+            setShowModal(true);
+          }}
           disabled={isLoading}
           className="flex gap-2 items-center justify-center px-4 py-2.5 w-full text-white bg-green-600 rounded-lg shadow-sm transition-colors hover:bg-green-700 disabled:bg-gray-400 sm:w-auto"
         >
@@ -347,17 +319,18 @@ const Admission = () => {
                 <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50">Phone Number</th>
                 <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50">Attender Name</th>
                 <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50">Attender Mobile</th>
-                <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50">Reason For Visit</th>
+                <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50 min-w-[200px]">Reason For Visit</th>
                 <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50">Date of Birth</th>
                 <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50">Age</th>
                 <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50">Gender</th>
+                <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50">Admission Time</th>
                 <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50">Action</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-y">
               {isLoading && filteredPatients.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
                     <div className="flex flex-col items-center">
                       <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mb-4"></div>
                       <p className="text-lg font-medium text-gray-900">Loading patients...</p>
@@ -371,122 +344,50 @@ const Admission = () => {
                     <td className="px-4 py-3 text-sm font-medium text-gray-700 whitespace-nowrap">
                       {patient.admissionNo}
                     </td>
-                    <td className="px-4 py-3 text-sm whitespace-nowrap">
-                      {editingId === patient.id ? (
-                        <input
-                          type="text"
-                          value={patient.patientName}
-                          onChange={(e) => handleEditChange(patient.id, 'patientName', e.target.value)}
-                          className="px-2 py-1 w-full border border-gray-300 rounded"
-                        />
-                      ) : (
-                        <span className="text-gray-900">{patient.patientName}</span>
-                      )}
+                    <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">
+                      {patient.patientName}
+                    </td>
+                    <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">
+                      {patient.phoneNumber}
+                    </td>
+                    <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">
+                      {patient.attenderName}
+                    </td>
+                    <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">
+                      {patient.attenderMobile}
+                    </td>
+                    <td className="px-4 py-3 text-sm max-w-[250px] whitespace-normal break-words text-gray-900">
+                      {patient.reasonForVisit}
+                    </td>
+                    <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">
+                      {formatDateForDisplay(patient.dateOfBirth)}
+                    </td>
+                    <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">
+                      {patient.age}
+                    </td>
+                    <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">
+                      {patient.gender}
+                    </td>
+                    <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">
+                      {patient.timestampFormatted ? new Date(patient.timestampFormatted).toLocaleString('en-GB', {
+                        hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short'
+                      }) : '-'}
                     </td>
                     <td className="px-4 py-3 text-sm whitespace-nowrap">
-                      {editingId === patient.id ? (
-                        <input
-                          type="text"
-                          value={patient.phoneNumber}
-                          onChange={(e) => handleEditChange(patient.id, 'phoneNumber', e.target.value)}
-                          className="px-2 py-1 w-full border border-gray-300 rounded"
-                        />
-                      ) : (
-                        <span className="text-gray-900">{patient.phoneNumber}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm whitespace-nowrap">
-                      {editingId === patient.id ? (
-                        <input
-                          type="text"
-                          value={patient.attenderName}
-                          onChange={(e) => handleEditChange(patient.id, 'attenderName', e.target.value)}
-                          className="px-2 py-1 w-full border border-gray-300 rounded"
-                        />
-                      ) : (
-                        <span className="text-gray-900">{patient.attenderName}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm whitespace-nowrap">
-                      {editingId === patient.id ? (
-                        <input
-                          type="text"
-                          value={patient.attenderMobile}
-                          onChange={(e) => handleEditChange(patient.id, 'attenderMobile', e.target.value)}
-                          className="px-2 py-1 w-full border border-gray-300 rounded"
-                        />
-                      ) : (
-                        <span className="text-gray-900">{patient.attenderMobile}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm whitespace-nowrap">
-                      {editingId === patient.id ? (
-                        <input
-                          type="text"
-                          value={patient.reasonForVisit}
-                          onChange={(e) => handleEditChange(patient.id, 'reasonForVisit', e.target.value)}
-                          className="px-2 py-1 w-full border border-gray-300 rounded"
-                        />
-                      ) : (
-                        <span className="text-gray-900">{patient.reasonForVisit}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm whitespace-nowrap">
-                      {editingId === patient.id ? (
-                        <input
-                          type="date"
-                          value={patient.dateOfBirth || ''}
-                          onChange={(e) => handleEditChange(patient.id, 'dateOfBirth', e.target.value)}
-                          className="px-2 py-1 w-full border border-gray-300 rounded"
-                        />
-                      ) : (
-                        <span className="text-gray-900">{formatDateForDisplay(patient.dateOfBirth)}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm whitespace-nowrap">
-                      <span className="text-gray-900">{patient.age}</span>
-                    </td>
-                    <td className="px-4 py-3 text-sm whitespace-nowrap">
-                      {editingId === patient.id ? (
-                        <select
-                          value={patient.gender}
-                          onChange={(e) => handleEditChange(patient.id, 'gender', e.target.value)}
-                          className="px-2 py-1 border border-gray-300 rounded"
-                        >
-                          <option value="Male">Male</option>
-                          <option value="Female">Female</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      ) : (
-                        <span className="text-gray-900">{patient.gender}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm whitespace-nowrap">
-                      {editingId === patient.id ? (
-                        <button
-                          onClick={() => handleSaveEdit(patient.id)}
-                          disabled={isLoading}
-                          className="flex gap-1 items-center px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700 disabled:bg-gray-400"
-                        >
-                          <Save className="w-4 h-4" />
-                          {isLoading ? 'Saving...' : 'Save'}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleEdit(patient.id)}
-                          disabled={isLoading}
-                          className="flex gap-1 items-center px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700 disabled:bg-gray-400"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          Edit
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleEdit(patient)}
+                        disabled={isLoading}
+                        className="flex gap-1 items-center px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700 disabled:bg-gray-400"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit
+                      </button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="10" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
                     <UserPlus className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                     <p className="text-lg font-medium text-gray-900">
                       {searchQuery || filterDate ? 'No patients found matching your filters' : 'No patients yet'}
@@ -520,122 +421,50 @@ const Admission = () => {
                   <div className="text-xs font-medium text-green-600 mb-1">
                     {patient.admissionNo}
                   </div>
-                  {editingId === patient.id ? (
-                    <input
-                      type="text"
-                      value={patient.patientName}
-                      onChange={(e) => handleEditChange(patient.id, 'patientName', e.target.value)}
-                      className="px-2 py-1 w-full text-sm font-semibold text-gray-900 border border-gray-300 rounded"
-                    />
-                  ) : (
-                    <h3 className="text-sm font-semibold text-gray-900">
-                      {patient.patientName}
-                    </h3>
-                  )}
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    {patient.patientName}
+                  </h3>
                 </div>
-                {editingId === patient.id ? (
-                  <button
-                    onClick={() => handleSaveEdit(patient.id)}
-                    disabled={isLoading}
-                    className="flex flex-shrink-0 gap-1 items-center px-2 py-1 text-xs text-white bg-green-600 rounded-lg shadow-sm disabled:bg-gray-400"
-                  >
-                    <Save className="w-3 h-3" />
-                    {isLoading ? 'Saving...' : 'Save'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleEdit(patient.id)}
-                    disabled={isLoading}
-                    className="flex flex-shrink-0 gap-1 items-center px-2 py-1 text-xs text-white bg-green-600 rounded-lg shadow-sm disabled:bg-gray-400"
-                  >
-                    <Edit2 className="w-3 h-3" />
-                    Edit
-                  </button>
-                )}
+                <button
+                  onClick={() => handleEdit(patient)}
+                  disabled={isLoading}
+                  className="flex flex-shrink-0 gap-1 items-center px-2 py-1 text-xs text-white bg-green-600 rounded-lg shadow-sm disabled:bg-gray-400"
+                >
+                  <Edit2 className="w-3 h-3" />
+                  Edit
+                </button>
               </div>
-              
-              {editingId === patient.id ? (
-                <div className="space-y-2 text-xs">
-                  <EditableField
-                    label="Phone"
-                    value={patient.phoneNumber}
-                    onChange={(e) => handleEditChange(patient.id, 'phoneNumber', e.target.value)}
-                  />
-                  <EditableField
-                    label="Attender"
-                    value={patient.attenderName}
-                    onChange={(e) => handleEditChange(patient.id, 'attenderName', e.target.value)}
-                  />
-                  <EditableField
-                    label="Attender Mobile"
-                    value={patient.attenderMobile}
-                    onChange={(e) => handleEditChange(patient.id, 'attenderMobile', e.target.value)}
-                  />
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">DOB:</span>
-                    <input
-                      type="date"
-                      value={patient.dateOfBirth || ''}
-                      onChange={(e) => handleEditChange(patient.id, 'dateOfBirth', e.target.value)}
-                      className="px-2 py-1 w-1/2 text-right font-medium text-gray-900 border border-gray-300 rounded"
-                    />
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Age:</span>
-                    <span className="px-2 py-1 w-1/2 text-right font-medium text-gray-900">
-                      {patient.age}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Gender:</span>
-                    <select
-                      value={patient.gender}
-                      onChange={(e) => handleEditChange(patient.id, 'gender', e.target.value)}
-                      className="px-2 py-1 w-1/2 text-right font-medium text-gray-900 border border-gray-300 rounded"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  <div className="pt-2 mt-2 border-t border-gray-100">
-                    <span className="text-gray-600">Reason:</span>
-                    <textarea
-                      value={patient.reasonForVisit}
-                      onChange={(e) => handleEditChange(patient.id, 'reasonForVisit', e.target.value)}
-                      rows="2"
-                      className="px-2 py-1 mt-1 w-full text-gray-900 border border-gray-300 rounded"
-                    />
-                  </div>
+
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Admission Time:</span>
+                  <span className="font-medium text-gray-900">{patient.timestampFormatted}</span>
                 </div>
-              ) : (
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Phone:</span>
-                    <span className="font-medium text-gray-900">{patient.phoneNumber}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Attender:</span>
-                    <span className="font-medium text-gray-900">{patient.attenderName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Attender Mobile:</span>
-                    <span className="font-medium text-gray-900">{patient.attenderMobile}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">DOB:</span>
-                    <span className="font-medium text-gray-900">{formatDateForDisplay(patient.dateOfBirth)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Age/Gender:</span>
-                    <span className="font-medium text-gray-900">{patient.age} / {patient.gender}</span>
-                  </div>
-                  <div className="pt-2 mt-2 border-t border-gray-100">
-                    <span className="text-gray-600">Reason:</span>
-                    <p className="mt-1 text-sm text-gray-900">{patient.reasonForVisit}</p>
-                  </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Phone:</span>
+                  <span className="font-medium text-gray-900">{patient.phoneNumber}</span>
                 </div>
-              )}
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Attender:</span>
+                  <span className="font-medium text-gray-900">{patient.attenderName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Attender Mobile:</span>
+                  <span className="font-medium text-gray-900">{patient.attenderMobile}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">DOB:</span>
+                  <span className="font-medium text-gray-900">{formatDateForDisplay(patient.dateOfBirth)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Age/Gender:</span>
+                  <span className="font-medium text-gray-900">{patient.age} / {patient.gender}</span>
+                </div>
+                <div className="pt-2 mt-2 border-t border-gray-100">
+                  <span className="text-gray-600">Reason:</span>
+                  <p className="mt-1 text-sm text-gray-900">{patient.reasonForVisit}</p>
+                </div>
+              </div>
             </div>
           ))
         ) : (
@@ -656,7 +485,9 @@ const Admission = () => {
         <div className="overflow-y-auto fixed inset-0 z-50 flex justify-center items-center p-4 bg-black bg-opacity-50 transition-opacity duration-300">
           <div className="relative w-full max-w-2xl bg-white rounded-lg shadow-xl animate-scale-in">
             <div className="flex justify-between items-center p-4 border-b border-gray-200 md:p-6">
-              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Add New Patient</h2>
+              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">
+                {editingId ? 'Edit Patient' : 'Add New Patient'}
+              </h2>
               <button
                 onClick={() => {
                   setShowModal(false);
@@ -667,7 +498,7 @@ const Admission = () => {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
@@ -682,7 +513,7 @@ const Admission = () => {
                     className="px-3 py-2 w-full rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block mb-1 text-sm font-medium text-gray-700">
                     Phone Number *
@@ -695,7 +526,7 @@ const Admission = () => {
                     className="px-3 py-2 w-full rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block mb-1 text-sm font-medium text-gray-700">
                     Attender Name *
@@ -708,7 +539,7 @@ const Admission = () => {
                     className="px-3 py-2 w-full rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block mb-1 text-sm font-medium text-gray-700">
                     Attender Mobile Number *
@@ -721,7 +552,7 @@ const Admission = () => {
                     className="px-3 py-2 w-full rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block mb-1 text-sm font-medium text-gray-700">
                     Date of Birth *
@@ -735,7 +566,7 @@ const Admission = () => {
                     className="px-3 py-2 w-full rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block mb-1 text-sm font-medium text-gray-700">
                     Age
@@ -749,7 +580,7 @@ const Admission = () => {
                     placeholder="Auto-calculated from DOB"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block mb-1 text-sm font-medium text-gray-700">
                     Gender *
@@ -765,7 +596,7 @@ const Admission = () => {
                     <option value="Other">Other</option>
                   </select>
                 </div>
-                
+
                 <div className="md:col-span-2">
                   <label className="block mb-1 text-sm font-medium text-gray-700">
                     Reason For Visit *
@@ -785,7 +616,7 @@ const Admission = () => {
                   {modalError}
                 </div>
               )}
-              
+
               <div className="flex flex-col gap-3 justify-end mt-6 sm:flex-row">
                 <button
                   type="button"
@@ -802,9 +633,10 @@ const Admission = () => {
                   type="button"
                   onClick={handleSubmit}
                   disabled={isLoading}
-                  className="px-4 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 disabled:bg-gray-400 sm:w-auto"
+                  className="flex gap-2 items-center justify-center px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg shadow-sm transition-colors hover:bg-green-700 disabled:bg-gray-400 sm:w-auto"
                 >
-                  {isLoading ? 'Saving...' : 'Save Patient'}
+                  <Save className="w-5 h-5" />
+                  {isLoading ? 'Saving...' : editingId ? 'Update Patient' : 'Save Patient'}
                 </button>
               </div>
             </div>

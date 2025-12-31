@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, X, Clock, CheckCircle, Image } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const ConcernAuthority = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -10,7 +11,7 @@ const ConcernAuthority = () => {
   const [workFileStatus, setWorkFileStatus] = useState({});
   const [viewImageModal, setViewImageModal] = useState(false);
   const [viewingImage, setViewingImage] = useState(null);
-  const [submitError, setSubmitError] = useState('');
+  const { showNotification } = useNotification();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false); // Separate state for submission
 
@@ -28,7 +29,7 @@ const ConcernAuthority = () => {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      
+
       // Fetch pending records (planned4 is not null and actual4 is null)
       const { data: pendingData, error: pendingError } = await supabase
         .from('discharge')
@@ -38,7 +39,16 @@ const ConcernAuthority = () => {
         .order('planned4', { ascending: true });
 
       if (pendingError) throw pendingError;
-      setPendingRecords(pendingData || []);
+      const formattedPending = (pendingData || []).map(record => ({
+        ...record,
+        planned4Date: record.planned4 ? new Date(record.planned4).toLocaleDateString('en-GB') : 'N/A',
+        planned4Time: record.planned4 ? new Date(record.planned4).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }) : 'N/A',
+      }));
+      setPendingRecords(formattedPending || []);
 
       // Fetch history records (both planned4 and actual4 are not null)
       const { data: historyData, error: historyError } = await supabase
@@ -49,12 +59,26 @@ const ConcernAuthority = () => {
         .order('actual4', { ascending: false });
 
       if (historyError) throw historyError;
-      setHistoryRecords(historyData || []);
+      const formattedHistory = (historyData || []).map(record => ({
+        ...record,
+        planned4Date: record.planned4 ? new Date(record.planned4).toLocaleDateString('en-GB') : 'N/A',
+        planned4Time: record.planned4 ? new Date(record.planned4).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }) : 'N/A',
+        actual4Date: record.actual4 ? new Date(record.actual4).toLocaleDateString('en-GB') : 'N/A',
+        actual4Time: record.actual4 ? new Date(record.actual4).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }) : 'N/A',
+      }));
+      setHistoryRecords(formattedHistory || []);
 
     } catch (error) {
       console.error('Error loading data from Supabase:', error);
-      setSubmitError('Failed to load data');
-      setTimeout(() => setSubmitError(''), 3000);
+      showNotification('Failed to load data', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -80,8 +104,7 @@ const ConcernAuthority = () => {
     );
 
     if (selectedAdmissions.length === 0) {
-      setSubmitError('Please select at least one record');
-      setTimeout(() => setSubmitError(''), 3000);
+      showNotification('Please select at least one record', 'error');
       return;
     }
 
@@ -89,14 +112,13 @@ const ConcernAuthority = () => {
       (admNo) => !workFileStatus[admNo]
     );
     if (missingWorkFile.length > 0) {
-      setSubmitError('Please select Work File status (Yes/No) for all selected records');
-      setTimeout(() => setSubmitError(''), 3000);
+      showNotification('Please select Work File status (Yes/No) for all selected records', 'error');
       return;
     }
 
     try {
       setIsSubmitting(true); // Set submitting state to true
-      
+
       // Prepare update data for each selected record
       const updates = selectedAdmissions.map(admissionNo => ({
         admission_no: admissionNo,
@@ -110,16 +132,16 @@ const ConcernAuthority = () => {
         const { error } = await supabase
           .from('discharge')
           .update({
-            actual4:new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
+            actual4: new Date().toLocaleString("en-CA", {
+              timeZone: "Asia/Kolkata",
+              hour12: false
+            }).replace(',', ''),
             concern_authority_work_file: updateData.concern_dept,
-            planned5:new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
-          
+            planned5: new Date().toLocaleString("en-CA", {
+              timeZone: "Asia/Kolkata",
+              hour12: false
+            }).replace(',', ''),
+
           })
           .eq('admission_no', updateData.admission_no);
 
@@ -131,15 +153,14 @@ const ConcernAuthority = () => {
       // Reset form
       setSelectedRecords({});
       setWorkFileStatus({});
-      setSubmitError('');
-      
+      showNotification('Concern Authority status updated successfully!', 'success');
+
       // Reload data
       await loadData();
 
     } catch (error) {
       console.error('Error updating records in Supabase:', error);
-      setSubmitError('Failed to save. Please try again.');
-      setTimeout(() => setSubmitError(''), 3000);
+      showNotification('Failed to save. Please try again.', 'error');
     } finally {
       setIsSubmitting(false); // Reset submitting state
     }
@@ -148,11 +169,11 @@ const ConcernAuthority = () => {
   const calculateDelay = (admissionNo) => {
     const record = pendingRecords.find(r => r.admission_no === admissionNo);
     if (!record || !record.planned4) return null;
-    
+
     const plannedDate = new Date(record.planned4);
     const actualDate = new Date();
     const diffHours = Math.floor((actualDate - plannedDate) / (1000 * 60 * 60));
-    
+
     if (diffHours <= 0) return 'On Time';
     return `${diffHours} hour${diffHours > 1 ? 's' : ''} delay`;
   };
@@ -188,11 +209,10 @@ const ConcernAuthority = () => {
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-              activeTab === 'pending'
-                ? 'text-green-600 border-b-2 border-green-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'pending'
+              ? 'text-green-600 border-b-2 border-green-600'
+              : 'text-gray-600 hover:text-gray-900'
+              }`}
           >
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4" />
@@ -206,11 +226,10 @@ const ConcernAuthority = () => {
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-              activeTab === 'history'
-                ? 'text-green-600 border-b-2 border-green-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'history'
+              ? 'text-green-600 border-b-2 border-green-600'
+              : 'text-gray-600 hover:text-gray-900'
+              }`}
           >
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4" />
@@ -228,11 +247,10 @@ const ConcernAuthority = () => {
           <button
             onClick={handleSubmit}
             disabled={!isAnySelected || isSubmitting} // Use isSubmitting instead of isLoading
-            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg shadow-sm font-medium transition-all mb-[-2px] ${
-              isAnySelected && !isSubmitting
-                ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
-                : 'bg-gray-400 cursor-not-allowed opacity-60'
-            }`}
+            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg shadow-sm font-medium transition-all mb-[-2px] ${isAnySelected && !isSubmitting
+              ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
+              : 'bg-gray-400 cursor-not-allowed opacity-60'
+              }`}
           >
             <Building2 className="w-5 h-5" />
             {isSubmitting ? 'Processing...' : 'Submit'} {/* Use isSubmitting here */}
@@ -243,11 +261,7 @@ const ConcernAuthority = () => {
       {/* === PENDING SECTION === */}
       {activeTab === 'pending' && (
         <div>
-          {submitError && (
-            <div className="mb-4 p-3 text-sm text-red-700 bg-red-100 rounded-lg">
-              {submitError}
-            </div>
-          )}
+
 
           {/* Desktop Table */}
           <div className="hidden md:block overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -261,11 +275,11 @@ const ConcernAuthority = () => {
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Department</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Consultant</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Staff Name</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Discharge Date</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Planned Authority</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Status</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">RMO Name</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Summary Report</th>
-                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Concern Dept</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Concern Dept</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -312,7 +326,7 @@ const ConcernAuthority = () => {
                         {record.staff_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.planned4 ? new Date(record.planned4).toLocaleDateString('en-GB') : 'N/A'}
+                        {record.planned4Date} {record.planned4Time}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
@@ -336,15 +350,15 @@ const ConcernAuthority = () => {
                           <span className="text-gray-500">No image</span>
                         )}
                       </td>
-                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                         {record.concern_dept}
                       </td>
                     </tr>
-                    
+
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="11" className="px-4 py-12 text-center text-gray-500">
+                    <td colSpan="12" className="px-4 py-12 text-center text-gray-500">
                       <Clock className="mx-auto mb-4 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium">No pending approvals</p>
                       <p>Records will appear here after Concern Department review</p>
@@ -361,11 +375,10 @@ const ConcernAuthority = () => {
               pendingRecords.map((record) => (
                 <div
                   key={record.id}
-                  className={`p-4 rounded-lg border shadow-sm ${
-                    selectedRecords[record.admission_no]
-                      ? 'border-green-400 bg-green-50'
-                      : 'border-gray-200 bg-white'
-                  }`}
+                  className={`p-4 rounded-lg border shadow-sm ${selectedRecords[record.admission_no]
+                    ? 'border-green-400 bg-green-50'
+                    : 'border-gray-200 bg-white'
+                    }`}
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-start gap-3">
@@ -390,7 +403,7 @@ const ConcernAuthority = () => {
                     <div><span className="text-gray-600">Dept:</span> <strong>{record.department}</strong></div>
                     <div><span className="text-gray-600">Consultant:</span> {record.consultant_name || 'N/A'}</div>
                     <div><span className="text-gray-600">Staff:</span> {record.staff_name}</div>
-                    <div><span className="text-gray-600">Planned:</span> {record.planned4 ? new Date(record.planned4).toLocaleDateString('en-GB') : 'N/A'}</div>
+                    <div><span className="text-gray-600">Planned Authority:</span> {record.planned4Date} {record.planned4Time}</div>
                     <div><span className="text-gray-600">RMO:</span> {record.rmo_name || 'N/A'}</div>
                   </div>
 
@@ -444,7 +457,8 @@ const ConcernAuthority = () => {
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Department</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Consultant</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Staff Name</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Discharge Date</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Planned Authority</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Actual Authority</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Status</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">RMO Name</th>
                   <th className="px-4 py-3 text-xs font-medium text-left uppercase">Summary Report</th>
@@ -462,13 +476,16 @@ const ConcernAuthority = () => {
                       <td className="px-4 py-3 text-sm">{record.department}</td>
                       <td className="px-4 py-3 text-sm">{record.consultant_name || 'N/A'}</td>
                       <td className="px-4 py-3 text-sm">{record.staff_name}</td>
-                      <td className="px-4 py-3 text-sm">
-                        {record.planned4 ? new Date(record.planned4).toLocaleDateString('en-GB') : 'N/A'}
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {record.planned4Date} {record.planned4Time}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {record.actual4Date} {record.actual4Time}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         {record.rmo_status}
                       </td>
-                    
+
                       <td className="px-4 py-3 text-sm">{record.rmo_name || 'N/A'}</td>
                       <td className="px-4 py-3 text-sm">
                         {record.summary_report_image ? (
@@ -481,21 +498,20 @@ const ConcernAuthority = () => {
                         ) : 'No image'}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          record.work_file === 'Yes'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs rounded-full ${record.work_file === 'Yes'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                          }`}>
                           {record.work_file || '-'}
                         </span>
                       </td>
-                       <td className="px-4 py-3 text-sm">{record.concern_dept}</td>
-                        <td className="px-4 py-3 text-sm">{record.concern_authority_work_file}</td>
+                      <td className="px-4 py-3 text-sm">{record.concern_dept}</td>
+                      <td className="px-4 py-3 text-sm">{record.concern_authority_work_file}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="11" className="py-12 text-center text-gray-500">
+                    <td colSpan="13" className="py-12 text-center text-gray-500">
                       <CheckCircle className="mx-auto mb-4 w-12 h-12 text-gray-300" />
                       <p>No completed approvals yet</p>
                     </td>
@@ -514,11 +530,10 @@ const ConcernAuthority = () => {
                     <div className="text-sm font-medium text-green-600">{record.admission_no}</div>
                     <div className="font-semibold">{record.patient_name}</div>
                   </div>
-                  <span className={`px-2 py-1 text-xs rounded-full ${
-                    record.delay4 === 'On Time' || !record.delay4
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700'
-                  }`}>
+                  <span className={`px-2 py-1 text-xs rounded-full ${record.delay4 === 'On Time' || !record.delay4
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-red-100 text-red-700'
+                    }`}>
                     {record.delay4 || 'N/A'}
                   </span>
                 </div>
@@ -526,8 +541,8 @@ const ConcernAuthority = () => {
                   <div>Dept: <strong>{record.department}</strong></div>
                   <div>Consultant: {record.consultant_name || 'N/A'}</div>
                   <div>Staff: {record.staff_name}</div>
-                  <div>Planned: {record.planned4 ? new Date(record.planned4).toLocaleDateString('en-GB') : 'N/A'}</div>
-                  <div>Actual: {record.actual4 ? new Date(record.actual4).toLocaleDateString('en-GB') : 'N/A'}</div>
+                  <div>Planned Authority: {record.planned4Date} {record.planned4Time}</div>
+                  <div>Actual Authority: {record.actual4Date} {record.actual4Time}</div>
                   <div>Work File: <strong className={record.concern_dept === 'Yes' ? 'text-green-700' : 'text-red-700'}>{record.concern_dept}</strong></div>
                 </div>
                 {record.summary_report_image && (

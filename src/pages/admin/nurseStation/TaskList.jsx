@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNotification } from '../../../contexts/NotificationContext';
 import {
     ClipboardList,
     Search,
@@ -33,7 +34,7 @@ const TaskList = () => {
     const [showCustomTaskInput, setShowCustomTaskInput] = useState(false);
     const [taskSearchQuery, setTaskSearchQuery] = useState('');
     const [savingNewTask, setSavingNewTask] = useState(false);
-    const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+    const { showNotification } = useNotification();
     const [availableNurses, setAvailableNurses] = useState([]);
     const [nurseSearchQuery, setNurseSearchQuery] = useState('');
     const [showNurseDropdown, setShowNurseDropdown] = useState(false);
@@ -52,7 +53,18 @@ const TaskList = () => {
     const [newCustomTask, setNewCustomTask] = useState('');
     const [addingCustomTask, setAddingCustomTask] = useState(false);
     const [expandedCard, setExpandedCard] = useState(null); // For mobile card expansion
-    
+
+    // Vitals Check Modal State
+    const [showVitalsModal, setShowVitalsModal] = useState(false);
+    const [selectedVitalsTask, setSelectedVitalsTask] = useState(null);
+    const [vitalsData, setVitalsData] = useState({
+        bloodPressure: '',
+        pulseRate: '',
+        temperature: '',
+        spo2: '',
+        rr: ''
+    });
+
     const tableRef = useRef(null);
     const refreshIntervalRef = useRef(null);
     const nurseInputRef = useRef(null);
@@ -128,19 +140,13 @@ const TaskList = () => {
             }
         `;
         document.head.appendChild(style);
-        
+
         return () => {
             document.head.removeChild(style);
         };
     }, []);
 
-    // Popup notification
-    const showNotification = (message, type = 'success') => {
-        setNotification({ show: true, message, type });
-        setTimeout(() => {
-            setNotification({ show: false, message: '', type: 'success' });
-        }, 3000);
-    };
+
 
     // Load available nurses from all_staff table
     const loadAvailableNurses = useCallback(async () => {
@@ -160,7 +166,7 @@ const TaskList = () => {
                         value: nurse.name,
                         label: nurse.name
                     }));
-                
+
                 setAvailableNurses(nurses);
             } else {
                 // Fallback if no nurses found
@@ -204,7 +210,7 @@ const TaskList = () => {
                 const bedMap = new Map();
                 data.forEach(record => {
                     if (record.bed_no) {
-                        if (!bedMap.has(record.bed_no) || 
+                        if (!bedMap.has(record.bed_no) ||
                             (record.timestamp && bedMap.get(record.bed_no).timestamp < record.timestamp)) {
                             bedMap.set(record.bed_no, {
                                 bedNo: record.bed_no,
@@ -242,7 +248,7 @@ const TaskList = () => {
                 const taskNames = data
                     .map(item => item.nurse_task)
                     .filter(task => task && task.trim() !== '');
-                
+
                 const uniqueTasks = [...new Set(taskNames)].sort();
                 setPredefinedTasks(uniqueTasks);
             } else {
@@ -292,15 +298,15 @@ const TaskList = () => {
     const addCustomTaskToDatabase = async (taskName) => {
         try {
             setAddingCustomTask(true);
-            
+
             const { data, error } = await supabase
                 .from('master')
                 .insert([
                     {
                         nurse_task: taskName,
-                        created_at: new Date().toLocaleString("en-CA", { 
-                            timeZone: "Asia/Kolkata", 
-                            hour12: false 
+                        created_at: new Date().toLocaleString("en-CA", {
+                            timeZone: "Asia/Kolkata",
+                            hour12: false
                         }).replace(',', '')
                     }
                 ])
@@ -332,7 +338,7 @@ const TaskList = () => {
         }
 
         const taskName = newCustomTask.trim();
-        
+
         // Check if task already exists
         if (predefinedTasks.includes(taskName)) {
             showNotification('This task already exists in the list!', 'info');
@@ -343,7 +349,7 @@ const TaskList = () => {
 
         try {
             await addCustomTaskToDatabase(taskName);
-            
+
             // Update the current task in new task form if we're in add task modal
             if (showAddTaskModal) {
                 const updatedTasks = [...newTaskData.tasks];
@@ -358,7 +364,7 @@ const TaskList = () => {
                     tasks: updatedTasks
                 }));
             }
-            
+
             setNewCustomTask('');
             setShowCustomTaskModal(false);
         } catch (error) {
@@ -368,13 +374,14 @@ const TaskList = () => {
     };
 
     // Load tasks from database
-    const loadTasks = useCallback(async () => {
+    const loadTasks = useCallback(async (showLoading = true) => {
         try {
-            setLoading(true);
+            if (showLoading) setLoading(true);
             const { data, error } = await supabase
                 .from('nurse_assign_task')
                 .select('*')
-                .order('timestamp', { ascending: false });
+                .order('timestamp', { ascending: false })
+                .order('id', { ascending: false });
 
             if (error) throw error;
 
@@ -386,11 +393,11 @@ const TaskList = () => {
                     } else if (typeof task.task === 'string') {
                         taskNames = [task.task];
                     }
-                    
+
                     // Determine status based on planned1 and actual1
                     let status = 'Pending';
                     let displayStatus = 'Pending';
-                    
+
                     if (task.planned1 && !task.actual1) {
                         status = 'Pending';
                         displayStatus = 'Pending';
@@ -401,7 +408,7 @@ const TaskList = () => {
                         status = 'Pending';
                         displayStatus = 'Pending';
                     }
-                    
+
                     return {
                         id: task.id,
                         taskId: task.task_no || `TASK-${task.id.toString().padStart(4, '0')}`,
@@ -420,7 +427,19 @@ const TaskList = () => {
                         room: task.room || 'N/A',
                         timestamp: task.timestamp,
                         planned1: task.planned1,
+                        planned1Date: task.planned1 ? new Date(task.planned1).toLocaleDateString('en-GB') : 'N/A',
+                        planned1Time: task.planned1 ? new Date(task.planned1).toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        }) : 'N/A',
                         actual1: task.actual1,
+                        actual1Date: task.actual1 ? new Date(task.actual1).toLocaleDateString('en-GB') : 'N/A',
+                        actual1Time: task.actual1 ? new Date(task.actual1).toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        }) : 'N/A',
                         tasksJson: task.task,
                         staff: task.staff || 'Regular' // Add staff field with default value
                     };
@@ -431,7 +450,7 @@ const TaskList = () => {
             console.error('Error loading tasks:', error);
             showNotification('Error loading tasks from database', 'error');
         } finally {
-            setLoading(false);
+            if (showLoading) setLoading(false);
         }
     }, []);
 
@@ -506,9 +525,9 @@ const TaskList = () => {
             }
 
             // Get current timestamp
-            const now = new Date().toLocaleString("en-CA", { 
-                timeZone: "Asia/Kolkata", 
-                hour12: false 
+            const now = new Date().toLocaleString("en-CA", {
+                timeZone: "Asia/Kolkata",
+                hour12: false
             }).replace(',', '');
 
             // Get the last task number to generate sequential numbers
@@ -527,7 +546,7 @@ const TaskList = () => {
             // Prepare task data array - one entry per task
             const taskEntries = validTasks.map((taskName, index) => {
                 const taskNumber = `TASK-${(baseTaskNumber + index).toString().padStart(4, '0')}`;
-                
+
                 return {
                     // task_no: taskNumber,
                     timestamp: now,
@@ -557,7 +576,7 @@ const TaskList = () => {
             if (error) throw error;
 
             showNotification(`${validTasks.length} task(s) added successfully!`, 'success');
-            
+
             // Reset form
             setNewTaskData({
                 shift: 'Shift A',
@@ -569,10 +588,10 @@ const TaskList = () => {
             setSelectedBed('');
             setSelectedPatientInfo(null);
             setShowAddTaskModal(false);
-            
+
             // Refresh tasks
             loadTasks();
-            
+
         } catch (error) {
             console.error('Error adding new tasks:', error);
             showNotification('Error adding new tasks', 'error');
@@ -594,20 +613,20 @@ const TaskList = () => {
     }, []);
 
     // Filter predefined tasks based on search query
-    const filteredPredefinedTasks = taskSearchQuery 
+    const filteredPredefinedTasks = taskSearchQuery
         ? predefinedTasks.filter(task =>
             task.toLowerCase().includes(taskSearchQuery.toLowerCase())
-          )
+        )
         : predefinedTasks;
 
     useEffect(() => {
-        loadTasks();
+        loadTasks(true); // Initial load with spinner
         loadPredefinedTasks();
         loadAvailableNurses();
-        
-        // Refresh every 2 minutes instead of 30 seconds
+
+        // Refresh every 2 minutes without showing loading spinner
         refreshIntervalRef.current = setInterval(() => {
-            loadTasks();
+            loadTasks(false);
         }, 120000);
 
         return () => {
@@ -634,31 +653,51 @@ const TaskList = () => {
     };
 
     const handleStatusUpdate = async (taskId, taskNo, newStatus) => {
+        // Check if this is a Vitals Check task
+        const taskToCheck = tasks.find(t => t.id === taskId);
+        const isVitalsTask = taskToCheck?.taskNames?.some(name =>
+            name.toLowerCase().includes("vitals check") ||
+            name.toLowerCase().includes("bp, pulse, temp")
+        );
+
+        if (newStatus === 'Completed' && isVitalsTask) {
+            setSelectedVitalsTask(taskToCheck);
+            setVitalsData({
+                bloodPressure: '',
+                pulseRate: '',
+                temperature: '',
+                spo2: '',
+                rr: ''
+            });
+            setShowVitalsModal(true);
+            return; // Stop standard status update
+        }
+
         try {
-            const now = new Date().toLocaleString("en-CA", { 
-                timeZone: "Asia/Kolkata", 
-                hour12: false 
+            const now = new Date().toLocaleString("en-CA", {
+                timeZone: "Asia/Kolkata",
+                hour12: false
             }).replace(',', '');
 
             const { error } = await supabase
                 .from('nurse_assign_task')
-                .update({ 
-                    actual1: newStatus === 'Completed' ? now : null 
+                .update({
+                    actual1: newStatus === 'Completed' ? now : null
                 })
                 .eq('task_no', taskNo);
 
             if (error) throw error;
-            
+
             // Update local state without reloading all data
-            setTasks(prevTasks => 
-                prevTasks.map(task => 
-                    task.id === taskId 
-                        ? { 
-                            ...task, 
+            setTasks(prevTasks =>
+                prevTasks.map(task =>
+                    task.id === taskId
+                        ? {
+                            ...task,
                             status: newStatus,
                             displayStatus: newStatus,
-                            actual1: newStatus === 'Completed' ? now : null 
-                        } 
+                            actual1: newStatus === 'Completed' ? now : null
+                        }
                         : task
                 )
             );
@@ -667,6 +706,67 @@ const TaskList = () => {
             console.error('Error updating task status:', error);
             showNotification('Error updating task status', 'error');
         }
+    };
+
+    // Handle Vitals Form Submission
+    const handleSubmitVitals = async () => {
+        if (!selectedVitalsTask) return;
+
+        // Validate that at least one field is filled
+        const hasAnyValue = Object.values(vitalsData).some(value => value.trim() !== '');
+        if (!hasAnyValue) {
+            showNotification('Please enter at least one vital sign value', 'error');
+            return;
+        }
+
+        try {
+            setLoading(true);
+
+            const now = new Date().toLocaleString("en-CA", {
+                timeZone: "Asia/Kolkata",
+                hour12: false
+            }).replace(',', '');
+
+            const { error } = await supabase
+                .from('nurse_assign_task')
+                .update({
+                    check_up: vitalsData,
+                    actual1: now
+                })
+                .eq('task_no', selectedVitalsTask.taskId);
+
+            if (error) throw error;
+
+            // Update local state
+            setTasks(prevTasks =>
+                prevTasks.map(task =>
+                    task.id === selectedVitalsTask.id
+                        ? {
+                            ...task,
+                            status: 'Completed',
+                            displayStatus: 'Completed',
+                            actual1: now
+                        }
+                        : task
+                )
+            );
+
+            showNotification('Vitals Check saved successfully!', 'success');
+            setShowVitalsModal(false);
+            setSelectedVitalsTask(null);
+        } catch (error) {
+            console.error('Error saving vitals:', error);
+            showNotification('Failed to save vitals. Please try again.', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleVitalsCheckboxChange = (field) => {
+        setVitalsData(prev => ({
+            ...prev,
+            [field]: !prev[field]
+        }));
     };
 
     // Handle edit task - now includes shift and staff fields
@@ -683,11 +783,11 @@ const TaskList = () => {
     };
 
     // Filter nurses based on search query
-    const filteredNurses = nurseSearchQuery 
+    const filteredNurses = nurseSearchQuery
         ? availableNurses.filter(nurse =>
             nurse.label.toLowerCase().includes(nurseSearchQuery.toLowerCase()) ||
             nurse.value.toLowerCase().includes(nurseSearchQuery.toLowerCase())
-          )
+        )
         : availableNurses;
 
     // Filter tasks based on active tab
@@ -696,7 +796,7 @@ const TaskList = () => {
             task.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             task.ipdNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             task.taskId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            task.taskNames?.some(taskName => 
+            task.taskNames?.some(taskName =>
                 taskName.toLowerCase().includes(searchTerm.toLowerCase())
             );
 
@@ -731,13 +831,12 @@ const TaskList = () => {
         const isOTStaff = task.staff === 'OT Staff';
 
         return (
-            <div 
-                className={`mobile-card bg-white rounded-xl shadow-sm border ${isOTStaff ? 'border-orange-200' : 'border-gray-200'} mb-3 overflow-hidden ${
-                    isExpanded ? 'mobile-card-expanded shadow-md' : ''
-                } ${isOTStaff ? 'ot-staff-row' : ''}`}
+            <div
+                className={`mobile-card bg-white rounded-xl shadow-sm border ${isOTStaff ? 'border-orange-200' : 'border-gray-200'} mb-3 overflow-hidden ${isExpanded ? 'mobile-card-expanded shadow-md' : ''
+                    } ${isOTStaff ? 'ot-staff-row' : ''}`}
             >
                 {/* Card Header - Always Visible */}
-                <div 
+                <div
                     className="p-4 cursor-pointer"
                     onClick={() => toggleCardExpansion(task.id)}
                 >
@@ -747,17 +846,16 @@ const TaskList = () => {
                                 <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${getStatusColor(task.displayStatus)}`}>
                                     {task.displayStatus}
                                 </span>
-                                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                    task.staff === 'OT Staff' 
-                                        ? 'bg-orange-100 text-orange-800 border border-orange-200' 
-                                        : 'bg-blue-100 text-blue-800 border border-blue-200'
-                                }`}>
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${task.staff === 'OT Staff'
+                                    ? 'bg-orange-100 text-orange-800 border border-orange-200'
+                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                    }`}>
                                     {task.staff || 'Staff Nurse'}
                                 </span>
                             </div>
-                            
+
                             <h3 className="font-bold text-gray-800 text-base mb-1">{task.patientName}</h3>
-                            
+
                             <div className="grid grid-cols-2 gap-2 mb-2">
                                 <div className="flex items-center gap-1 text-sm text-gray-600">
                                     <span className="font-medium">IPD:</span>
@@ -768,7 +866,7 @@ const TaskList = () => {
                                     <span className="text-gray-800">{task.bedNo}</span>
                                 </div>
                             </div>
-                            
+
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <User className="w-4 h-4 text-gray-400" />
@@ -817,16 +915,33 @@ const TaskList = () => {
                                 </div>
                                 <div className="bg-gray-50 p-3 rounded-lg">
                                     <label className="block text-xs font-medium text-gray-500 mb-1">Shift</label>
-                                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                        task.shift === 'Shift A' ? 'bg-blue-100 text-blue-800' : 
-                                        task.shift === 'Shift B' ? 'bg-green-100 text-green-800' : 
-                                        task.shift === 'Shift C' ? 'bg-purple-100 text-purple-800' : 
-                                        'bg-gray-100 text-gray-800'
-                                    }`}>
+                                    <span className={`px-2 py-1 rounded text-xs font-medium ${task.shift === 'Shift A' ? 'bg-blue-100 text-blue-800' :
+                                        task.shift === 'Shift B' ? 'bg-green-100 text-green-800' :
+                                            task.shift === 'Shift C' ? 'bg-purple-100 text-purple-800' :
+                                                'bg-gray-100 text-gray-800'
+                                        }`}>
                                         {task.shift}
                                     </span>
                                 </div>
                             </div>
+
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Planned Task</label>
+                                <div className="flex items-center gap-1 font-medium text-gray-700">
+                                    <Clock className="w-4 h-4 text-gray-400" />
+                                    <span className="text-sm">{task.planned1Date} {task.planned1Time}</span>
+                                </div>
+                            </div>
+
+                            {activeTab === 'History' && (
+                                <div className="bg-gray-50 p-3 rounded-lg">
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Actual Task</label>
+                                    <div className="flex items-center gap-1 font-medium text-green-700">
+                                        <CheckCircle className="w-4 h-4 text-green-500" />
+                                        <span className="text-sm">{task.actual1Date} {task.actual1Time}</span>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="bg-gray-50 p-3 rounded-lg">
                                 <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
@@ -879,7 +994,7 @@ const TaskList = () => {
     // Custom Task Modal Component - Fixed with useCallback to prevent re-renders
     const CustomTaskModal = useCallback(() => {
         const [localTask, setLocalTask] = useState(newCustomTask);
-        
+
         useEffect(() => {
             setLocalTask(newCustomTask);
         }, [newCustomTask]);
@@ -919,7 +1034,7 @@ const TaskList = () => {
                             <Plus className="w-6 h-6 text-purple-600" />
                             Add Custom Task
                         </h2>
-                        <button 
+                        <button
                             onClick={() => {
                                 setShowCustomTaskModal(false);
                                 setNewCustomTask('');
@@ -993,12 +1108,12 @@ const TaskList = () => {
     const EditModal = () => {
         const [showNurseDropdownEdit, setShowNurseDropdownEdit] = useState(false);
         const [nurseSearchQueryEdit, setNurseSearchQueryEdit] = useState('');
-        
-        const filteredNursesEdit = nurseSearchQueryEdit 
+
+        const filteredNursesEdit = nurseSearchQueryEdit
             ? availableNurses.filter(nurse =>
                 nurse.label.toLowerCase().includes(nurseSearchQueryEdit.toLowerCase()) ||
                 nurse.value.toLowerCase().includes(nurseSearchQueryEdit.toLowerCase())
-              )
+            )
             : availableNurses;
 
         const handleEditChange = (field, value) => {
@@ -1032,21 +1147,21 @@ const TaskList = () => {
                     .eq('task_no', editingTask.taskNo);
 
                 if (error) throw error;
-                
+
                 // Update local state without reloading all data
-                setTasks(prevTasks => 
-                    prevTasks.map(task => 
-                        task.id === editingTask.id 
-                            ? { 
-                                ...task, 
+                setTasks(prevTasks =>
+                    prevTasks.map(task =>
+                        task.id === editingTask.id
+                            ? {
+                                ...task,
                                 assignNurse: editingTask.assignNurse.trim(),
                                 shift: editingTask.shift,
                                 staff: editingTask.staff
-                            } 
+                            }
                             : task
                     )
                 );
-                
+
                 showNotification('Task updated successfully!', 'success');
                 setEditingTask(null);
                 setNurseSearchQueryEdit('');
@@ -1069,7 +1184,7 @@ const TaskList = () => {
                             Edit Task Details
                         </h2>
 
-                        <button 
+                        <button
                             onClick={() => {
                                 setEditingTask(null);
                                 setNurseSearchQueryEdit('');
@@ -1098,21 +1213,19 @@ const TaskList = () => {
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="font-medium">Current Shift:</span>
-                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                        editingTask.shift === 'Shift A' ? 'bg-blue-100 text-blue-800' : 
-                                        editingTask.shift === 'Shift B' ? 'bg-green-100 text-green-800' : 
-                                        editingTask.shift === 'Shift C' ? 'bg-purple-100 text-purple-800' : 
-                                        'bg-gray-100 text-gray-800'
-                                    }`}>
+                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${editingTask.shift === 'Shift A' ? 'bg-blue-100 text-blue-800' :
+                                        editingTask.shift === 'Shift B' ? 'bg-green-100 text-green-800' :
+                                            editingTask.shift === 'Shift C' ? 'bg-purple-100 text-purple-800' :
+                                                'bg-gray-100 text-gray-800'
+                                        }`}>
                                         {editingTask.shift || 'Not assigned'}
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="font-medium">Staff Type:</span>
-                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                        editingTask.staff === 'OT Staff' ? 'bg-orange-100 text-orange-800 ot-staff-badge' : 
+                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${editingTask.staff === 'OT Staff' ? 'bg-orange-100 text-orange-800 ot-staff-badge' :
                                         'bg-gray-100 text-gray-800'
-                                    }`}>
+                                        }`}>
                                         {editingTask.staff || 'Regular'}
                                     </span>
                                 </div>
@@ -1133,13 +1246,12 @@ const TaskList = () => {
                                             key={staffOption}
                                             type="button"
                                             onClick={() => handleEditChange('staff', staffOption)}
-                                            className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-all ${
-                                                editingTask.staff === staffOption
-                                                    ? staffOption === 'OT Staff' 
-                                                        ? 'bg-orange-100 text-orange-700 border-orange-300 ot-staff-badge' 
-                                                        : 'bg-blue-100 text-blue-700 border-blue-300'
-                                                    : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
-                                            }`}
+                                            className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-all ${editingTask.staff === staffOption
+                                                ? staffOption === 'OT Staff'
+                                                    ? 'bg-orange-100 text-orange-700 border-orange-300 ot-staff-badge'
+                                                    : 'bg-blue-100 text-blue-700 border-blue-300'
+                                                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                                                }`}
                                         >
                                             {staffOption}
                                             {staffOption === 'OT Staff' && (
@@ -1165,21 +1277,20 @@ const TaskList = () => {
                                             key={shiftOption}
                                             type="button"
                                             onClick={() => handleEditChange('shift', shiftOption)}
-                                            className={`px-3 py-2 text-sm rounded-lg border transition-all ${
-                                                editingTask.shift === shiftOption
-                                                    ? shiftOption === 'Shift A' 
-                                                        ? 'bg-blue-100 text-blue-700 border-blue-300' 
-                                                        : shiftOption === 'Shift B'
+                                            className={`px-3 py-2 text-sm rounded-lg border transition-all ${editingTask.shift === shiftOption
+                                                ? shiftOption === 'Shift A'
+                                                    ? 'bg-blue-100 text-blue-700 border-blue-300'
+                                                    : shiftOption === 'Shift B'
                                                         ? 'bg-green-100 text-green-700 border-green-300'
                                                         : shiftOption === 'Shift C'
-                                                        ? 'bg-purple-100 text-purple-700 border-purple-300'
-                                                        : 'bg-gray-100 text-gray-700 border-gray-300'
-                                                    : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
-                                            }`}
+                                                            ? 'bg-purple-100 text-purple-700 border-purple-300'
+                                                            : 'bg-gray-100 text-gray-700 border-gray-300'
+                                                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                                                }`}
                                         >
                                             {shiftOption === 'Shift A' ? 'Shift A (Morning)' :
-                                             shiftOption === 'Shift B' ? 'Shift B (Evening)' :
-                                             shiftOption === 'Shift C' ? 'Shift C (Night)' : shiftOption}
+                                                shiftOption === 'Shift B' ? 'Shift B (Evening)' :
+                                                    shiftOption === 'Shift C' ? 'Shift C (Night)' : shiftOption}
                                         </button>
                                     ))}
                                 </div>
@@ -1211,7 +1322,7 @@ const TaskList = () => {
                                     {/* Nurse Dropdown */}
                                     {showNurseDropdownEdit && (
                                         <>
-                                            <div 
+                                            <div
                                                 className="fixed inset-0 z-0"
                                                 onClick={() => setShowNurseDropdownEdit(false)}
                                             />
@@ -1293,11 +1404,11 @@ const TaskList = () => {
         const [showNewNurseDropdown, setShowNewNurseDropdown] = useState(false);
         const [newNurseSearchQuery, setNewNurseSearchQuery] = useState('');
 
-        const filteredNewNurses = newNurseSearchQuery 
+        const filteredNewNurses = newNurseSearchQuery
             ? availableNurses.filter(nurse =>
                 nurse.label.toLowerCase().includes(newNurseSearchQuery.toLowerCase()) ||
                 nurse.value.toLowerCase().includes(newNurseSearchQuery.toLowerCase())
-              )
+            )
             : availableNurses;
 
         return (
@@ -1308,7 +1419,7 @@ const TaskList = () => {
                             <Plus className="w-6 h-6 text-green-600" />
                             Add New Task
                         </h2>
-                        <button 
+                        <button
                             onClick={resetAddTaskForm}
                             className="p-2 hover:bg-gray-100 rounded-full transition"
                         >
@@ -1324,7 +1435,7 @@ const TaskList = () => {
                                     <Bed className="w-5 h-5 text-blue-600" />
                                     <h3 className="text-lg font-semibold text-gray-800">Select Occupied Bed</h3>
                                 </div>
-                                
+
                                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto p-2">
                                         {occupiedBeds.length === 0 ? (
@@ -1339,10 +1450,10 @@ const TaskList = () => {
                                                     key={bed.bedNo}
                                                     type="button"
                                                     onClick={() => handleBedSelect(bed)}
-                                                    className={`p-3 rounded-lg border transition-all text-left ${selectedBed === bed.bedNo 
-                                                        ? 'bg-blue-100 border-blue-500 shadow-sm' 
+                                                    className={`p-3 rounded-lg border transition-all text-left ${selectedBed === bed.bedNo
+                                                        ? 'bg-blue-100 border-blue-500 shadow-sm'
                                                         : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     <div className="flex items-center justify-between mb-2">
                                                         <span className="font-medium text-gray-800">Bed: {bed.bedNo}</span>
@@ -1424,7 +1535,7 @@ const TaskList = () => {
                                         <ClipboardList className="w-5 h-5 text-purple-600" />
                                         <h3 className="text-lg font-semibold text-gray-800">Task Details</h3>
                                     </div>
-                                    
+
                                     <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                             {/* Staff Type Selection */}
@@ -1445,7 +1556,7 @@ const TaskList = () => {
                                                     OT Staff rows will be highlighted in orange
                                                 </p>
                                             </div>
-                                            
+
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Shift
@@ -1462,7 +1573,7 @@ const TaskList = () => {
                                                     <option value="General">General</option>
                                                 </select>
                                             </div>
-                                            
+
                                             <div className="relative">
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Assign Nurse
@@ -1482,11 +1593,11 @@ const TaskList = () => {
                                                         placeholder="Search or select nurse..."
                                                     />
                                                     <User className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                                                    
+
                                                     {/* Nurse Dropdown for Add Task */}
                                                     {showNewNurseDropdown && (
                                                         <>
-                                                            <div 
+                                                            <div
                                                                 className="fixed inset-0 z-0"
                                                                 onClick={() => setShowNewNurseDropdown(false)}
                                                             />
@@ -1530,7 +1641,7 @@ const TaskList = () => {
                                                     )}
                                                 </div>
                                             </div>
-                                            
+
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Reminder
@@ -1544,7 +1655,7 @@ const TaskList = () => {
                                                     <option value="Yes">Yes</option>
                                                 </select>
                                             </div>
-                                            
+
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Start Date
@@ -1558,7 +1669,7 @@ const TaskList = () => {
                                                 />
                                             </div>
                                         </div>
-                                        
+
                                         {/* Tasks List */}
                                         <div>
                                             <div className="flex justify-between items-center mb-3">
@@ -1581,7 +1692,7 @@ const TaskList = () => {
                                                     Add Task
                                                 </button>
                                             </div>
-                                            
+
                                             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-60 overflow-y-auto space-y-3">
                                                 {newTaskData.tasks.map((task, index) => (
                                                     <div key={index} className="flex gap-3 items-center">
@@ -1640,7 +1751,7 @@ const TaskList = () => {
                         >
                             Cancel
                         </button>
-                        
+
                         <div className="flex items-center gap-3">
                             <span className="text-sm text-gray-500">
                                 {selectedPatientInfo ? `Bed: ${selectedBed}` : 'No bed selected'}
@@ -1660,52 +1771,13 @@ const TaskList = () => {
         );
     };
 
-    // Notification Popup Component
-    const NotificationPopup = () => {
-        if (!notification.show) return null;
-
-        const bgColor = notification.type === 'success' 
-            ? 'bg-green-50 border-green-200' 
-            : notification.type === 'error' 
-            ? 'bg-red-50 border-red-200' 
-            : 'bg-yellow-50 border-yellow-200';
-        
-        const textColor = notification.type === 'success' 
-            ? 'text-green-800' 
-            : notification.type === 'error' 
-            ? 'text-red-800' 
-            : 'text-yellow-800';
-        
-        const Icon = notification.type === 'success' 
-            ? CheckCircle 
-            : notification.type === 'error' 
-            ? XCircle 
-            : Info;
-
-        return (
-            <div className="fixed top-4 right-4 z-[100] animate-slide-in">
-                <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg ${bgColor}`}>
-                    <Icon className={`w-5 h-5 ${textColor}`} />
-                    <span className={`font-medium ${textColor}`}>{notification.message}</span>
-                    <button
-                        onClick={() => setNotification({ show: false, message: '', type: 'success' })}
-                        className="ml-4 text-gray-400 hover:text-gray-600"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-        );
-    };
-
     return (
-        <div className="p-4 md:p-6 bg-gray-50 min-h-screen flex flex-col">
-            {/* Notification Popup */}
-            <NotificationPopup />
+        <div className="p-4 md:p-6 bg-gray-50 min-h-screen flex flex-col max-w-full overflow-x-hidden">
+            {/* Notification Popup logic handled by global NotificationProvider */}
 
-            <div className="max-w-7xl mx-auto flex-1 flex flex-col">
+            <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col min-w-0">
                 {/* Header with Add Task Button - Fixed at top */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 w-full overflow-hidden">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                             <ClipboardList className="w-8 h-8 text-blue-600" />
@@ -1735,7 +1807,7 @@ const TaskList = () => {
                                 History
                             </button>
                         </div>
-                        
+
                         {/* Add Task Button */}
                         <button
                             onClick={() => setShowAddTaskModal(true)}
@@ -1781,7 +1853,7 @@ const TaskList = () => {
                     ) : (
                         <>
                             {/* Desktop Table View - Scrollable within container */}
-                            <div className="hidden md:block flex-1 min-h-0 overflow-hidden">
+                            <div className="hidden md:block flex-1 min-h-0 overflow-hidden w-full">
                                 <div ref={contentContainerRef} className="bg-white rounded-xl shadow-lg border border-gray-200 h-full flex flex-col">
                                     <div ref={tableRef} className="overflow-auto flex-1 scroll-container">
                                         <table className="w-full whitespace-nowrap">
@@ -1797,6 +1869,14 @@ const TaskList = () => {
                                                     <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                                                     <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Staff Type</th>
                                                     <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Start Date</th>
+                                                    {activeTab === 'Pending' ? (
+                                                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Planned Task</th>
+                                                    ) : (
+                                                        <>
+                                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Planned Task</th>
+                                                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actual Task</th>
+                                                        </>
+                                                    )}
                                                     <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">IPD No.</th>
                                                     <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Patient Name</th>
                                                     <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
@@ -1809,13 +1889,13 @@ const TaskList = () => {
                                             <tbody className="divide-y divide-gray-200 text-sm">
                                                 {filteredTasks.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan={activeTab === 'Pending' ? 13 : 11} className="px-6 py-8 text-center text-gray-500">
+                                                        <td colSpan={activeTab === 'Pending' ? 14 : 13} className="px-6 py-8 text-center text-gray-500">
                                                             <div className="flex flex-col items-center justify-center">
                                                                 <ClipboardList className="w-12 h-12 text-gray-300 mb-2" />
                                                                 <p>No {activeTab.toLowerCase()} tasks found</p>
                                                                 <p className="text-xs text-gray-400 mt-1">
-                                                                    {activeTab === 'Pending' 
-                                                                        ? 'Tasks with planned date but not yet completed' 
+                                                                    {activeTab === 'Pending'
+                                                                        ? 'Tasks with planned date but not yet completed'
                                                                         : 'Tasks that have been completed'}
                                                                 </p>
                                                             </div>
@@ -1823,8 +1903,8 @@ const TaskList = () => {
                                                     </tr>
                                                 ) : (
                                                     filteredTasks.map((task) => (
-                                                        <tr 
-                                                            key={task.id} 
+                                                        <tr
+                                                            key={task.id}
                                                             className={`hover:bg-gray-50 transition-colors ${task.staff === 'OT Staff' ? 'ot-staff-row' : ''}`}
                                                         >
                                                             {activeTab === 'Pending' && (
@@ -1853,21 +1933,34 @@ const TaskList = () => {
                                                                     {task.displayStatus}
                                                                 </span>
                                                             </td>
-                                                         <td className="px-6 py-4">
-          <span className={`px-2 py-1 rounded text-xs font-medium ${
-            task.staff === 'OT Staff' 
-              ? 'bg-green-100 text-green-800 border border-green-200' 
-              : 'bg-red-100 text-gray-800'
-          }`}>
-            {task.staff || 'Staff Nurse'}
-          </span>
-        </td>
+                                                            <td className="px-6 py-4">
+                                                                <span className={`px-2 py-1 rounded text-xs font-medium ${task.staff === 'OT Staff'
+                                                                    ? 'bg-green-100 text-green-800 border border-green-200'
+                                                                    : 'bg-red-100 text-gray-800'
+                                                                    }`}>
+                                                                    {task.staff || 'Staff Nurse'}
+                                                                </span>
+                                                            </td>
                                                             <td className="px-6 py-4 text-gray-700">
                                                                 <div className="flex items-center gap-1">
                                                                     <Calendar className="w-3.5 h-3.5 text-gray-400" />
                                                                     {task.taskStartDate}
                                                                 </div>
                                                             </td>
+                                                            {activeTab === 'Pending' ? (
+                                                                <td className="px-6 py-4 text-gray-700 font-medium">
+                                                                    {task.planned1Date} {task.planned1Time}
+                                                                </td>
+                                                            ) : (
+                                                                <>
+                                                                    <td className="px-6 py-4 text-gray-700 font-medium">
+                                                                        {task.planned1Date} {task.planned1Time}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-green-700 font-medium">
+                                                                        {task.actual1Date} {task.actual1Time}
+                                                                    </td>
+                                                                </>
+                                                            )}
                                                             <td className="px-6 py-4 text-gray-900 font-medium">{task.ipdNumber}</td>
                                                             <td className="px-6 py-4 text-gray-700">{task.patientName}</td>
                                                             <td className="px-6 py-4 text-gray-500">
@@ -1881,12 +1974,11 @@ const TaskList = () => {
                                                                 {task.assignNurse}
                                                             </td>
                                                             <td className="px-6 py-4 text-gray-700">
-                                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                                                    task.shift === 'Shift A' ? 'bg-blue-100 text-blue-800' : 
-                                                                    task.shift === 'Shift B' ? 'bg-green-100 text-green-800' : 
-                                                                    task.shift === 'Shift C' ? 'bg-purple-100 text-purple-800' : 
-                                                                    'bg-gray-100 text-gray-800'
-                                                                }`}>
+                                                                <span className={`px-2 py-1 rounded text-xs font-medium ${task.shift === 'Shift A' ? 'bg-blue-100 text-blue-800' :
+                                                                    task.shift === 'Shift B' ? 'bg-green-100 text-green-800' :
+                                                                        task.shift === 'Shift C' ? 'bg-purple-100 text-purple-800' :
+                                                                            'bg-gray-100 text-gray-800'
+                                                                    }`}>
                                                                     {task.shift}
                                                                 </span>
                                                             </td>
@@ -1923,8 +2015,8 @@ const TaskList = () => {
                                             <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                             <p className="text-gray-500 mb-1">No {activeTab.toLowerCase()} tasks found</p>
                                             <p className="text-xs text-gray-400">
-                                                {activeTab === 'Pending' 
-                                                    ? 'Tasks with planned date but not yet completed' 
+                                                {activeTab === 'Pending'
+                                                    ? 'Tasks with planned date but not yet completed'
                                                     : 'Tasks that have been completed'}
                                             </p>
                                         </div>
@@ -1942,12 +2034,136 @@ const TaskList = () => {
 
             {/* Edit Modal - Now allows editing shift, assign_nurse, and staff */}
             {editingTask && <EditModal />}
-            
+
             {/* Add Task Modal */}
             {showAddTaskModal && <AddTaskModal />}
-            
+
             {/* Custom Task Modal - Fixed with local state */}
             <CustomTaskModal />
+
+            {/* Vitals Check Modal */}
+            {showVitalsModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm animate-fade-in overflow-hidden">
+                        <div className="p-4 border-b flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-100">
+                            <div className="flex items-center gap-2">
+                                <CheckCircle className="w-6 h-6 text-green-600" />
+                                <h3 className="font-bold text-lg text-gray-800">Vitals Check</h3>
+                            </div>
+                            <button
+                                onClick={() => setShowVitalsModal(false)}
+                                className="p-2 hover:bg-gray-100 rounded-full transition"
+                                disabled={loading}
+                            >
+                                <X className="w-5 h-5 text-gray-600" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-gray-600 font-medium italic">Record performed vitals:</p>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Blood Pressure
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g., 120/80"
+                                        value={vitalsData.bloodPressure}
+                                        onChange={(e) => setVitalsData(prev => ({ ...prev, bloodPressure: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                        disabled={loading}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Pulse Rate (bpm)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g., 72"
+                                        value={vitalsData.pulseRate}
+                                        onChange={(e) => setVitalsData(prev => ({ ...prev, pulseRate: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                        disabled={loading}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Temperature (°F)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g., 98.6"
+                                        value={vitalsData.temperature}
+                                        onChange={(e) => setVitalsData(prev => ({ ...prev, temperature: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                        disabled={loading}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        SPO2 (%)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g., 98"
+                                        value={vitalsData.spo2}
+                                        onChange={(e) => setVitalsData(prev => ({ ...prev, spo2: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                        disabled={loading}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Respiratory Rate (breaths/min)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g., 16"
+                                        value={vitalsData.rr}
+                                        onChange={(e) => setVitalsData(prev => ({ ...prev, rr: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                        disabled={loading}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t flex gap-3 bg-gray-50">
+                            <button
+                                onClick={() => setShowVitalsModal(false)}
+                                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors"
+                                disabled={loading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSubmitVitals}
+                                disabled={loading}
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-sm transition-all shadow-sm disabled:opacity-50"
+                            >
+                                {loading ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                                        <span>Saving...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle className="w-4 h-4" />
+                                        <span>Submit</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Eye, Trash2, Edit, Filter, Search, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import supabase from '../../../SupabaseClient'; // Adjust the path to your supabase client
+import { useNotification } from '../../../contexts/NotificationContext';
 
 // Status Badge Component
 const StatusBadge = ({ status }) => {
@@ -33,7 +34,7 @@ const PatientCard = ({ patient, onViewDetails, onEdit, onDelete }) => {
   const bedNo = patient.bed_no || patient.bedNumber || 'N/A';
   const ipdNo = patient.ipd_number || patient.admission_no || 'N/A';
   const patCategory = patient.pat_category || patient.patientCategory || 'General';
-  const timeInWard = patient.time_in_ward || calculateTimeInWard(patient.admission_date) || 'N/A';
+  const timeInWard = patient.time_in_ward || 'N/A';
   const mobileNumber = patient.phone_no || patient.mobileNumber || 'N/A';
   const wardType = patient.ward_type || 'N/A';
   const roomNo = patient.room || patient.room_no || 'N/A';
@@ -49,7 +50,7 @@ const PatientCard = ({ patient, onViewDetails, onEdit, onDelete }) => {
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
       const diffDays = Math.floor(diffHours / 24);
       const remainingHours = diffHours % 24;
-      
+
       if (diffDays > 0) {
         return `${diffDays}d ${remainingHours}h`;
       } else if (diffHours > 0) {
@@ -74,7 +75,7 @@ const PatientCard = ({ patient, onViewDetails, onEdit, onDelete }) => {
           {age}
         </div>
       </div>
-      
+
       <div className="space-y-2 mb-4 border-t pt-3">
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">Ward/Bed:</span>
@@ -101,7 +102,7 @@ const PatientCard = ({ patient, onViewDetails, onEdit, onDelete }) => {
           <span className="font-semibold text-green-600">{timeInWard}</span>
         </div>
       </div>
-      
+
       <div className="flex items-center justify-between pt-3 border-t mb-4">
         <StatusBadge status={patCategory} />
         {/* <span className="text-xs text-gray-500">ID: {patient.id}</span> */}
@@ -146,13 +147,14 @@ export default function PatientProfile() {
   const [showFilters, setShowFilters] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
+  const { showNotification } = useNotification();
 
   // Load patients from Supabase
   const fetchPatients = useCallback(async () => {
     try {
       setLoading(true);
       setIsRefreshing(true);
-      
+
       const { data, error } = await supabase
         .from('ipd_admissions')
         .select('*')
@@ -210,15 +212,15 @@ export default function PatientProfile() {
     const department = patient.department || '';
 
     const matchesSearch = patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         ipdNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         consultantDr.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         department.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesWard = wardFilter === 'All Patients' || 
-                       bedLocation === wardFilter || 
-                       wardType === wardFilter;
+      ipdNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      consultantDr.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      department.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesWard = wardFilter === 'All Patients' ||
+      bedLocation === wardFilter ||
+      wardType === wardFilter;
     const matchesCategory = filterCategory === 'All' || patCategory === filterCategory;
-    
+
     return matchesSearch && matchesWard && matchesCategory;
   });
 
@@ -230,7 +232,7 @@ export default function PatientProfile() {
     // Find the patient to edit
     const patient = patientsData.find(p => p.id === patientId);
     if (patient) {
-      alert(`Edit functionality for patient: ${patient.patient_name}\nID: ${patientId}`);
+      showNotification(`Edit functionality for patient: ${patient.patient_name}`, 'info');
       // You can implement an edit modal here
     }
   };
@@ -245,16 +247,16 @@ export default function PatientProfile() {
 
         if (error) {
           console.error('Error deleting patient:', error);
-          alert('Failed to delete patient record.');
+          showNotification('Failed to delete patient record.', 'error');
           return;
         }
 
         // Refresh the list
         await fetchPatients();
-        alert('Patient record deleted successfully!');
+        showNotification('Patient record deleted successfully!', 'success');
       } catch (error) {
         console.error('Error deleting patient:', error);
-        alert('Failed to delete patient record.');
+        showNotification('Failed to delete patient record.', 'error');
       }
     }
   };
@@ -351,11 +353,10 @@ export default function PatientProfile() {
                     <button
                       key={filter}
                       onClick={() => setWardFilter(filter)}
-                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                        wardFilter === filter
+                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${wardFilter === filter
                           ? 'bg-green-600 text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                        }`}
                     >
                       {filter}
                     </button>
@@ -370,11 +371,10 @@ export default function PatientProfile() {
                       <button
                         key={category}
                         onClick={() => setFilterCategory(category)}
-                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                          filterCategory === category
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${filterCategory === category
                             ? 'bg-blue-600 text-white shadow-md'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                          }`}
                       >
                         {category}
                       </button>
@@ -397,7 +397,7 @@ export default function PatientProfile() {
                 </div>
               </div>
             )}
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredPatients.length > 0 ? (
                 filteredPatients.map(patient => (

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Eye, FileText, CheckCircle } from 'lucide-react';
 import supabase from '../../../SupabaseClient'; // Adjust import path
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const LabAdvice = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -8,14 +9,14 @@ const LabAdvice = () => {
   const [historyAdvices, setHistoryAdvices] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
-  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState(null);
   const [viewingRecord, setViewingRecord] = useState(null);
   const [modalError, setModalError] = useState('');
+  const { showNotification } = useNotification();
   const [isLoading, setIsLoading] = useState(false);
   const [availableTests, setAvailableTests] = useState([]);
   const [successMessage, setSuccessMessage] = useState('');
-  
+  const [selectedPatient, setSelectedPatient] = useState(null);
+
   const [formData, setFormData] = useState({
     priority: 'Medium',
     category: '',
@@ -28,7 +29,7 @@ const LabAdvice = () => {
   // Load data from Supabase
   useEffect(() => {
     loadData();
-    
+
     // Set up real-time subscription for lab table
     const setupRealtimeSubscription = () => {
       const channel = supabase
@@ -52,22 +53,15 @@ const LabAdvice = () => {
     };
 
     const cleanup = setupRealtimeSubscription();
-    
+
     return () => {
       cleanup();
     };
   }, []);
 
-  // Show success popup
+  // Show success popup (legacy - use showNotification)
   const showSuccessNotification = (message) => {
-    setSuccessMessage(message);
-    setShowSuccessPopup(true);
-    
-    // Auto hide after 5 seconds
-    setTimeout(() => {
-      setShowSuccessPopup(false);
-      setSuccessMessage('');
-    }, 5000);
+    showNotification(message, 'success');
   };
 
   // Fetch tests from investigation table based on category and type
@@ -125,7 +119,7 @@ const LabAdvice = () => {
   const loadPendingData = async () => {
     try {
       setIsLoading(true);
-      
+
       // Fetch from ipd_admissions where planned1 is not null and actual1 is null
       const { data: pendingPatients, error } = await supabase
         .from('ipd_admissions')
@@ -159,7 +153,7 @@ const LabAdvice = () => {
         department: patient.department,
         timestamp: patient.timestamp,
         ipd_number: patient.ipd_number
-        
+
       }));
 
       return transformedData;
@@ -207,7 +201,8 @@ const LabAdvice = () => {
         radiologyTests: record.radiology_tests || [],
         remarks: record.remarks || '',
         completedDate: record.timestamp,
-        ipd_number: record.ipd_number
+        ipd_number: record.ipd_number,
+        timestamp: record.timestamp,
 
       }));
 
@@ -223,7 +218,7 @@ const LabAdvice = () => {
       setIsLoading(true);
       const pendingData = await loadPendingData();
       const historyData = await loadHistoryData();
-      
+
       setPendingAdvices(pendingData);
       setHistoryAdvices(historyData);
     } catch (error) {
@@ -256,7 +251,7 @@ const LabAdvice = () => {
           }
         }
       }
-      
+
       return 'LAB-001';
     } catch (error) {
       console.error('Error generating lab number:', error);
@@ -284,10 +279,10 @@ const LabAdvice = () => {
     setFormData(prev => ({
       ...prev,
       [name]: value,
-      ...(name === 'category' && { 
-        pathologyTests: [], 
-        radiologyType: '', 
-        radiologyTests: [] 
+      ...(name === 'category' && {
+        pathologyTests: [],
+        radiologyType: '',
+        radiologyTests: []
       }),
       ...(name === 'radiologyType' && { radiologyTests: [] })
     }));
@@ -299,7 +294,7 @@ const LabAdvice = () => {
       const newTests = currentTests.includes(testName)
         ? currentTests.filter(t => t !== testName)
         : [...currentTests, testName];
-      
+
       return {
         ...prev,
         [prev.category === 'Pathology' ? 'pathologyTests' : 'radiologyTests']: newTests
@@ -325,10 +320,11 @@ const LabAdvice = () => {
 
     try {
       setIsLoading(true);
-      
+
       // Generate lab number
       const labNumber = await generateLabNumber();
-      
+
+      // Prepare data for lab table
       // Prepare data for lab table
       const labData = {
         lab_no: labNumber,
@@ -337,8 +333,8 @@ const LabAdvice = () => {
         phone_no: selectedPatient.phoneNumber,
         father_husband_name: selectedPatient.fatherHusband,
         age: selectedPatient.age,
-        consultant_dr: selectedPatient.consultant_dr,
-        refer_by_dr: selectedPatient.refer_by_dr,
+        consultant_dr: selectedPatient.consultantDr,
+        refer_by_dr: selectedPatient.referByDr,
         gender: selectedPatient.gender,
         reason_for_visit: selectedPatient.reasonForVisit,
         bed_no: selectedPatient.bedNo,
@@ -353,13 +349,13 @@ const LabAdvice = () => {
         radiology_tests: formData.category === 'Radiology' ? formData.radiologyTests : null,
         remarks: formData.remarks || '',
         status: 'completed',
-        planned1: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
+        planned1: new Date().toLocaleString("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour12: false
         }).replace(',', ''),
-        timestamp: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
+        timestamp: new Date().toLocaleString("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour12: false
         }).replace(',', ''),
         ipd_number: selectedPatient.ipd_number
       };
@@ -376,13 +372,13 @@ const LabAdvice = () => {
 
       // Reload data
       await loadData();
-      
+
       setShowModal(false);
       resetForm();
-      
+
       // Show success popup instead of alert
       showSuccessNotification(`Lab advice submitted successfully! Lab Number: ${labNumber}`);
-      
+
     } catch (error) {
       console.error('Error submitting lab advice:', error);
       setModalError(`Failed to submit: ${error.message}`);
@@ -422,24 +418,6 @@ const LabAdvice = () => {
         </div>
       )}
 
-      {/* Success Popup */}
-      {showSuccessPopup && (
-        <div className="fixed top-4 right-4 z-50 animate-fade-in-down">
-          <div className="flex items-center p-4 space-x-3 bg-green-50 border border-green-200 rounded-lg shadow-lg">
-            <CheckCircle className="w-6 h-6 text-green-600" />
-            <div>
-              <p className="font-medium text-green-800">{successMessage}</p>
-            </div>
-            <button
-              onClick={() => setShowSuccessPopup(false)}
-              className="p-1 text-green-400 rounded-full hover:text-green-600 hover:bg-green-100"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Lab Advice</h1>
@@ -451,21 +429,19 @@ const LabAdvice = () => {
       <div className="flex gap-2 p-1 bg-white rounded-lg border border-gray-200 shadow-sm">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            activeTab === 'pending'
-              ? 'bg-green-600 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
+          className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'pending'
+            ? 'bg-green-600 text-white'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
         >
           Pending ({pendingAdvices.length})
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            activeTab === 'history'
-              ? 'bg-green-600 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
+          className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'history'
+            ? 'bg-green-600 text-white'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
         >
           History ({historyAdvices.length})
         </button>
@@ -511,10 +487,10 @@ const LabAdvice = () => {
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{patient.admission_no}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.patientName}</td>
-                    
+
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.phoneNumber}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.consultantDr}</td>
-                      
+
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.referByDr}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.fatherHusband || 'N/A'}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{patient.reasonForVisit}</td>
@@ -598,6 +574,7 @@ const LabAdvice = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Lab No</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Timestamp</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
                   <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th>
@@ -618,6 +595,14 @@ const LabAdvice = () => {
                   historyAdvices.map((record) => (
                     <tr key={record.adviceId} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                        {record.timestamp ? new Date(record.timestamp).toLocaleString('en-GB', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          day: '2-digit',
+                          month: 'short'
+                        }) : '-'}
+                      </td>
                       <td className="px-4 py-3 text-sm font-medium text-purple-600 whitespace-nowrap">{record.admission_no}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
@@ -627,13 +612,12 @@ const LabAdvice = () => {
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <span
-                          className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                            record.priority === 'High'
-                              ? 'bg-red-100 text-red-700'
-                              : record.priority === 'Medium'
+                          className={`px-2 py-1 text-xs font-semibold rounded-full ${record.priority === 'High'
+                            ? 'bg-red-100 text-red-700'
+                            : record.priority === 'Medium'
                               ? 'bg-yellow-100 text-yellow-700'
                               : 'bg-green-100 text-green-700'
-                          }`}
+                            }`}
                         >
                           {record.priority}
                         </span>
@@ -642,13 +626,13 @@ const LabAdvice = () => {
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                         {record.category === 'Pathology' && record.pathologyTests?.length > 0
                           ? record.pathologyTests.slice(0, 2).join(', ') +
-                            (record.pathologyTests?.length > 2 ? '...' : '')
+                          (record.pathologyTests?.length > 2 ? '...' : '')
                           : '-'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                         {record.category === 'Radiology' && record.radiologyTests?.length > 0
                           ? record.radiologyTests.slice(0, 2).join(', ') +
-                            (record.radiologyTests?.length > 2 ? '...' : '')
+                          (record.radiologyTests?.length > 2 ? '...' : '')
                           : '-'}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
@@ -1017,11 +1001,10 @@ const LabAdvice = () => {
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Priority:</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      viewingRecord.priority === 'High' ? 'bg-red-100 text-red-700' :
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${viewingRecord.priority === 'High' ? 'bg-red-100 text-red-700' :
                       viewingRecord.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
+                        'bg-green-100 text-green-700'
+                      }`}>
                       {viewingRecord.priority}
                     </span>
                   </div>

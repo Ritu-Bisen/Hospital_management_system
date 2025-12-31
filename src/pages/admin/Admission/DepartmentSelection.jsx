@@ -20,7 +20,7 @@ const DepartmentSelection = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
-  
+
   // New state for notification popup
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
@@ -28,7 +28,7 @@ const DepartmentSelection = () => {
 
   useEffect(() => {
     loadPatients();
-    
+
     // Set up real-time subscription for patient updates
     const setupRealtimeSubscription = () => {
       const channel = supabase
@@ -52,7 +52,7 @@ const DepartmentSelection = () => {
     };
 
     const cleanup = setupRealtimeSubscription();
-    
+
     return () => {
       cleanup();
     };
@@ -63,7 +63,7 @@ const DepartmentSelection = () => {
     if (showNotification) {
       const timer = setTimeout(() => {
         setShowNotification(false);
-      }, 3000);
+      }, 1000);
       return () => clearTimeout(timer);
     }
   }, [showNotification]);
@@ -77,7 +77,7 @@ const DepartmentSelection = () => {
   const loadPatients = async () => {
     try {
       setIsLoading(true);
-      
+
       const { data, error } = await supabase
         .from('patient_admission')
         .select('*')
@@ -104,12 +104,16 @@ const DepartmentSelection = () => {
           status: patient.status || 'pending',
           department: patient.department || '',
           assignedDate: patient.actual1 || '',
-          timestamp: patient.timestamp || ''
+          timestamp: patient.timestamp || '',
+          planned1: patient.planned1 || '',
+          actual1: patient.actual1 || '',
+          planned1Formatted: patient.planned1 ? patient.planned1.split(' ')[0].split('-').reverse().join('/') + ' ' + (patient.planned1.split(' ')[1]?.substring(0, 5) || '') : '-',
+          actual1Formatted: patient.actual1 ? patient.actual1.split(' ')[0].split('-').reverse().join('/') + ' ' + (patient.actual1.split(' ')[1]?.substring(0, 5) || '') : '-'
         }));
 
         const pending = transformedPatients.filter(p => p.status === 'pending');
         const assigned = transformedPatients.filter(p => p.status === 'assigned');
-        
+
         setPendingPatients(pending);
         setHistoryPatients(assigned);
 
@@ -148,12 +152,12 @@ const DepartmentSelection = () => {
 
     try {
       setIsAssigning(true);
-      
-      const timestamp = new Date().toLocaleString("en-CA", { 
-        timeZone: "Asia/Kolkata", 
-        hour12: false 
+
+      const timestamp = new Date().toLocaleString("en-CA", {
+        timeZone: "Asia/Kolkata",
+        hour12: false
       }).replace(',', '');
-      
+
       const { data, error } = await supabase
         .from('patient_admission')
         .update({
@@ -171,15 +175,15 @@ const DepartmentSelection = () => {
 
       if (data && data.length > 0) {
         await loadPatients();
-        
+
         setShowAssignModal(false);
         setSelectedPatient(null);
         setSelectedDepartment('');
-        
+
         // Show success notification instead of alert
         showNotificationPopup(`Patient successfully assigned to ${selectedDepartment}`, 'success');
       }
-      
+
     } catch (error) {
       console.error('Failed to assign department:', error);
       setAssignError(`Failed to assign department: ${error.message}`);
@@ -219,9 +223,9 @@ const DepartmentSelection = () => {
 
   const filterPatients = (patients) => {
     if (!searchQuery.trim()) return patients;
-    
+
     const query = searchQuery.toLowerCase();
-    return patients.filter(patient => 
+    return patients.filter(patient =>
       patient.admissionNo?.toLowerCase().includes(query) ||
       patient.patientName?.toLowerCase().includes(query) ||
       patient.phoneNumber?.toLowerCase().includes(query) ||
@@ -323,11 +327,10 @@ const DepartmentSelection = () => {
           <button
             onClick={() => setActiveView('pending')}
             disabled={isLoading}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors md:text-base ${
-              activeView === 'pending'
-                ? 'text-yellow-600 border-b-2 border-yellow-600 bg-yellow-50'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors md:text-base ${activeView === 'pending'
+              ? 'text-yellow-600 border-b-2 border-yellow-600 bg-yellow-50'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <Clock className="w-4 h-4 md:w-5 md:h-5" />
             Pending ({stats.pending})
@@ -336,11 +339,10 @@ const DepartmentSelection = () => {
           <button
             onClick={() => setActiveView('history')}
             disabled={isLoading}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors md:text-base ${
-              activeView === 'history'
-                ? 'text-green-600 border-b-2 border-green-600 bg-green-50'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors md:text-base ${activeView === 'history'
+              ? 'text-green-600 border-b-2 border-green-600 bg-green-50'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <CheckCircle className="w-4 h-4 md:w-5 md:h-5" />
             History ({historyPatients.length})
@@ -355,6 +357,7 @@ const DepartmentSelection = () => {
                   <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                     <tr>
                       <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Action</th>
+                      <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Planned Time</th>
                       <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Admission No</th>
                       <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Patient Name</th>
                       <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Phone Number</th>
@@ -369,7 +372,7 @@ const DepartmentSelection = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {isLoading ? (
                       <tr>
-                        <td colSpan="10" className="px-4 py-8 text-center text-gray-500">
+                        <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
                           <div className="flex flex-col items-center">
                             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mb-4"></div>
                             <p className="text-gray-700">Loading patients...</p>
@@ -387,6 +390,9 @@ const DepartmentSelection = () => {
                             >
                               Assign
                             </button>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                            {patient.planned1Formatted}
                           </td>
                           <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
                             {patient.admissionNo}
@@ -419,7 +425,7 @@ const DepartmentSelection = () => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="10" className="px-4 py-8 text-center text-gray-500">
+                        <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
                           <Clock className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                           <p className="text-lg font-medium text-gray-900">
                             {searchQuery ? 'No patients found matching your search' : 'No pending assignments'}
@@ -447,7 +453,7 @@ const DepartmentSelection = () => {
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
                         <div className="text-xs font-medium text-green-600 mb-1">
-                          {patient.admissionNo}
+                          {patient.admissionNo} • <span className="text-gray-500">{patient.planned1Formatted}</span>
                         </div>
                         <h3 className="text-sm font-semibold text-gray-900">
                           {patient.patientName}
@@ -507,6 +513,8 @@ const DepartmentSelection = () => {
                   <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                     <tr>
                       <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Department</th>
+                      <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Planned Time</th>
+                      <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Actual Time</th>
                       <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Admission No</th>
                       <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Patient Name</th>
                       <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Phone Number</th>
@@ -516,13 +524,13 @@ const DepartmentSelection = () => {
                       <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Reason For Visit</th>
                       <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Age</th>
                       <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Gender</th>
-                      <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Date Assigned</th>
+                      {/* <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-700 uppercase bg-gray-50 border-b-2 border-gray-200">Date Assigned</th> */}
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {isLoading ? (
                       <tr>
-                        <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
+                        <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
                           <div className="flex flex-col items-center">
                             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600 mb-4"></div>
                             <p className="text-gray-700">Loading patients...</p>
@@ -536,6 +544,12 @@ const DepartmentSelection = () => {
                             <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${getDepartmentBadge(patient.department)}`}>
                               {patient.department}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                            {patient.planned1Formatted}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-green-700 whitespace-nowrap">
+                            {patient.actual1Formatted}
                           </td>
                           <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
                             {patient.admissionNo}
@@ -564,14 +578,14 @@ const DepartmentSelection = () => {
                           <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                             {patient.gender}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                          {/* <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                             {formatDate(patient.assignedDate)}
-                          </td>
+                          </td> */}
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
+                        <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
                           <CheckCircle className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                           <p className="text-lg font-medium text-gray-900">
                             {searchQuery ? 'No patients found matching your search' : 'No assignment history'}
@@ -599,7 +613,7 @@ const DepartmentSelection = () => {
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
                         <div className="text-xs font-medium text-green-600 mb-1">
-                          {patient.admissionNo}
+                          {patient.admissionNo} • <span className="text-gray-500">{patient.planned1Formatted}</span>
                         </div>
                         <h3 className="text-sm font-semibold text-gray-900">
                           {patient.patientName}
@@ -634,9 +648,9 @@ const DepartmentSelection = () => {
                         <span className="text-gray-600">Reason:</span>
                         <p className="mt-1 text-sm text-gray-900">{patient.reasonForVisit}</p>
                       </div>
-                      <div className="pt-2 mt-2 border-t border-gray-100">
-                        <span className="text-gray-600">Assigned:</span>
-                        <p className="mt-1 text-sm text-gray-900">{formatDate(patient.assignedDate)}</p>
+                      <div className="pt-2 mt-2 border-t border-gray-100 flex justify-between">
+                        <span className="text-gray-600">Actual:</span>
+                        <span className="font-medium text-green-700">{patient.actual1Formatted}</span>
                       </div>
                     </div>
                   </div>
@@ -668,7 +682,7 @@ const DepartmentSelection = () => {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="p-4 md:p-6">
               <div className="space-y-4">
                 <div>
@@ -724,7 +738,7 @@ const DepartmentSelection = () => {
                   </select>
                 </div>
               </div>
-              
+
               {assignError && (
                 <div className="p-3 mt-4 text-sm text-red-700 bg-red-100 rounded-lg">
                   {assignError}
@@ -763,40 +777,34 @@ const DepartmentSelection = () => {
 
       {/* Notification Popup */}
       {showNotification && (
-        <div className={`fixed top-4 right-4 z-50 max-w-md animate-slide-in ${
-          notificationType === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-        } border rounded-lg shadow-lg`}>
+        <div className={`fixed top-4 right-4 z-50 max-w-md animate-slide-in ${notificationType === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+          } border rounded-lg shadow-lg`}>
           <div className="p-4">
             <div className="flex items-start">
-              <div className={`flex-shrink-0 p-1 rounded-full ${
-                notificationType === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-              }`}>
+              <div className={`flex-shrink-0 p-1 rounded-full ${notificationType === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                }`}>
                 <Bell className="w-5 h-5" />
               </div>
               <div className="ml-3">
-                <p className={`text-sm font-medium ${
-                  notificationType === 'success' ? 'text-green-800' : 'text-red-800'
-                }`}>
+                <p className={`text-sm font-medium ${notificationType === 'success' ? 'text-green-800' : 'text-red-800'
+                  }`}>
                   {notificationMessage}
                 </p>
               </div>
               <button
                 onClick={() => setShowNotification(false)}
-                className={`ml-4 flex-shrink-0 ${
-                  notificationType === 'success' ? 'text-green-400 hover:text-green-600' : 'text-red-400 hover:text-red-600'
-                }`}
+                className={`ml-4 flex-shrink-0 ${notificationType === 'success' ? 'text-green-400 hover:text-green-600' : 'text-red-400 hover:text-red-600'
+                  }`}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           </div>
           {/* Progress bar */}
-          <div className={`h-1 w-full ${
-            notificationType === 'success' ? 'bg-green-200' : 'bg-red-200'
-          }`}>
-            <div className={`h-full ${
-              notificationType === 'success' ? 'bg-green-500' : 'bg-red-500'
-            } animate-progress`}></div>
+          <div className={`h-1 w-full ${notificationType === 'success' ? 'bg-green-200' : 'bg-red-200'
+            }`}>
+            <div className={`h-full ${notificationType === 'success' ? 'bg-green-500' : 'bg-red-500'
+              } animate-progress`}></div>
           </div>
         </div>
       )}

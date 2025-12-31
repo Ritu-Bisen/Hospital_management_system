@@ -11,7 +11,7 @@ export default function RMOTask() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterShift, setFilterShift] = useState('all');
   const [expandedCard, setExpandedCard] = useState(null);
-  
+
   // Get IPD number from parent component context
   const { ipdNumber } = useOutletContext();
 
@@ -19,9 +19,9 @@ export default function RMOTask() {
   const fetchRMOTasks = async () => {
     try {
       setLoading(true);
-      
+
       console.log('Fetching RMO tasks for IPD:', ipdNumber);
-      
+
       let query = supabase
         .from('rmo_assign_task')
         .select('*')
@@ -55,9 +55,9 @@ export default function RMOTask() {
         rmoName: task.assign_rmo || 'Dr. Smith',
         instructions: task.reminder || '',
         status: task.actual1 ? 'Completed' : 'Pending',
-        plannedTime: task.planned1 ? new Date(task.planned1).toLocaleString() : '',
-        actualTime: task.actual1 ? new Date(task.actual1).toLocaleString() : '',
-        delayStatus: task.planned1 && task.actual1 ? 
+        plannedTime: task.planned1 ? new Date(task.planned1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+        actualTime: task.actual1 ? new Date(task.actual1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+        delayStatus: task.planned1 && task.actual1 ?
           (new Date(task.actual1) > new Date(task.planned1) ? 'Delayed' : 'On Time') : 'Pending',
         supabaseData: {
           id: task.id,
@@ -103,15 +103,15 @@ export default function RMOTask() {
     try {
       const storedPending = localStorage.getItem('rmoTasksPending');
       const storedHistory = localStorage.getItem('rmoTasksHistory');
-      
+
       if (storedPending) {
         const allPending = JSON.parse(storedPending);
-        const filteredPending = ipdNumber && ipdNumber !== 'N/A' 
+        const filteredPending = ipdNumber && ipdNumber !== 'N/A'
           ? allPending.filter(task => task.ipdNumber === ipdNumber)
           : allPending;
         setPendingList(filteredPending);
       }
-      
+
       if (storedHistory) {
         const allHistory = JSON.parse(storedHistory);
         const filteredHistory = ipdNumber && ipdNumber !== 'N/A'
@@ -137,9 +137,9 @@ export default function RMOTask() {
 
   const getFilteredTasks = () => {
     const tasks = activeTab === 'pending' ? pendingList : historyList;
-    
+
     return tasks.filter(task => {
-      const matchesSearch = 
+      const matchesSearch =
         task.taskName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.ipdNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -173,7 +173,7 @@ export default function RMOTask() {
 
     return (
       <div className="bg-white rounded-lg border border-gray-200 mb-3">
-        <div 
+        <div
           className="p-3 cursor-pointer"
           onClick={() => toggleCardExpansion(task.id)}
         >
@@ -187,9 +187,9 @@ export default function RMOTask() {
                   {task.shift}
                 </span>
               </div>
-              
+
               <h3 className="font-bold text-gray-800 text-sm mb-1">{task.taskName}</h3>
-              
+
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div className="flex items-center gap-1 text-xs text-gray-600">
                   <span className="font-medium">Patient:</span>
@@ -200,7 +200,7 @@ export default function RMOTask() {
                   <span className="text-gray-800">{task.ipdNumber}</span>
                 </div>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   <User className="w-3 h-3 text-gray-400" />
@@ -293,39 +293,37 @@ export default function RMOTask() {
             <div>
               <h1 className="text-xl md:text-2xl font-bold">RMO Tasks</h1>
               <p className="text-xs opacity-90 mt-1">
-                {ipdNumber && ipdNumber !== 'N/A' 
-                  ? `Tasks for IPD: ${ipdNumber}` 
+                {ipdNumber && ipdNumber !== 'N/A'
+                  ? `Tasks for IPD: ${ipdNumber}`
                   : 'All RMO Tasks'}
               </p>
             </div>
           </div>
-          
+
           {/* Right side: Tabs, Search and Filter in one row */}
           <div className="flex items-center gap-3">
             {/* Tabs */}
             <div className="flex items-center bg-white/20 rounded-lg p-1">
               <button
                 onClick={() => setActiveTab('history')}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'history'
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${activeTab === 'history'
                     ? 'bg-white text-green-600'
                     : 'text-white hover:bg-white/30'
-                }`}
+                  }`}
               >
                 Complete ({historyList.length})
               </button>
               <button
                 onClick={() => setActiveTab('pending')}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'pending'
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${activeTab === 'pending'
                     ? 'bg-white text-green-600'
                     : 'text-white hover:bg-white/30'
-                }`}
+                  }`}
               >
                 Pending ({pendingList.length})
               </button>
             </div>
-            
+
             {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-300 w-4 h-4" />
@@ -337,7 +335,7 @@ export default function RMOTask() {
                 className="w-48 pl-9 pr-3 py-2 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-sm"
               />
             </div>
-            
+
             {/* Shift Filter */}
             <select
               value={filterShift}
@@ -362,8 +360,8 @@ export default function RMOTask() {
               <div className="flex-1">
                 <h1 className="text-xl font-bold">RMO Tasks</h1>
                 <p className="text-xs opacity-90 mt-1">
-                  {ipdNumber && ipdNumber !== 'N/A' 
-                    ? `Tasks for IPD: ${ipdNumber}` 
+                  {ipdNumber && ipdNumber !== 'N/A'
+                    ? `Tasks for IPD: ${ipdNumber}`
                     : 'All RMO Tasks'}
                 </p>
               </div>
@@ -375,26 +373,24 @@ export default function RMOTask() {
               <div className="flex items-center bg-white/20 rounded-lg p-0.5">
                 <button
                   onClick={() => setActiveTab('history')}
-                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                    activeTab === 'history'
+                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${activeTab === 'history'
                       ? 'bg-white text-green-600'
                       : 'text-white hover:bg-white/30'
-                  }`}
+                    }`}
                 >
                   Complete ({historyList.length})
                 </button>
                 <button
                   onClick={() => setActiveTab('pending')}
-                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                    activeTab === 'pending'
+                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${activeTab === 'pending'
                       ? 'bg-white text-green-600'
                       : 'text-white hover:bg-white/30'
-                  }`}
+                    }`}
                 >
                   Pending ({pendingList.length})
                 </button>
               </div>
-              
+
               {/* Search and Filter in same row */}
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
@@ -407,7 +403,7 @@ export default function RMOTask() {
                     className="w-full pl-8 pr-3 py-1.5 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-xs"
                   />
                 </div>
-                
+
                 <select
                   value={filterShift}
                   onChange={(e) => setFilterShift(e.target.value)}
@@ -440,8 +436,8 @@ export default function RMOTask() {
                   <p className="text-gray-500 text-xs mt-1">
                     {ipdNumber && ipdNumber !== 'N/A'
                       ? `No RMO tasks found for IPD: ${ipdNumber}`
-                      : searchTerm 
-                        ? 'No tasks match your search' 
+                      : searchTerm
+                        ? 'No tasks match your search'
                         : 'No tasks available'
                     }
                   </p>
@@ -476,6 +472,10 @@ export default function RMOTask() {
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Shift</th>
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Assigned RMO</th>
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Ward/Bed</th>
+                      <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Planned Time</th>
+                      {activeTab === 'history' && (
+                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Actual Time</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -513,6 +513,14 @@ export default function RMOTask() {
                           </div>
                           <div className="text-xs text-gray-500">Bed: {task.bedNo || 'N/A'}</div>
                         </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {task.plannedTime}
+                        </td>
+                        {activeTab === 'history' && (
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {task.actualTime}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -528,8 +536,8 @@ export default function RMOTask() {
                   <p className="text-gray-500 text-xs mt-1">
                     {ipdNumber && ipdNumber !== 'N/A'
                       ? `No RMO tasks found for IPD: ${ipdNumber}`
-                      : searchTerm 
-                        ? 'No tasks match your search' 
+                      : searchTerm
+                        ? 'No tasks match your search'
                         : 'No tasks available'
                     }
                   </p>

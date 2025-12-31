@@ -31,7 +31,7 @@ const CompleteDetail = ({ nurseName, onClose }) => {
         try {
             setLoading(true);
             setError(null);
-            
+
             const { data: tasksData, error } = await supabase
                 .from('nurse_assign_task')
                 .select('*')
@@ -51,19 +51,33 @@ const CompleteDetail = ({ nurseName, onClose }) => {
                     shift: task.shift || 'N/A',
                     taskName: task.task || 'N/A',
                     startDate: task.start_date || 'N/A',
+                    planned1: task.planned1,
+                    planned1Date: task.planned1 ? new Date(task.planned1).toLocaleDateString('en-GB') : 'N/A',
+                    planned1Time: task.planned1 ? new Date(task.planned1).toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    }) : 'N/A',
+                    actual1: task.actual1,
+                    actual1Date: task.actual1 ? new Date(task.actual1).toLocaleDateString('en-GB') : 'N/A',
+                    actual1Time: task.actual1 ? new Date(task.actual1).toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    }) : 'N/A',
                     reminder: task.reminder || 'No',
                     wardType: task.ward_type || 'N/A',
                     room: task.room || 'N/A',
                     ipdNumber: task.Ipd_number || 'N/A',
                 }));
-                
+
                 setNurseTasks(formattedTasks);
-                
+
                 const completedTasks = formattedTasks.filter(task => task.status === 'Completed').length;
                 const pendingTasks = formattedTasks.filter(task => task.status === 'Pending').length;
                 const totalTasks = formattedTasks.length;
                 const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-                
+
                 setSummary({
                     totalTasks,
                     completed: completedTasks,
@@ -101,7 +115,7 @@ const CompleteDetail = ({ nurseName, onClose }) => {
     };
 
     const getShiftColor = (shift) => {
-        switch(shift) {
+        switch (shift) {
             case 'Shift A': return 'bg-blue-100 text-blue-800';
             case 'Shift B': return 'bg-green-100 text-green-800';
             case 'Shift C': return 'bg-purple-100 text-purple-800';
@@ -111,8 +125,8 @@ const CompleteDetail = ({ nurseName, onClose }) => {
 
     const getFilterButtonClass = (filter) => {
         const baseClass = "px-4 py-2 rounded-lg text-sm font-medium transition-colors";
-        return activeFilter === filter 
-            ? `${baseClass} bg-blue-600 text-white` 
+        return activeFilter === filter
+            ? `${baseClass} bg-blue-600 text-white`
             : `${baseClass} bg-gray-100 text-gray-700 hover:bg-gray-200`;
     };
 
@@ -143,7 +157,7 @@ const CompleteDetail = ({ nurseName, onClose }) => {
                             <p className="text-sm text-gray-600">Complete task history and performance</p>
                         </div>
                     </div>
-                    <button 
+                    <button
                         onClick={onClose}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
                     >
@@ -218,7 +232,7 @@ const CompleteDetail = ({ nurseName, onClose }) => {
                                     </span>
                                 </div>
                                 <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
-                                    <div 
+                                    <div
                                         className="h-full rounded-full bg-gradient-to-r from-green-500 to-blue-500"
                                         style={{ width: `${summary.completionRate}%` }}
                                     ></div>
@@ -266,8 +280,8 @@ const CompleteDetail = ({ nurseName, onClose }) => {
                             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                                 <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                                     <h3 className="text-lg font-bold text-gray-800">
-                                        {activeFilter === 'all' ? 'All Tasks' : 
-                                         activeFilter === 'completed' ? 'Completed Tasks' : 'Pending Tasks'} 
+                                        {activeFilter === 'all' ? 'All Tasks' :
+                                            activeFilter === 'completed' ? 'Completed Tasks' : 'Pending Tasks'}
                                         ({filteredTasks.length})
                                     </h3>
                                     <div className="text-sm text-gray-600">
@@ -282,6 +296,8 @@ const CompleteDetail = ({ nurseName, onClose }) => {
                                                 <th className="px-4 py-3 text-sm">Status</th>
                                                 <th className="px-4 py-3 text-sm">Shift</th>
                                                 <th className="px-4 py-3 text-sm">Patient Details</th>
+                                                <th className="px-4 py-3 text-sm">Planned Task</th>
+                                                <th className="px-4 py-3 text-sm">Actual Task</th>
                                                 <th className="px-4 py-3 text-sm">Task Details</th>
                                                 <th className="px-4 py-3 text-sm">Start Date</th>
                                                 <th className="px-4 py-3 text-sm">Location</th>
@@ -290,7 +306,7 @@ const CompleteDetail = ({ nurseName, onClose }) => {
                                         <tbody className="divide-y divide-gray-100">
                                             {filteredTasks.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan="7" className="px-4 py-12 text-center text-gray-500">
+                                                    <td colSpan="9" className="px-4 py-12 text-center text-gray-500">
                                                         No {activeFilter === 'all' ? '' : activeFilter} tasks found for {nurseName}
                                                     </td>
                                                 </tr>
@@ -318,6 +334,12 @@ const CompleteDetail = ({ nurseName, onClose }) => {
                                                                     <div>IPD: {task.ipdNumber}</div>
                                                                 </div>
                                                             </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 font-medium text-gray-700">
+                                                            {task.planned1Date} {task.planned1Time}
+                                                        </td>
+                                                        <td className="px-4 py-3 font-medium text-green-700">
+                                                            {task.actual1Date} {task.actual1Time}
                                                         </td>
                                                         <td className="px-4 py-3">
                                                             <div className="font-medium">{task.taskName}</div>
@@ -351,7 +373,7 @@ const CompleteDetail = ({ nurseName, onClose }) => {
                             </div>
 
                             {/* Simple Shift Distribution */}
-                          
+
                         </>
                     )}
                 </div>

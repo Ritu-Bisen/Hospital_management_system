@@ -88,7 +88,9 @@ const formatDate = (dateString) => {
 const PatientOverview = () => {
     const { data, calculateDaysInHospital, refetchPatientData } = useOutletContext();
     const [patientAdmissionData, setPatientAdmissionData] = useState(null);
+    const [vitalsData, setVitalsData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [vitalsLoading, setVitalsLoading] = useState(true);
 
     // Fetch patient admission data
     useEffect(() => {
@@ -124,8 +126,68 @@ const PatientOverview = () => {
 
         if (data) {
             fetchPatientAdmissionData();
+            fetchLatestVitals();
         }
     }, [data]);
+
+    // Fetch latest vitals data from nurse_assign_task
+    const fetchLatestVitals = async () => {
+        if (!data?.personalInfo?.ipd) {
+            console.log('PatientOverview: No IPD number available');
+            setVitalsLoading(false);
+            return;
+        }
+
+        try {
+            setVitalsLoading(true);
+            console.log('PatientOverview: Fetching vitals for IPD:', data.personalInfo.ipd);
+
+            const { data: vitalsRecords, error } = await supabase
+                .from('nurse_assign_task')
+                .select('check_up, actual1, task')
+                .eq('Ipd_number', data.personalInfo.ipd)
+                .eq('task', 'Vitals Check (BP, Pulse, Temp,SPO2,RR)')
+                .not('planned1', 'is', null)
+                .not('actual1', 'is', null)
+                .not('check_up', 'is', null)
+                .order('actual1', { ascending: false })
+                .limit(1);
+
+            console.log('PatientOverview: Query result:', { vitalsRecords, error });
+
+            if (error) {
+                console.error('PatientOverview: Query error:', error);
+                setVitalsData(null);
+            } else if (vitalsRecords && vitalsRecords.length > 0) {
+                const latestVitals = vitalsRecords[0];
+                console.log('PatientOverview: Found vitals:', latestVitals);
+
+                // Parse check_up if it's a string
+                let checkUpData = latestVitals.check_up;
+                if (typeof checkUpData === 'string') {
+                    try {
+                        checkUpData = JSON.parse(checkUpData);
+                    } catch (e) {
+                        console.error('PatientOverview: Error parsing check_up JSON:', e);
+                        checkUpData = {};
+                    }
+                }
+
+                setVitalsData({
+                    ...checkUpData,
+                    lastUpdated: latestVitals.actual1
+                });
+            } else {
+                console.log('PatientOverview: No vitals found for this patient');
+                setVitalsData(null);
+            }
+        } catch (err) {
+            console.error('PatientOverview: Error fetching vitals:', err);
+            setVitalsData(null);
+        } finally {
+            setVitalsLoading(false);
+        }
+    };
 
     if (!data) {
         return (
@@ -257,26 +319,39 @@ const PatientOverview = () => {
                 </div>
             </ExpandableSection>
 
-            {/* Current Vitals Monitoring Section
+            {/* Current Vitals Monitoring Section */}
             <ExpandableSection title="Current Vitals Monitoring" icon={Activity} defaultOpen={true}>
-                <div className="space-y-4">
-                    <div className="flex justify-between items-center mb-4">
-                        <p className="text-sm text-gray-600">
-                            Last Updated: {data.vitalsMonitoring.lastUpdated || 'N/A'}
-                        </p>
-                        <StatusBadge status={data.vitalsMonitoring.status} />
+                {vitalsLoading ? (
+                    <div className="text-center py-8">
+                        <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mb-2"></div>
+                        <p className="text-gray-600 text-sm">Loading vitals data...</p>
                     </div>
-                    <InfoGrid
-                        data={{
-                            'Blood Pressure': data.vitalsMonitoring.bloodPressure || 'N/A',
-                            'Heart Rate': data.vitalsMonitoring.heartRate || 'N/A',
-                            'Temperature': data.vitalsMonitoring.temperature || 'N/A',
-                            'Respiratory Rate': data.vitalsMonitoring.respiratoryRate || 'N/A',
-                            'Oxygen Saturation': data.vitalsMonitoring.oxygenSaturation || 'N/A',
-                        }}
-                    />
-                </div>
-            </ExpandableSection> */}
+                ) : vitalsData ? (
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center mb-4">
+                            <p className="text-sm text-gray-600">
+                                Last Updated: {formatDate(vitalsData.lastUpdated)}
+                            </p>
+                            <StatusBadge status="Recorded" />
+                        </div>
+                        <InfoGrid
+                            data={{
+                                'Blood Pressure': vitalsData.bloodPressure || 'N/A',
+                                'Pulse Rate': vitalsData.pulseRate ? `${vitalsData.pulseRate} bpm` : 'N/A',
+                                'Temperature': vitalsData.temperature ? `${vitalsData.temperature}°F` : 'N/A',
+                                'SPO2': vitalsData.spo2 ? `${vitalsData.spo2}%` : 'N/A',
+                                'Respiratory Rate': vitalsData.rr ? `${vitalsData.rr} breaths/min` : 'N/A',
+                            }}
+                        />
+                    </div>
+                ) : (
+                    <div className="text-center py-8">
+                        <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500 mb-1">No vitals data recorded yet</p>
+                        <p className="text-xs text-gray-400">Vitals will appear here once recorded by nursing staff</p>
+                    </div>
+                )}
+            </ExpandableSection>
 
             {/* Billing Information Section
             {data.billing && (

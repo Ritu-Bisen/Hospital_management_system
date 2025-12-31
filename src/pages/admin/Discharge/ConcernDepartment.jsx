@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, X, Clock, CheckCircle, Image as ImageIcon } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const ConcernDepartment = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -10,7 +11,7 @@ const ConcernDepartment = () => {
   const [concernDepartmentStatus, setConcernDepartmentStatus] = useState({});
   const [viewImageModal, setViewImageModal] = useState(false);
   const [viewingImage, setViewingImage] = useState(null);
-  const [submitError, setSubmitError] = useState('');
+  const { showNotification } = useNotification();
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingRecords, setUploadingRecords] = useState({});
 
@@ -59,10 +60,10 @@ const ConcernDepartment = () => {
         consultantName: record.consultant_name,
         staffName: record.staff_name,
         dischargeDate: record.actual1 ? new Date(record.actual1).toLocaleDateString('en-GB') : 'N/A',
-        dischargeTime: record.actual1 ? new Date(record.actual1).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        dischargeTime: record.actual1 ? new Date(record.actual1).toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: false 
+          hour12: false
         }) : 'N/A',
         status: record.rmo_status || 'N/A',
         rmoName: record.rmo_name || 'N/A',
@@ -70,10 +71,16 @@ const ConcernDepartment = () => {
         summaryReportImageName: record.summary_report_image_name,
         workFile: record.work_file,
         workFileDate: record.planned2 ? new Date(record.planned2).toLocaleDateString('en-GB') : 'N/A',
-        workFileTime: record.planned2 ? new Date(record.planned2).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        workFileTime: record.planned2 ? new Date(record.planned2).toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: false 
+          hour12: false
+        }) : 'N/A',
+        planned3Date: record.planned3 ? new Date(record.planned3).toLocaleDateString('en-GB') : 'N/A',
+        planned3Time: record.planned3 ? new Date(record.planned3).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
         }) : 'N/A',
         planned3: record.planned3,
         actual3: record.actual3,
@@ -113,10 +120,10 @@ const ConcernDepartment = () => {
         consultantName: record.consultant_name,
         staffName: record.staff_name,
         dischargeDate: record.actual1 ? new Date(record.actual1).toLocaleDateString('en-GB') : 'N/A',
-        dischargeTime: record.actual1 ? new Date(record.actual1).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        dischargeTime: record.actual1 ? new Date(record.actual1).toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: false 
+          hour12: false
         }) : 'N/A',
         status: record.rmo_status || 'N/A',
         rmoName: record.rmo_name || 'N/A',
@@ -124,17 +131,29 @@ const ConcernDepartment = () => {
         summaryReportImageName: record.summary_report_image_name,
         workFile: record.work_file,
         workFileDate: record.planned2 ? new Date(record.planned2).toLocaleDateString('en-GB') : 'N/A',
-        workFileTime: record.planned2 ? new Date(record.planned2).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        workFileTime: record.planned2 ? new Date(record.planned2).toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: false 
+          hour12: false
         }) : 'N/A',
         concernDepartment: record.concern_dept,
         concernDepartmentDate: record.actual3 ? new Date(record.actual3).toLocaleDateString('en-GB') : 'N/A',
-        concernDepartmentTime: record.actual3 ? new Date(record.actual3).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        concernDepartmentTime: record.actual3 ? new Date(record.actual3).toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: false 
+          hour12: false
+        }) : 'N/A',
+        actual3Date: record.actual3 ? new Date(record.actual3).toLocaleDateString('en-GB') : 'N/A',
+        actual3Time: record.actual3 ? new Date(record.actual3).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }) : 'N/A',
+        planned3Date: record.planned3 ? new Date(record.planned3).toLocaleDateString('en-GB') : 'N/A',
+        planned3Time: record.planned3 ? new Date(record.planned3).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
         }) : 'N/A',
         delay3: record.delay3,
         planned3: record.planned3,
@@ -164,18 +183,16 @@ const ConcernDepartment = () => {
 
   const handleSubmit = async () => {
     const selectedAdmissions = Object.keys(selectedRecords).filter(key => selectedRecords[key]);
-    
+
     if (selectedAdmissions.length === 0) {
-      setSubmitError('Please select at least one record');
-      setTimeout(() => setSubmitError(''), 3000);
+      showNotification('Please select at least one record', 'error');
       return;
     }
 
     // Check if all selected records have concern department status
     const missingConcernDept = selectedAdmissions.filter(admNo => !concernDepartmentStatus[admNo]);
     if (missingConcernDept.length > 0) {
-      setSubmitError('Please select Concern Department status for all selected records');
-      setTimeout(() => setSubmitError(''), 3000);
+      showNotification('Please select Concern Department status for all selected records', 'error');
       return;
     }
 
@@ -189,7 +206,7 @@ const ConcernDepartment = () => {
       });
 
       const updates = [];
-      
+
       // Process each selected record
       for (const admissionNo of selectedAdmissions) {
         const record = pendingRecords.find(r => r.admissionNo === admissionNo);
@@ -197,13 +214,13 @@ const ConcernDepartment = () => {
 
         const updateData = {
           concern_dept: concernDepartmentStatus[admissionNo],
-          actual3: new Date().toLocaleString("en-CA", { 
-            timeZone: "Asia/Kolkata", 
-            hour12: false 
+          actual3: new Date().toLocaleString("en-CA", {
+            timeZone: "Asia/Kolkata",
+            hour12: false
           }).replace(',', ''),
-           planned4: new Date().toLocaleString("en-CA", { 
-            timeZone: "Asia/Kolkata", 
-            hour12: false 
+          planned4: new Date().toLocaleString("en-CA", {
+            timeZone: "Asia/Kolkata",
+            hour12: false
           }).replace(',', ''),
         };
 
@@ -217,7 +234,7 @@ const ConcernDepartment = () => {
 
       // Execute all updates
       const results = await Promise.all(updates);
-      
+
       // Check for errors
       const errors = results.filter(result => result.error);
       if (errors.length > 0) {
@@ -227,13 +244,12 @@ const ConcernDepartment = () => {
       // Clear selections and reload data
       setSelectedRecords({});
       setConcernDepartmentStatus({});
-      setSubmitError('');
+      showNotification('Concern Department status updated successfully!', 'success');
       await loadData();
-      
+
     } catch (error) {
       console.error('Error saving concern department:', error);
-      setSubmitError(error.message || 'Failed to save. Please try again.');
-      setTimeout(() => setSubmitError(''), 3000);
+      showNotification(error.message || 'Failed to save. Please try again.', 'error');
     } finally {
       setUploadingRecords({});
     }
@@ -241,13 +257,13 @@ const ConcernDepartment = () => {
 
   const calculateDelay = (plannedDate) => {
     if (!plannedDate) return 'No planned date';
-    
+
     const planned = new Date(plannedDate);
     const actual = new Date();
     const diffMs = actual - planned;
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    
+
     if (diffHours < 0) {
       const hoursEarly = Math.abs(diffHours);
       const minsEarly = Math.abs(diffMinutes);
@@ -300,11 +316,10 @@ const ConcernDepartment = () => {
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-              activeTab === 'pending'
-                ? 'text-green-600 border-b-2 border-green-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'pending'
+              ? 'text-green-600 border-b-2 border-green-600'
+              : 'text-gray-600 hover:text-gray-900'
+              }`}
           >
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4" />
@@ -318,11 +333,10 @@ const ConcernDepartment = () => {
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-              activeTab === 'history'
-                ? 'text-green-600 border-b-2 border-green-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'history'
+              ? 'text-green-600 border-b-2 border-green-600'
+              : 'text-gray-600 hover:text-gray-900'
+              }`}
           >
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4" />
@@ -341,11 +355,10 @@ const ConcernDepartment = () => {
           <button
             onClick={handleSubmit}
             disabled={!isAnyRecordSelected || isUploading}
-            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg shadow-sm font-medium transition-all mb-[-2px] ${
-              isAnyRecordSelected && !isUploading
-                ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
-                : 'bg-gray-400 cursor-not-allowed opacity-60'
-            }`}
+            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg shadow-sm font-medium transition-all mb-[-2px] ${isAnyRecordSelected && !isUploading
+              ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
+              : 'bg-gray-400 cursor-not-allowed opacity-60'
+              }`}
           >
             {isUploading ? (
               <>
@@ -365,11 +378,7 @@ const ConcernDepartment = () => {
       {/* Pending Section */}
       {activeTab === 'pending' && (
         <div>
-          {submitError && (
-            <div className="mb-4 p-3 text-sm text-red-700 bg-red-100 rounded-lg">
-              {submitError}
-            </div>
-          )}
+
 
           {/* Desktop Table */}
           <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
@@ -383,8 +392,7 @@ const ConcernDepartment = () => {
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Department</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Consultant</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Staff Name</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Discharge Date</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">File Work Date</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Planned Concern Dept</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Status</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">RMO Name</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Summary Report</th>
@@ -435,10 +443,7 @@ const ConcernDepartment = () => {
                         {record.staffName}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.dischargeDate} {record.dischargeTime}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.workFileDate} {record.workFileTime}
+                        {record.planned3Date} {record.planned3Time}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
@@ -463,11 +468,10 @@ const ConcernDepartment = () => {
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          record.workFile === 'Yes' 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-red-100 text-red-700'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${record.workFile === 'Yes'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                          }`}>
                           {record.workFile}
                         </span>
                       </td>
@@ -475,7 +479,7 @@ const ConcernDepartment = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="12" className="px-4 py-8 text-center text-gray-500">
                       <Clock className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium text-gray-900">No pending records</p>
                       <p className="text-sm">All file work completed patients have been processed</p>
@@ -516,7 +520,7 @@ const ConcernDepartment = () => {
                       {record.status}
                     </span>
                   </div>
-                  
+
                   <div className="space-y-2 text-xs mb-3">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Department:</span>
@@ -531,12 +535,8 @@ const ConcernDepartment = () => {
                       <span className="font-medium text-gray-900">{record.staffName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Actual Discharge:</span>
-                      <span className="font-medium text-gray-900">{record.dischargeDate} {record.dischargeTime}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">File Work Date:</span>
-                      <span className="font-medium text-gray-900">{record.workFileDate} {record.workFileTime}</span>
+                      <span className="text-gray-600">Planned Concern Dept:</span>
+                      <span className="font-medium text-gray-900">{record.planned3Date} {record.planned3Time}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">RMO Name:</span>
@@ -544,11 +544,10 @@ const ConcernDepartment = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Work File:</span>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        record.workFile === 'Yes' 
-                          ? 'bg-green-100 text-green-700' 
-                          : 'bg-red-100 text-red-700'
-                      }`}>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${record.workFile === 'Yes'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700'
+                        }`}>
                         {record.workFile}
                       </span>
                     </div>
@@ -568,7 +567,7 @@ const ConcernDepartment = () => {
                         <option value="No">No</option>
                       </select>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-600">Summary Report:</span>
                       {record.summaryReportImage ? (
@@ -611,8 +610,8 @@ const ConcernDepartment = () => {
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Department</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Consultant</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Staff Name</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Discharge Date</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Concern Dept Date</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Planned Concern Dept</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Actual Concern Dept</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Status</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">RMO Name</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Summary Report</th>
@@ -640,12 +639,12 @@ const ConcernDepartment = () => {
                         {record.staffName}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.dischargeDate} {record.dischargeTime}
+                        {record.planned3Date} {record.planned3Time}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.concernDepartmentDate} {record.concernDepartmentTime}
+                        {record.actual3Date} {record.actual3Time}
                       </td>
-                     
+
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
                           {record.status}
@@ -668,20 +667,18 @@ const ConcernDepartment = () => {
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          record.workFile === 'Yes' 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-red-100 text-red-700'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${record.workFile === 'Yes'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                          }`}>
                           {record.workFile}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          record.concernDepartment === 'Yes' 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-red-100 text-red-700'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${record.concernDepartment === 'Yes'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                          }`}>
                           {record.concernDepartment}
                         </span>
                       </td>
@@ -689,7 +686,7 @@ const ConcernDepartment = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="12" className="px-4 py-8 text-center text-gray-500">
                       <CheckCircle className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium text-gray-900">No history records</p>
                       <p className="text-sm">Completed concern department records will appear here</p>
@@ -718,7 +715,7 @@ const ConcernDepartment = () => {
                       {record.status}
                     </span>
                   </div>
-                  
+
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Department:</span>
@@ -733,22 +730,21 @@ const ConcernDepartment = () => {
                       <span className="font-medium text-gray-900">{record.staffName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Actual Discharge:</span>
-                      <span className="font-medium text-gray-900">{record.dischargeDate} {record.dischargeTime}</span>
+                      <span className="text-gray-600">Planned Concern Dept:</span>
+                      <span className="font-medium text-gray-900">{record.planned3Date} {record.planned3Time}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Concern Dept Date:</span>
-                      <span className="font-medium text-gray-900">{record.concernDepartmentDate} {record.concernDepartmentTime}</span>
+                      <span className="text-gray-600">Actual Concern Dept:</span>
+                      <span className="font-medium text-gray-900">{record.actual3Date} {record.actual3Time}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Delay:</span>
-                      <span className={`font-medium ${
-                        record.delay3?.includes('Delayed') 
-                          ? 'text-red-700'
-                          : record.delay3?.includes('Early')
+                      <span className={`font-medium ${record.delay3?.includes('Delayed')
+                        ? 'text-red-700'
+                        : record.delay3?.includes('Early')
                           ? 'text-blue-700'
                           : 'text-green-700'
-                      }`}>
+                        }`}>
                         {record.delay3 || 'N/A'}
                       </span>
                     </div>
@@ -758,21 +754,19 @@ const ConcernDepartment = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Work File:</span>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        record.workFile === 'Yes' 
-                          ? 'bg-green-100 text-green-700' 
-                          : 'bg-red-100 text-red-700'
-                      }`}>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${record.workFile === 'Yes'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700'
+                        }`}>
                         {record.workFile}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Concern Dept:</span>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        record.concernDepartment === 'Yes' 
-                          ? 'bg-green-100 text-green-700' 
-                          : 'bg-red-100 text-red-700'
-                      }`}>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${record.concernDepartment === 'Yes'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700'
+                        }`}>
                         {record.concernDepartment}
                       </span>
                     </div>

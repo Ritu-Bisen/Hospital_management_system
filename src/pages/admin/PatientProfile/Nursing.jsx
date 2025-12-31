@@ -32,11 +32,11 @@ export default function Nursing() {
   // Fetch nursing tasks from Supabase
   const fetchNursingTasks = async () => {
     if (!data) return;
-    
+
     try {
       setLoading(true);
       const ipdNumber = data.personalInfo.ipd;
-      
+
       if (!ipdNumber || ipdNumber === 'N/A') {
         console.warn('No IPD number available for fetching nursing tasks');
         return;
@@ -47,6 +47,7 @@ export default function Nursing() {
         .from('nurse_assign_task')
         .select('*')
         .eq('Ipd_number', ipdNumber)
+        .or('staff.is.null,staff.eq.nurse')
         .order('timestamp', { ascending: false });
 
       if (error) {
@@ -74,8 +75,8 @@ export default function Nursing() {
         date: task.start_date || new Date(task.timestamp).toISOString().split('T')[0],
         delayStatus: calculateDelayStatus(task),
         supabaseData: task,
-        plannedTime: task.planned1 ? new Date(task.planned1).toLocaleString() : '',
-        actualTime: task.actual1 ? new Date(task.actual1).toLocaleString() : ''
+        plannedTime: task.planned1 ? new Date(task.planned1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+        actualTime: task.actual1 ? new Date(task.actual1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
       }));
 
       // Separate pending and completed tasks
@@ -94,10 +95,10 @@ export default function Nursing() {
 
   const calculateDelayStatus = (task) => {
     if (!task.planned1) return 'No Delay';
-    
+
     const planned = new Date(task.planned1);
     const now = new Date();
-    
+
     if (task.actual1) {
       const actual = new Date(task.actual1);
       const diffHours = (actual - planned) / (1000 * 60 * 60);
@@ -120,9 +121,9 @@ export default function Nursing() {
 
   const getFilteredTasks = () => {
     const tasks = activeTab === 'pending' ? pendingList : historyList;
-    
+
     return tasks.filter(task => {
-      const matchesSearch = 
+      const matchesSearch =
         task.taskName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.admissionNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -147,7 +148,7 @@ export default function Nursing() {
 
     return (
       <div className="bg-white rounded-lg border border-gray-200 mb-3">
-        <div 
+        <div
           className="p-3 cursor-pointer"
           onClick={() => toggleCardExpansion(task.id)}
         >
@@ -159,9 +160,9 @@ export default function Nursing() {
                   {task.shift}
                 </span>
               </div>
-              
+
               <h3 className="font-bold text-gray-800 text-sm mb-1">{task.taskName}</h3>
-              
+
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div className="flex items-center gap-1 text-xs text-gray-600">
                   <span className="font-medium">Patient:</span>
@@ -172,7 +173,7 @@ export default function Nursing() {
                   <span className="text-gray-800">{task.admissionNo}</span>
                 </div>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   <User className="w-3 h-3 text-gray-400" />
@@ -268,33 +269,31 @@ export default function Nursing() {
               </p>
             </div>
           </div>
-          
+
           {/* Right side: Tabs, Search and Filter in one row */}
           <div className="flex items-center gap-3">
             {/* Tabs */}
             <div className="flex items-center bg-white/20 rounded-lg p-1">
               <button
                 onClick={() => setActiveTab('history')}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'history'
-                    ? 'bg-white text-green-600'
-                    : 'text-white hover:bg-white/30'
-                }`}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${activeTab === 'history'
+                  ? 'bg-white text-green-600'
+                  : 'text-white hover:bg-white/30'
+                  }`}
               >
                 Complete ({historyList.length})
               </button>
               <button
                 onClick={() => setActiveTab('pending')}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === 'pending'
-                    ? 'bg-white text-green-600'
-                    : 'text-white hover:bg-white/30'
-                }`}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${activeTab === 'pending'
+                  ? 'bg-white text-green-600'
+                  : 'text-white hover:bg-white/30'
+                  }`}
               >
                 Pending ({pendingList.length})
               </button>
             </div>
-            
+
             {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-300 w-4 h-4" />
@@ -306,7 +305,7 @@ export default function Nursing() {
                 className="w-48 pl-9 pr-3 py-2 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-sm"
               />
             </div>
-            
+
             {/* Shift Filter */}
             <select
               value={filterShift}
@@ -342,26 +341,24 @@ export default function Nursing() {
               <div className="flex items-center bg-white/20 rounded-lg p-0.5">
                 <button
                   onClick={() => setActiveTab('history')}
-                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                    activeTab === 'history'
-                      ? 'bg-white text-green-600'
-                      : 'text-white hover:bg-white/30'
-                  }`}
+                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${activeTab === 'history'
+                    ? 'bg-white text-green-600'
+                    : 'text-white hover:bg-white/30'
+                    }`}
                 >
                   Complete ({historyList.length})
                 </button>
                 <button
                   onClick={() => setActiveTab('pending')}
-                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                    activeTab === 'pending'
-                      ? 'bg-white text-green-600'
-                      : 'text-white hover:bg-white/30'
-                  }`}
+                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${activeTab === 'pending'
+                    ? 'bg-white text-green-600'
+                    : 'text-white hover:bg-white/30'
+                    }`}
                 >
                   Pending ({pendingList.length})
                 </button>
               </div>
-              
+
               {/* Search and Filter in same row */}
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
@@ -374,7 +371,7 @@ export default function Nursing() {
                     className="w-full pl-8 pr-3 py-1.5 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-xs"
                   />
                 </div>
-                
+
                 <select
                   value={filterShift}
                   onChange={(e) => setFilterShift(e.target.value)}
@@ -405,7 +402,7 @@ export default function Nursing() {
                     {activeTab === 'pending' ? 'No pending tasks found' : 'No completed tasks found'}
                   </p>
                   <p className="text-gray-500 text-xs mt-1">
-                    {searchTerm ? 'No tasks match your search' : 
+                    {searchTerm ? 'No tasks match your search' :
                       activeTab === 'pending' ? 'No pending tasks available' : 'No completed tasks available'
                     }
                   </p>
@@ -440,6 +437,10 @@ export default function Nursing() {
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Assigned Nurse</th>
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Ward/Bed</th>
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Reminder</th>
+                      <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Planned Time</th>
+                      {activeTab === 'history' && (
+                        <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Actual Time</th>
+                      )}
                       <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Status</th>
                     </tr>
                   </thead>
@@ -476,11 +477,15 @@ export default function Nursing() {
                           </div>
                           <div className="text-xs text-gray-500">Bed: {task.bedNo || 'N/A'}</div>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="text-xs text-gray-500 max-w-xs truncate">
-                            {task.instructions || 'No'}
-                          </div>
+
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {task.plannedTime}
                         </td>
+                        {activeTab === 'history' && (
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {task.actualTime}
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <StatusBadge status={task.status} />
                         </td>
@@ -497,7 +502,7 @@ export default function Nursing() {
                     {activeTab === 'pending' ? 'No pending tasks found' : 'No completed tasks found'}
                   </p>
                   <p className="text-gray-500 text-xs mt-1">
-                    {searchTerm ? 'No tasks match your search' : 
+                    {searchTerm ? 'No tasks match your search' :
                       activeTab === 'pending' ? 'No pending tasks available' : 'No completed tasks available'
                     }
                   </p>

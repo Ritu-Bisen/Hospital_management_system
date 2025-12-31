@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Save, Bed, Building, DoorOpen, Hash } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const FloorBed = () => {
   const [floorBeds, setFloorBeds] = useState([]);
@@ -8,7 +9,8 @@ const FloorBed = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFloorBed, setEditingFloorBed] = useState(null);
-  
+  const { showNotification } = useNotification();
+
   // Form state
   const [formData, setFormData] = useState({
     serial_no: '',
@@ -43,12 +45,12 @@ const FloorBed = () => {
 
       if (error) throw error;
       setFloorBeds(data || []);
-      
+
       // Extract unique options from data
       const floors = [...new Set(data?.map(item => item.floor).filter(Boolean))];
       const wards = [...new Set(data?.map(item => item.ward).filter(Boolean))];
       const rooms = [...new Set(data?.map(item => item.room).filter(Boolean))];
-      
+
       setAvailableOptions({
         floors: floors.sort(),
         wards: wards.sort(),
@@ -56,7 +58,7 @@ const FloorBed = () => {
       });
     } catch (error) {
       console.error('Error fetching floor beds:', error);
-      alert('Error loading floor bed data');
+      showNotification('Error loading floor bed data', 'error');
     } finally {
       setLoading(false);
     }
@@ -72,7 +74,7 @@ const FloorBed = () => {
     if (filters.floor !== 'all' && item.floor !== filters.floor) return false;
     if (filters.ward !== 'all' && item.ward !== filters.ward) return false;
     if (filters.room !== 'all' && item.room !== filters.room) return false;
-    
+
     // Apply search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -84,7 +86,7 @@ const FloorBed = () => {
         item.bed?.toLowerCase().includes(searchLower)
       );
     }
-    
+
     return true;
   });
 
@@ -144,40 +146,40 @@ const FloorBed = () => {
   // Validate form
   const validateForm = () => {
     if (!formData.floor.trim()) {
-      alert('Floor is required');
+      showNotification('Floor is required', 'error');
       return false;
     }
-    
+
     if (!formData.ward.trim()) {
-      alert('Ward is required');
+      showNotification('Ward is required', 'error');
       return false;
     }
-    
+
     if (!formData.room.trim()) {
-      alert('Room is required');
+      showNotification('Room is required', 'error');
       return false;
     }
-    
+
     if (!formData.bed.trim()) {
-      alert('Bed number is required');
+      showNotification('Bed number is required', 'error');
       return false;
     }
-    
+
     // Check for duplicates (same floor, ward, room, bed)
     const duplicate = floorBeds.find(
-      item => 
+      item =>
         item.floor === formData.floor &&
         item.ward === formData.ward &&
         item.room === formData.room &&
         item.bed === formData.bed &&
         (!editingFloorBed || item.id !== editingFloorBed.id)
     );
-    
+
     if (duplicate) {
-      alert(`Bed ${formData.bed} already exists in ${formData.floor} - ${formData.ward} - ${formData.room}`);
+      showNotification(`Bed ${formData.bed} already exists in ${formData.floor} - ${formData.ward} - ${formData.room}`, 'error');
       return false;
     }
-    
+
     return true;
   };
 
@@ -202,7 +204,7 @@ const FloorBed = () => {
           .eq('id', editingFloorBed.id);
 
         if (error) throw error;
-        alert('Floor bed updated successfully!');
+        showNotification('Floor bed updated successfully!', 'success');
       } else {
         // Insert new floor bed
         const { error } = await supabase
@@ -210,14 +212,14 @@ const FloorBed = () => {
           .insert([floorBedData]);
 
         if (error) throw error;
-        alert('Floor bed added successfully!');
+        showNotification('Floor bed added successfully!', 'success');
       }
 
       fetchFloorBeds();
       closeModal();
     } catch (error) {
       console.error('Error saving floor bed:', error);
-      alert('Error saving floor bed');
+      showNotification('Error saving floor bed', 'error');
     }
   };
 
@@ -234,11 +236,11 @@ const FloorBed = () => {
         .eq('id', id);
 
       if (error) throw error;
-      alert('Floor bed deleted successfully!');
+      showNotification('Floor bed deleted successfully!', 'success');
       fetchFloorBeds();
     } catch (error) {
       console.error('Error deleting floor bed:', error);
-      alert('Error deleting floor bed');
+      showNotification('Error deleting floor bed', 'error');
     }
   };
 
@@ -584,7 +586,7 @@ const FloorBed = () => {
               </div>
 
               {/* Preview */}
-           
+
             </div>
 
             <div className="p-6 border-t flex justify-end gap-3">

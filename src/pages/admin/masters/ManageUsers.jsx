@@ -43,128 +43,42 @@ import {
   Activity,
   Thermometer,
   AlertCircle,
-  Package
+  Package,
+  Calendar
 } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
+import { ALL_PAGES } from '../../../contexts/AuthContext';
 
-// Define all available pages/menu items with clear differentiation
-const ALL_PAGES = [
-  // Main tabs
-  { key: 'dashboard', label: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard size={16} /> },
-  { key: 'patient-profile', label: 'Patient Profile', path: '/admin/patient-profile', icon: <User size={16} /> },
-  { key: 'pms', label: 'PMS', path: '/admin/pms', icon: <FileText size={16} /> },
-  
-  // Admission dropdown
-  { key: 'admission', label: 'Admission', type: 'group', icon: <LineChart size={16} /> },
-  { key: 'admission-add-patient', label: 'Add Patient', path: '/admin/admission/add-patient' },
-  { key: 'admission-department-selection', label: 'Department Selection', path: '/admin/admission/department-selection' },
-  
-  // IPD dropdown
-  { key: 'ipd', label: 'IPD', type: 'group', icon: <History size={16} /> },
-  { key: 'ipd-admission', label: 'IPD Admission', path: '/admin/ipd/admission' },
-  
-  // OT dropdown
-  { key: 'ot', label: 'OT (Operation Theater)', type: 'group', icon: <Scissors size={16} /> },
-  { key: 'ot-assign-ot-time', label: 'Assign OT Time', path: '/admin/ot/assign-ot-time', icon: <Clock size={16} /> },
-  { key: 'ot-complete-operation', label: 'Complete Operation', path: '/admin/ot/complete-operation', icon: <CheckCircle size={16} /> },
-  
-  // Nurse Station dropdown - CLEARLY LABELED FOR NURSING STAFF
-  { 
-    key: 'nurse-station', 
-    label: 'Nurse Station', 
-    type: 'group', 
-    icon: <UserCog size={16} />,
-    description: 'Nursing duties and patient care management'
-  },
-  { 
-    key: 'nurse-station-assign-task', 
-    label: 'Assign Nursing Task', 
-    path: '/admin/nurse-station/assign-task', 
-    icon: <ClipboardList size={16} />,
-    description: 'Assign patient care tasks to nursing staff'
-  },
-  { 
-    key: 'nurse-station-task-list', 
-    label: 'Nursing Task List', 
-    path: '/admin/nurse-station/task-list', 
-    icon: <CheckSquare size={16} />,
-    description: 'View and manage nursing tasks'
-  },
-  { 
-    key: 'nurse-station-score-dashboard', 
-    label: 'Nursing Score Dashboard', 
-    path: '/admin/nurse-station/score-dashboard', 
-    icon: <BarChart3 size={16} />,
-    description: 'Nursing performance metrics and scores'
-  },
-  
-  // RMO dropdown - CLEARLY LABELED FOR MEDICAL OFFICERS
-  { 
-    key: 'rmo', 
-    label: 'RMO', 
-    type: 'group', 
-    icon: <Shield size={16} />,
-    description: 'Resident Medical Officer duties'
-  },
-  { 
-    key: 'rmo-assign-task', 
-    label: 'Assign Medical Task', 
-    path: '/admin/rmo/assign-task', 
-    icon: <Activity size={16} />,
-    description: 'Assign medical/clinical tasks to RMOs'
-  },
-  { 
-    key: 'rmo-task-list', 
-    label: 'Medical Task List', 
-    path: '/admin/rmo/task-list', 
-    icon: <FileText size={16} />,
-    description: 'View and manage medical officer tasks'
-  },
-  { 
-    key: 'rmo-score-dashboard', 
-    label: 'RMO Score Dashboard', 
-    path: '/admin/rmo/score-dashboard', 
-    icon: <LineChart size={16} />,
-    description: 'RMO performance metrics and scores'
-  },
-  
-  // Lab dropdown
-  { key: 'lab', label: 'Lab', type: 'group', icon: <FlaskConical size={16} /> },
-  { key: 'lab-advice', label: 'Advice', path: '/admin/lab/advice' },
-  { key: 'lab-payment-slip', label: 'Payment Slip', path: '/admin/lab/payment-slip' },
-  { key: 'lab-pathology', label: 'Pathology', path: '/admin/lab/pathology' },
-  { key: 'lab-xray', label: 'X-ray', path: '/admin/lab/xray' },
-  { key: 'lab-ct-scan', label: 'CT Scan', path: '/admin/lab/ct-scan' },
-  { key: 'lab-usg', label: 'USG', path: '/admin/lab/usg' },
-  
-  // Pharmacy dropdown
-  { key: 'pharmacy', label: 'Pharmacy', type: 'group', icon: <Pill size={16} /> },
-  { key: 'pharmacy-indent', label: 'Indent', path: '/admin/pharmacy/indent' },
-  { key: 'pharmacy-approval', label: 'Approval', path: '/admin/pharmacy/approval' },
-  { key: 'pharmacy-store', label: 'Store', path: '/admin/pharmacy/store' },
-  
-  // Discharge dropdown
-  { key: 'discharge', label: 'Discharge', type: 'group', icon: <UserCheck size={16} /> },
-  { key: 'discharge-patient', label: 'Discharge Patient', path: '/admin/discharge/patient' },
-  { key: 'discharge-initiation', label: 'Initiation', path: '/admin/discharge/initiation' },
-  { key: 'discharge-complete-file', label: 'Complete File Work', path: '/admin/discharge/complete-file' },
-  { key: 'discharge-concern-department', label: 'Concern Department', path: '/admin/discharge/concern-department' },
-  { key: 'discharge-concern-authority', label: 'Concern Authority', path: '/admin/discharge/concern-authority' },
-  { key: 'discharge-bill', label: 'Discharge Bill', path: '/admin/discharge/bill' },
-  
-  // Masters dropdown
-  { key: 'masters', label: 'Masters', type: 'group', icon: <Users size={16} /> },
-  { key: 'masters-all-staff', label: 'All Staff', path: '/admin/masters/all-staff', icon: <Users size={16} /> },
-  { key: 'masters-medicine', label: 'Medicine', path: '/admin/masters/medicine', icon: <Pill size={16} /> },
-  { key: 'masters-department', label: 'Department', path: '/admin/masters/department', icon: <Building size={16} /> },
-  { key: 'masters-tests', label: 'Tests', path: '/admin/masters/tests', icon: <FlaskConical size={16} /> },
-  { key: 'masters-floor-bed', label: 'Floor & Bed', path: '/admin/masters/floor-bed', icon: <Bed size={16} /> },
-  { key: 'masters-doctors', label: 'Doctors', path: '/admin/masters/doctors', icon: <Stethoscope size={16} /> },
-  { key: 'masters-manage-users', label: 'Manage Users', path: '/admin/masters/manage-users', icon: <Key size={16} /> },
-];
+// Icon mapping for sidebar items
+const sidebarIcons = {
+  LayoutDashboard,
+  User,
+  LineChart,
+  History,
+  Scissors,
+  UserCog,
+  Shield,
+  FlaskConical,
+  Pill,
+  UserCheck,
+  Users,
+  ClipboardList,
+  CheckSquare,
+  BarChart3,
+  FileText,
+  Activity,
+  Clock,
+  Building,
+  Bed,
+  Stethoscope,
+  Key,
+  Calendar
+};
 
 // Get all page keys (excluding groups)
 const ALL_PAGE_KEYS = ALL_PAGES.filter(page => page.type !== 'group').map(page => page.key);
+
 
 const ManageUsers = () => {
   const [users, setUsers] = useState([]);
@@ -186,6 +100,7 @@ const ManageUsers = () => {
     profile_image: ''
   });
   const [imageFile, setImageFile] = useState(null);
+  const { showNotification } = useNotification();
 
   // Fetch users from Supabase
   useEffect(() => {
@@ -205,7 +120,7 @@ const ManageUsers = () => {
       // Parse pages from string to array for each user
       const usersWithParsedPages = data.map(user => {
         let pages = [];
-        
+
         if (user.pages) {
           if (user.pages === 'all') {
             // User has access to all pages
@@ -223,7 +138,7 @@ const ManageUsers = () => {
             }
           }
         }
-        
+
         return {
           ...user,
           pages: pages || []
@@ -232,7 +147,7 @@ const ManageUsers = () => {
       setUsers(usersWithParsedPages);
     } catch (error) {
       console.error('Error fetching users:', error);
-      alert('Failed to fetch users');
+      showNotification('Failed to fetch users', 'error');
     } finally {
       setLoading(false);
     }
@@ -267,7 +182,7 @@ const ManageUsers = () => {
       password: '',
       profile_image: user.profile_image || ''
     });
-    
+
     // Check if user has all pages access
     const hasAllPages = user.pages && user.pages.length === ALL_PAGE_KEYS.length;
     setSelectAll(hasAllPages);
@@ -287,11 +202,11 @@ const ManageUsers = () => {
 
         if (error) throw error;
 
-        alert('User deleted successfully');
+        showNotification('User deleted successfully', 'success');
         fetchUsers();
       } catch (error) {
         console.error('Error deleting user:', error);
-        alert('Failed to delete user');
+        showNotification('Failed to delete user', 'error');
       }
     }
   };
@@ -319,7 +234,7 @@ const ManageUsers = () => {
       if (uploadError) {
         // If bucket doesn't exist, try to create it
         if (uploadError.message.includes('bucket') && uploadError.message.includes('not found')) {
-          alert('Please create a "profile_image" bucket in Supabase Storage first.');
+          showNotification('Please create a "profile_image" bucket in Supabase Storage first.', 'warning');
           return null;
         }
         throw uploadError;
@@ -341,12 +256,12 @@ const ManageUsers = () => {
     try {
       // Basic validation
       if (!formData.user_name || !formData.name || !formData.email || !formData.role) {
-        alert('Please fill all required fields');
+        showNotification('Please fill all required fields', 'error');
         return;
       }
 
       if (!editingUser && !formData.password) {
-        alert('Please enter password for new user');
+        showNotification('Please enter password for new user', 'error');
         return;
       }
 
@@ -362,7 +277,7 @@ const ManageUsers = () => {
           }
         } catch (error) {
           setUploading(false);
-          alert('Failed to upload image. Please try again.');
+          showNotification('Failed to upload image. Please try again.', 'error');
           return;
         }
       }
@@ -401,7 +316,7 @@ const ManageUsers = () => {
           .eq('id', editingUser.id);
 
         if (error) throw error;
-        alert('User updated successfully');
+        showNotification('User updated successfully', 'success');
       } else {
         // Create new user
         const { error } = await supabase
@@ -409,7 +324,7 @@ const ManageUsers = () => {
           .insert([userData]);
 
         if (error) throw error;
-        alert('User created successfully');
+        showNotification('User created successfully', 'success');
       }
 
       setUploading(false);
@@ -418,7 +333,7 @@ const ManageUsers = () => {
     } catch (error) {
       console.error('Error saving user:', error);
       setUploading(false);
-      alert(error.message || 'Failed to save user');
+      showNotification(error.message || 'Failed to save user', 'error');
     }
   };
 
@@ -428,13 +343,13 @@ const ManageUsers = () => {
 
     // Validate file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
-      alert('File size must be less than 2MB');
+      showNotification('File size must be less than 2MB', 'error');
       return;
     }
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file');
+      showNotification('Please upload an image file', 'error');
       return;
     }
 
@@ -520,28 +435,19 @@ const ManageUsers = () => {
   // Enhanced function to get page display info
   const getPageDisplayInfo = (pageKey) => {
     const page = ALL_PAGES.find(p => p.key === pageKey);
-    if (!page) return { 
-      label: pageKey, 
+    if (!page) return {
+      label: pageKey,
       description: '',
       icon: null
     };
 
-    // Add role/department prefix for clarity
-    let prefixedLabel = page.label;
-    let description = page.description || '';
-    
-    if (pageKey.startsWith('nurse-station-')) {
-      description = description || 'Nursing duties and patient care';
-    } else if (pageKey.startsWith('rmo-')) {
-      description = description || 'Resident Medical Officer duties';
-    } else if (pageKey.startsWith('ot-')) {
-      description = description || 'Operation Theater duties';
-    }
+    const IconComponent = sidebarIcons[page.icon];
+    const icon = IconComponent ? <IconComponent size={16} /> : null;
 
     return {
-      label: prefixedLabel,
-      description,
-      icon: page.icon
+      label: page.label,
+      description: page.description || '',
+      icon: icon
     };
   };
 
@@ -564,24 +470,19 @@ const ManageUsers = () => {
   // Function to categorize pages by department for better organization
   const getPagesByDepartment = () => {
     const categories = {};
-    
+    const groups = ALL_PAGES.filter(p => p.type === 'group');
+
     ALL_PAGES.filter(page => page.type !== 'group').forEach(page => {
       let category = 'General';
-      
-      if (page.key.startsWith('nurse-station-')) category = 'Nurse Station';
-      else if (page.key.startsWith('rmo-')) category = 'RMO';
-      else if (page.key.startsWith('ot-')) category = 'OT'; // OT category
-      else if (page.key.startsWith('lab-')) category = 'Laboratory';
-      else if (page.key.startsWith('pharmacy-')) category = 'Pharmacy';
-      else if (page.key.startsWith('admission-')) category = 'Admission';
-      else if (page.key.startsWith('ipd-')) category = 'IPD';
-      else if (page.key.startsWith('discharge-')) category = 'Discharge';
-      else if (page.key.startsWith('masters-')) category = 'Masters';
-      
+      if (page.parent) {
+        const parentGroup = groups.find(g => g.key === page.parent);
+        if (parentGroup) category = parentGroup.label;
+      }
+
       if (!categories[category]) categories[category] = [];
       categories[category].push(page);
     });
-    
+
     return categories;
   };
 
@@ -707,10 +608,10 @@ const ManageUsers = () => {
                       <div className="flex items-center gap-2">
                         {getRoleIcon(user.role)}
                         <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
-                          {user.role === 'rmo' ? 'RMO' : 
-                           user.role === 'nurse' ? 'Nurse' : 
-                           user.role === 'ot' ? 'OT Staff' : 
-                           user.role || 'N/A'}
+                          {user.role === 'rmo' ? 'RMO' :
+                            user.role === 'nurse' ? 'Nurse' :
+                              user.role === 'ot' ? 'OT Staff' :
+                                user.role || 'N/A'}
                         </span>
                       </div>
                     </td>
@@ -1038,7 +939,7 @@ const ManageUsers = () => {
                   <h3 className="text-lg font-semibold text-gray-900">Access Permissions</h3>
                 </div>
                 <p className="text-gray-600 mb-4">Select which pages this user can access</p>
-                
+
                 {/* Select All Checkbox */}
                 <div className="mb-4">
                   <label className="flex items-center gap-3 p-3 rounded-lg border border-blue-200 bg-blue-50 cursor-pointer hover:bg-blue-100 transition-colors">
@@ -1054,7 +955,7 @@ const ManageUsers = () => {
                     </div>
                   </label>
                 </div>
-                
+
                 {!selectAll && (
                   <>
                     <p className="text-sm text-gray-600 mb-3">Or select individual pages by department:</p>
@@ -1079,11 +980,10 @@ const ManageUsers = () => {
                             {pages.map((page) => (
                               <label
                                 key={page.key}
-                                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                                  selectedPages.includes(page.key)
-                                    ? 'bg-blue-50 border-blue-200'
-                                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                                }`}
+                                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedPages.includes(page.key)
+                                  ? 'bg-blue-50 border-blue-200'
+                                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                                  }`}
                               >
                                 <input
                                   type="checkbox"
@@ -1093,7 +993,7 @@ const ManageUsers = () => {
                                 />
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-1">
-                                    {page.icon}
+                                    {page.icon && sidebarIcons[page.icon] && React.createElement(sidebarIcons[page.icon], { size: 14, className: 'text-gray-500' })}
                                     <span className="text-sm font-medium text-gray-700">
                                       {page.label}
                                     </span>
@@ -1138,14 +1038,14 @@ const ManageUsers = () => {
                             const isNurse = page.startsWith('nurse-station-');
                             const isRMO = page.startsWith('rmo-');
                             const isOT = page.startsWith('ot-'); // Check for OT pages
-                            
+
                             return (
                               <div key={page} className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border shadow-sm" style={{
                                 borderColor: isNurse ? '#d1fae5' : isRMO ? '#e0e7ff' : isOT ? '#fce7f3' : '#dbeafe'
                               }}>
-                                {pageInfo.icon && React.cloneElement(pageInfo.icon, { 
-                                  size: 14, 
-                                  className: isNurse ? 'text-green-600' : isRMO ? 'text-indigo-600' : isOT ? 'text-pink-600' : 'text-blue-600' 
+                                {pageInfo.icon && React.cloneElement(pageInfo.icon, {
+                                  size: 14,
+                                  className: isNurse ? 'text-green-600' : isRMO ? 'text-indigo-600' : isOT ? 'text-pink-600' : 'text-blue-600'
                                 })}
                                 <span className="text-sm font-medium text-gray-700">
                                   {pageInfo.label}
@@ -1161,7 +1061,7 @@ const ManageUsers = () => {
                             </div>
                           )}
                         </div>
-                        
+
                         {/* Department Summary */}
                         <div className="mt-3 text-sm text-gray-600">
                           <div className="flex flex-wrap gap-3">

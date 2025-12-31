@@ -14,7 +14,7 @@ const InitiationByRMO = () => {
     // Initialize formData with user name from localStorage
     const storedUser = localStorage.getItem('mis_user');
     let initialName = '';
-    
+
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
@@ -23,7 +23,7 @@ const InitiationByRMO = () => {
         console.error('Error parsing mis_user from localStorage:', error);
       }
     }
-    
+
     return {
       status: '',
       rmoName: initialName,
@@ -33,7 +33,7 @@ const InitiationByRMO = () => {
   });
 
   const statusOptions = [
-   
+
     'Completed',
     'Pending Documentation'
   ];
@@ -78,10 +78,10 @@ const InitiationByRMO = () => {
         consultantName: patient.consultant_name,
         staffName: patient.staff_name,
         dischargeDate: patient.planned1 ? new Date(patient.planned1).toLocaleDateString('en-GB') : 'N/A',
-        dischargeTime: patient.planned1 ? new Date(patient.planned1).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        dischargeTime: patient.planned1 ? new Date(patient.planned1).toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: false 
+          hour12: false
         }) : 'N/A',
         planned1: patient.planned1,
         actual1: patient.actual1,
@@ -123,11 +123,17 @@ const InitiationByRMO = () => {
         department: patient.department,
         consultantName: patient.consultant_name,
         staffName: patient.staff_name,
-        dischargeDate: patient.actual1 ? new Date(patient.actual1).toLocaleDateString('en-GB') : 'N/A',
-        dischargeTime: patient.actual1 ? new Date(patient.actual1).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        dischargeDate: patient.planned1 ? new Date(patient.planned1).toLocaleDateString('en-GB') : 'N/A',
+        dischargeTime: patient.planned1 ? new Date(patient.planned1).toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: false 
+          hour12: false
+        }) : 'N/A',
+        actualDate: patient.actual1 ? new Date(patient.actual1).toLocaleDateString('en-GB') : 'N/A',
+        actualTime: patient.actual1 ? new Date(patient.actual1).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
         }) : 'N/A',
         planned1: patient.planned1,
         actual1: patient.actual1,
@@ -151,11 +157,11 @@ const InitiationByRMO = () => {
 
   const handleInitiation = (patient) => {
     setSelectedPatient(patient);
-    
+
     // Get current user name from localStorage
     const storedUser = localStorage.getItem('mis_user');
     let currentUserName = '';
-    
+
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
@@ -164,7 +170,7 @@ const InitiationByRMO = () => {
         console.error('Error parsing user data in handleInitiation:', error);
       }
     }
-    
+
     // Pre-fill with existing data or current user's name
     setFormData({
       status: patient.rmo_status || '',
@@ -190,7 +196,7 @@ const InitiationByRMO = () => {
         setModalError('Please upload a valid image file');
         return;
       }
-      
+
       if (file.size > 5 * 1024 * 1024) {
         setModalError('Image size should be less than 5MB');
         return;
@@ -217,103 +223,103 @@ const InitiationByRMO = () => {
     }));
   };
 
-const handleSubmit = async () => {
-  if (!formData.status || !formData.rmoName) {
-    setModalError('Please fill all required fields marked with *');
-    return;
-  }
+  const handleSubmit = async () => {
+    if (!formData.status || !formData.rmoName) {
+      setModalError('Please fill all required fields marked with *');
+      return;
+    }
 
-  try {
-    let imageUrl = null;
-    
-    // If there's an image to upload
-    if (formData.summaryReportImage && typeof formData.summaryReportImage === 'string' && formData.summaryReportImage.startsWith('data:image')) {
-      // Generate a unique filename
-      const fileName = `summary_report_${selectedPatient.admissionNo}_${Date.now()}.jpg`;
-      const filePath = `summary-reports/${fileName}`;
-      
-      // Convert base64 to blob
-      const base64Response = await fetch(formData.summaryReportImage);
-      const blob = await base64Response.blob();
-      
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('summary_report_image')
-        .upload(filePath, blob, {
-          contentType: 'image/jpeg',
-          upsert: true
-        });
-      
-      if (uploadError) {
-        console.error('Error uploading image:', uploadError);
-        throw new Error('Failed to upload summary report image');
+    try {
+      let imageUrl = null;
+
+      // If there's an image to upload
+      if (formData.summaryReportImage && typeof formData.summaryReportImage === 'string' && formData.summaryReportImage.startsWith('data:image')) {
+        // Generate a unique filename
+        const fileName = `summary_report_${selectedPatient.admissionNo}_${Date.now()}.jpg`;
+        const filePath = `summary-reports/${fileName}`;
+
+        // Convert base64 to blob
+        const base64Response = await fetch(formData.summaryReportImage);
+        const blob = await base64Response.blob();
+
+        // Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('summary_report_image')
+          .upload(filePath, blob, {
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+
+        if (uploadError) {
+          console.error('Error uploading image:', uploadError);
+          throw new Error('Failed to upload summary report image');
+        }
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('summary_report_image')
+          .getPublicUrl(filePath);
+
+        imageUrl = urlData.publicUrl;
+      } else if (typeof formData.summaryReportImage === 'string') {
+        // If it's already a URL (from history), use it directly
+        imageUrl = formData.summaryReportImage;
       }
-      
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('summary_report_image')
-        .getPublicUrl(filePath);
-      
-      imageUrl = urlData.publicUrl;
-    } else if (typeof formData.summaryReportImage === 'string') {
-      // If it's already a URL (from history), use it directly
-      imageUrl = formData.summaryReportImage;
+
+      // Prepare update data object
+      const updateData = {
+        // RMO initiation fields (always updated)
+        rmo_status: formData.status,
+        rmo_name: formData.rmoName,
+        summary_report_image: imageUrl,
+        summary_report_image_name: formData.summaryReportImageName,
+      };
+
+      // Only set actual1 and planned2 if status is NOT "Pending Documentation"
+      if (formData.status !== 'Pending Documentation') {
+        const currentTime = new Date().toLocaleString("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour12: false
+        }).replace(',', '');
+
+        updateData.actual1 = currentTime;
+        updateData.planned2 = currentTime;
+      } else {
+        // For Pending Documentation, ensure these fields remain null
+        updateData.actual1 = null;
+        updateData.planned2 = null;
+      }
+
+      // Update the discharge record in Supabase with RMO initiation data
+      const { error: updateError } = await supabase
+        .from('discharge')
+        .update(updateData)
+        .eq('id', selectedPatient.id);
+
+      if (updateError) throw updateError;
+
+      setShowModal(false);
+      setSelectedPatient(null);
+      resetForm();
+
+      // Reload data
+      await loadData();
+
+    } catch (error) {
+      console.error('Error saving initiation:', error);
+      setModalError(error.message || 'Failed to save. Please try again.');
     }
-
-    // Prepare update data object
-    const updateData = {
-      // RMO initiation fields (always updated)
-      rmo_status: formData.status,
-      rmo_name: formData.rmoName,
-      summary_report_image: imageUrl,
-      summary_report_image_name: formData.summaryReportImageName,
-    };
-
-    // Only set actual1 and planned2 if status is NOT "Pending Documentation"
-    if (formData.status !== 'Pending Documentation') {
-      const currentTime = new Date().toLocaleString("en-CA", { 
-        timeZone: "Asia/Kolkata", 
-        hour12: false 
-      }).replace(',', '');
-      
-      updateData.actual1 = currentTime;
-      updateData.planned2 = currentTime;
-    } else {
-      // For Pending Documentation, ensure these fields remain null
-      updateData.actual1 = null;
-      updateData.planned2 = null;
-    }
-
-    // Update the discharge record in Supabase with RMO initiation data
-    const { error: updateError } = await supabase
-      .from('discharge')
-      .update(updateData)
-      .eq('id', selectedPatient.id);
-
-    if (updateError) throw updateError;
-
-    setShowModal(false);
-    setSelectedPatient(null);
-    resetForm();
-    
-    // Reload data
-    await loadData();
-    
-  } catch (error) {
-    console.error('Error saving initiation:', error);
-    setModalError(error.message || 'Failed to save. Please try again.');
-  }
-};
+  };
 
   const calculateDelay = (plannedDate, actualDate) => {
     if (!plannedDate) return 'No planned date';
-    
+
     const planned = new Date(plannedDate);
     const actual = actualDate || new Date();
     const diffMs = actual - planned;
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    
+
     if (diffHours < 0) {
       const hoursEarly = Math.abs(diffHours);
       const minsEarly = Math.abs(diffMinutes);
@@ -327,7 +333,7 @@ const handleSubmit = async () => {
     // Get current user name from localStorage
     const storedUser = localStorage.getItem('mis_user');
     let userName = '';
-    
+
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
@@ -336,7 +342,7 @@ const handleSubmit = async () => {
         console.error('Error parsing user data in resetForm:', error);
       }
     }
-    
+
     setFormData({
       status: '',
       rmoName: userName,
@@ -386,11 +392,10 @@ const handleSubmit = async () => {
       <div className="flex gap-2 border-b border-gray-200">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-            activeTab === 'pending'
-              ? 'text-green-600 border-b-2 border-green-600'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
+          className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'pending'
+            ? 'text-green-600 border-b-2 border-green-600'
+            : 'text-gray-600 hover:text-gray-900'
+            }`}
         >
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4" />
@@ -404,11 +409,10 @@ const handleSubmit = async () => {
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-            activeTab === 'history'
-              ? 'text-green-600 border-b-2 border-green-600'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
+          className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'history'
+            ? 'text-green-600 border-b-2 border-green-600'
+            : 'text-gray-600 hover:text-gray-900'
+            }`}
         >
           <div className="flex items-center gap-2">
             <CheckCircle className="w-4 h-4" />
@@ -507,7 +511,7 @@ const handleSubmit = async () => {
                       Initiation
                     </button>
                   </div>
-                  
+
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Department:</span>
@@ -552,7 +556,8 @@ const handleSubmit = async () => {
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Department</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Consultant</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Staff Name</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Discharge Date</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Planned Discharge</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Actual Discharge</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">RMO Name</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Status</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Summary Report</th>
@@ -581,10 +586,14 @@ const handleSubmit = async () => {
                         {patient.dischargeDate} {patient.dischargeTime}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {patient.actualDate} {patient.actualTime}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                         {patient.rmo_name || 'N/A'}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${patient.rmo_status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                          }`}>
                           {patient.rmo_status || 'N/A'}
                         </span>
                       </td>
@@ -634,7 +643,7 @@ const handleSubmit = async () => {
                       {patient.rmo_status || 'N/A'}
                     </span>
                   </div>
-                  
+
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Department:</span>
@@ -649,8 +658,12 @@ const handleSubmit = async () => {
                       <span className="font-medium text-gray-900">{patient.staffName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Actual Discharge:</span>
+                      <span className="text-gray-600">Planned Discharge:</span>
                       <span className="font-medium text-gray-900">{patient.dischargeDate} {patient.dischargeTime}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Actual Discharge:</span>
+                      <span className="font-medium text-gray-900">{patient.actualDate} {patient.actualTime}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">RMO Name:</span>
@@ -703,7 +716,7 @@ const handleSubmit = async () => {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="p-4 md:p-6">
               <div className="space-y-4">
                 {/* Pre-filled Information */}
@@ -767,12 +780,12 @@ const handleSubmit = async () => {
                     Auto-filled from your login
                   </p>
                 </div>
-                
+
                 <div>
                   <label className="block mb-1 text-sm font-medium text-gray-700">
                     Summary Report (Optional)
                   </label>
-                  
+
                   {!formData.summaryReportImage ? (
                     <div className="relative">
                       <input
@@ -818,7 +831,7 @@ const handleSubmit = async () => {
                   {modalError}
                 </div>
               )}
-              
+
               <div className="flex flex-col gap-3 justify-end mt-6 sm:flex-row">
                 <button
                   type="button"

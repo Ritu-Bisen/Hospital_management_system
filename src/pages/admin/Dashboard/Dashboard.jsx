@@ -42,7 +42,7 @@ export default function Dashboard() {
   // Helper function to process distribution data
   const processDistributionData = (data, field) => {
     const distribution = {};
-    
+
     data?.forEach(item => {
       const value = item[field];
       if (value) {
@@ -115,7 +115,7 @@ export default function Dashboard() {
   const calculatePieChartSegments = (genderDistribution) => {
     const total = genderDistribution.reduce((sum, gender) => sum + gender.percentage, 0);
     let accumulatedPercentage = 0;
-    
+
     return genderDistribution.map((gender, index) => {
       const segment = {
         name: gender.name,
@@ -136,7 +136,7 @@ export default function Dashboard() {
       const { count: doctorCount, error: doctorError } = await supabase
         .from('doctors')
         .select('*', { count: 'exact', head: true })
-      
+
 
       // Fetch nurses count
       const { count: nurseCount, error: nurseError } = await supabase
@@ -216,7 +216,7 @@ export default function Dashboard() {
       const staffCounts = await fetchStaffCounts();
 
       if (
-        patientError || ipdError || wardError || 
+        patientError || ipdError || wardError ||
         departmentError || genderError || ipdStatusError
       ) {
         console.error('Error fetching dashboard data:', {
@@ -235,11 +235,11 @@ export default function Dashboard() {
       const genderDistribution = processDistributionData(genderData, 'gender');
 
       // Process active/discharged patients based on planned1 and actual1
-      const activePatients = ipdStatusData?.filter(patient => 
+      const activePatients = ipdStatusData?.filter(patient =>
         patient.planned1 && !patient.actual1
       ).length || 0;
 
-      const dischargedPatients = ipdStatusData?.filter(patient => 
+      const dischargedPatients = ipdStatusData?.filter(patient =>
         patient.planned1 && patient.actual1
       ).length || 0;
 
@@ -332,10 +332,10 @@ export default function Dashboard() {
               </p>
               <div className="text-xs text-gray-500 mt-1">Planned ✓ | Discharged ✗</div>
               <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
-                <div 
-                  className="bg-green-600 h-2 rounded-full" 
-                  style={{ 
-                    width: `${calculatePercentage(stats.activePatients, stats.ipdAdmissionCount)}%` 
+                <div
+                  className="bg-green-600 h-2 rounded-full"
+                  style={{
+                    width: `${calculatePercentage(stats.activePatients, stats.ipdAdmissionCount)}%`
                   }}
                 ></div>
               </div>
@@ -356,10 +356,10 @@ export default function Dashboard() {
               </p>
               <div className="text-xs text-gray-500 mt-1">Planned ✓ | Discharged ✓</div>
               <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full" 
-                  style={{ 
-                    width: `${calculatePercentage(stats.dischargedPatients, stats.ipdAdmissionCount)}%` 
+                <div
+                  className="bg-blue-600 h-2 rounded-full"
+                  style={{
+                    width: `${calculatePercentage(stats.dischargedPatients, stats.ipdAdmissionCount)}%`
                   }}
                 ></div>
               </div>
@@ -396,9 +396,9 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-3">
-                    <div 
-                      className="h-3 rounded-full" 
-                      style={{ 
+                    <div
+                      className="h-3 rounded-full"
+                      style={{
                         width: `${ward.percentage}%`,
                         backgroundColor: getChartColor(index)
                       }}
@@ -439,9 +439,9 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-3">
-                    <div 
-                      className="h-3 rounded-full" 
-                      style={{ 
+                    <div
+                      className="h-3 rounded-full"
+                      style={{
                         width: `${dept.percentage}%`,
                         backgroundColor: getChartColor(index)
                       }}
@@ -468,41 +468,41 @@ export default function Dashboard() {
       </div>
 
       {/* Staff Summary Section */}
-     <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-6 text-white">
-  <div className="flex flex-col md:flex-row md:items-center justify-between">
-    <div>
-      <h3 className="text-xl font-bold">Hospital Staff Overview</h3>
-      <p className="opacity-90 mt-1">Total staff distribution across different roles</p>
-    </div>
-    <div className="mt-4 md:mt-0">
-      <div className="text-center">
-        <p className="text-2xl font-bold">
-          {stats.doctorCount + stats.nurseCount + stats.rmoCount + stats.otStaffCount}
-        </p>
-        <p className="text-sm opacity-90 mt-1">Total Staff</p>
+      <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-6 text-white">
+        <div className="flex flex-col md:flex-row md:items-center justify-between">
+          <div>
+            <h3 className="text-xl font-bold">Hospital Staff Overview</h3>
+            <p className="opacity-90 mt-1">Total staff distribution across different roles</p>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <div className="text-center">
+              <p className="text-2xl font-bold">
+                {stats.doctorCount + stats.nurseCount + stats.rmoCount + stats.otStaffCount}
+              </p>
+              <p className="text-sm opacity-90 mt-1">Total Staff</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+          <div className="text-center">
+            <p className="text-2xl font-bold">{stats.doctorCount}</p>
+            <p className="text-sm opacity-90 mt-1">Doctors</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold">{stats.nurseCount}</p>
+            <p className="text-sm opacity-90 mt-1">Nurses</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold">{stats.rmoCount}</p>
+            <p className="text-sm opacity-90 mt-1">RMOs</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold">{stats.otStaffCount}</p>
+            <p className="text-sm opacity-90 mt-1">OT Staff</p>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
-  
-  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-    <div className="text-center">
-      <p className="text-2xl font-bold">{stats.doctorCount}</p>
-      <p className="text-sm opacity-90 mt-1">Doctors</p>
-    </div>
-    <div className="text-center">
-      <p className="text-2xl font-bold">{stats.nurseCount}</p>
-      <p className="text-sm opacity-90 mt-1">Nurses</p>
-    </div>
-    <div className="text-center">
-      <p className="text-2xl font-bold">{stats.rmoCount}</p>
-      <p className="text-sm opacity-90 mt-1">RMOs</p>
-    </div>
-    <div className="text-center">
-      <p className="text-2xl font-bold">{stats.otStaffCount}</p>
-      <p className="text-sm opacity-90 mt-1">OT Staff</p>
-    </div>
-  </div>
-</div>
     </div>
   );
 }

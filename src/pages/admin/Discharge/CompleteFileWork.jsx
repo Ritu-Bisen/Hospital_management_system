@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileCheck, X, Clock, CheckCircle, Image as ImageIcon } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const CompleteFileWork = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -10,7 +11,7 @@ const CompleteFileWork = () => {
   const [workFileStatus, setWorkFileStatus] = useState({});
   const [viewImageModal, setViewImageModal] = useState(false);
   const [viewingImage, setViewingImage] = useState(null);
-  const [submitError, setSubmitError] = useState('');
+  const { showNotification } = useNotification();
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingRecords, setUploadingRecords] = useState({});
 
@@ -56,10 +57,10 @@ const CompleteFileWork = () => {
         consultantName: record.consultant_name,
         staffName: record.staff_name,
         dischargeDate: record.actual1 ? new Date(record.actual1).toLocaleDateString('en-GB') : 'N/A',
-        dischargeTime: record.actual1 ? new Date(record.actual1).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        dischargeTime: record.actual1 ? new Date(record.actual1).toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: false 
+          hour12: false
         }) : 'N/A',
         status: record.rmo_status || 'N/A',
         rmoName: record.rmo_name || 'N/A',
@@ -104,10 +105,10 @@ const CompleteFileWork = () => {
         consultantName: record.consultant_name,
         staffName: record.staff_name,
         dischargeDate: record.actual1 ? new Date(record.actual1).toLocaleDateString('en-GB') : 'N/A',
-        dischargeTime: record.actual1 ? new Date(record.actual1).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        dischargeTime: record.actual1 ? new Date(record.actual1).toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: false 
+          hour12: false
         }) : 'N/A',
         status: record.rmo_status || 'N/A',
         rmoName: record.rmo_name || 'N/A',
@@ -120,10 +121,16 @@ const CompleteFileWork = () => {
         workFile: record.work_file,
         fileWorkCompleted: record.work_file !== null,
         fileWorkDate: record.planned2 ? new Date(record.planned2).toLocaleDateString('en-GB') : 'N/A',
-        fileWorkTime: record.planned2 ? new Date(record.planned2).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
+        fileWorkTime: record.planned2 ? new Date(record.planned2).toLocaleTimeString('en-US', {
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: false 
+          hour12: false
+        }) : 'N/A',
+        actualWorkDate: record.actual2 ? new Date(record.actual2).toLocaleDateString('en-GB') : 'N/A',
+        actualWorkTime: record.actual2 ? new Date(record.actual2).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
         }) : 'N/A',
         planned2: record.planned2
       }));
@@ -151,18 +158,16 @@ const CompleteFileWork = () => {
 
   const handleSubmit = async () => {
     const selectedAdmissions = Object.keys(selectedRecords).filter(key => selectedRecords[key]);
-    
+
     if (selectedAdmissions.length === 0) {
-      setSubmitError('Please select at least one record');
-      setTimeout(() => setSubmitError(''), 3000);
+      showNotification('Please select at least one record', 'error');
       return;
     }
 
     // Check if all selected records have work file status
     const missingWorkFile = selectedAdmissions.filter(admNo => !workFileStatus[admNo]);
     if (missingWorkFile.length > 0) {
-      setSubmitError('Please select Work File status for all selected records');
-      setTimeout(() => setSubmitError(''), 3000);
+      showNotification('Please select Work File status for all selected records', 'error');
       return;
     }
 
@@ -176,7 +181,7 @@ const CompleteFileWork = () => {
       });
 
       const updates = [];
-      
+
       // Process each selected record
       for (const admissionNo of selectedAdmissions) {
         const record = pendingRecords.find(r => r.admissionNo === admissionNo);
@@ -184,13 +189,13 @@ const CompleteFileWork = () => {
 
         const updateData = {
           work_file: workFileStatus[admissionNo],
-         actual2: new Date().toLocaleString("en-CA", { 
-            timeZone: "Asia/Kolkata", 
-            hour12: false 
+          actual2: new Date().toLocaleString("en-CA", {
+            timeZone: "Asia/Kolkata",
+            hour12: false
           }).replace(',', ''),
-          planned3: new Date().toLocaleString("en-CA", { 
-            timeZone: "Asia/Kolkata", 
-            hour12: false 
+          planned3: new Date().toLocaleString("en-CA", {
+            timeZone: "Asia/Kolkata",
+            hour12: false
           }).replace(',', ''),
         };
 
@@ -204,7 +209,7 @@ const CompleteFileWork = () => {
 
       // Execute all updates
       const results = await Promise.all(updates);
-      
+
       // Check for errors
       const errors = results.filter(result => result.error);
       if (errors.length > 0) {
@@ -214,13 +219,12 @@ const CompleteFileWork = () => {
       // Clear selections and reload data
       setSelectedRecords({});
       setWorkFileStatus({});
-      setSubmitError('');
+      showNotification('File work completion updated successfully!', 'success');
       await loadData();
-      
+
     } catch (error) {
       console.error('Error saving file work:', error);
-      setSubmitError(error.message || 'Failed to save. Please try again.');
-      setTimeout(() => setSubmitError(''), 3000);
+      showNotification(error.message || 'Failed to save. Please try again.', 'error');
     } finally {
       setUploadingRecords({});
     }
@@ -271,11 +275,10 @@ const CompleteFileWork = () => {
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-              activeTab === 'pending'
-                ? 'text-green-600 border-b-2 border-green-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'pending'
+              ? 'text-green-600 border-b-2 border-green-600'
+              : 'text-gray-600 hover:text-gray-900'
+              }`}
           >
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4" />
@@ -289,11 +292,10 @@ const CompleteFileWork = () => {
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-              activeTab === 'history'
-                ? 'text-green-600 border-b-2 border-green-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'history'
+              ? 'text-green-600 border-b-2 border-green-600'
+              : 'text-gray-600 hover:text-gray-900'
+              }`}
           >
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4" />
@@ -312,11 +314,10 @@ const CompleteFileWork = () => {
           <button
             onClick={handleSubmit}
             disabled={!isAnyRecordSelected || isUploading}
-            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg shadow-sm font-medium transition-all mb-[-2px] ${
-              isAnyRecordSelected && !isUploading
-                ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
-                : 'bg-gray-400 cursor-not-allowed opacity-60'
-            }`}
+            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg shadow-sm font-medium transition-all mb-[-2px] ${isAnyRecordSelected && !isUploading
+              ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
+              : 'bg-gray-400 cursor-not-allowed opacity-60'
+              }`}
           >
             {isUploading ? (
               <>
@@ -336,11 +337,7 @@ const CompleteFileWork = () => {
       {/* Pending Section */}
       {activeTab === 'pending' && (
         <div>
-          {submitError && (
-            <div className="mb-4 p-3 text-sm text-red-700 bg-red-100 rounded-lg">
-              {submitError}
-            </div>
-          )}
+
 
           {/* Desktop Table */}
           <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
@@ -473,7 +470,7 @@ const CompleteFileWork = () => {
                       {record.status}
                     </span>
                   </div>
-                  
+
                   <div className="space-y-2 text-xs mb-3">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Department:</span>
@@ -511,7 +508,7 @@ const CompleteFileWork = () => {
                         <option value="No">No</option>
                       </select>
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-600">Summary Report:</span>
                       {record.summaryReportImage ? (
@@ -554,10 +551,12 @@ const CompleteFileWork = () => {
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Department</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Consultant</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Staff Name</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Discharge Date</th>
+                  {/* <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Actual Discharge</th> */}
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Status</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">RMO Name</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Summary Report</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Planned File Work</th>
+                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Actual File Work</th>
                   <th className="px-4 py-3 text-xs font-medium tracking-wider text-left uppercase">Work File</th>
                 </tr>
               </thead>
@@ -580,10 +579,10 @@ const CompleteFileWork = () => {
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                         {record.staffName}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                      {/* <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                         {record.dischargeDate} {record.dischargeTime}
-                      </td>
-                     
+                      </td> */}
+
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
                           {record.status}
@@ -605,12 +604,17 @@ const CompleteFileWork = () => {
                           <span className="text-gray-500">No report</span>
                         )}
                       </td>
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {record.fileWorkDate} {record.fileWorkTime}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {record.actualWorkDate} {record.actualWorkTime}
+                      </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          record.workFile === 'Yes' 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-red-100 text-red-700'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${record.workFile === 'Yes'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                          }`}>
                           {record.workFile}
                         </span>
                       </td>
@@ -618,7 +622,7 @@ const CompleteFileWork = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="11" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="12" className="px-4 py-8 text-center text-gray-500">
                       <CheckCircle className="mx-auto mb-2 w-12 h-12 text-gray-300" />
                       <p className="text-lg font-medium text-gray-900">No history records</p>
                       <p className="text-sm">Completed file work will appear here</p>
@@ -647,7 +651,7 @@ const CompleteFileWork = () => {
                       {record.status}
                     </span>
                   </div>
-                  
+
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Department:</span>
@@ -666,8 +670,12 @@ const CompleteFileWork = () => {
                       <span className="font-medium text-gray-900">{record.dischargeDate} {record.dischargeTime}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">File Work Date:</span>
+                      <span className="text-gray-600">Planned File Work:</span>
                       <span className="font-medium text-gray-900">{record.fileWorkDate} {record.fileWorkTime}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Actual File Work:</span>
+                      <span className="font-medium text-gray-900">{record.actualWorkDate} {record.actualWorkTime}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">RMO Name:</span>
@@ -675,11 +683,10 @@ const CompleteFileWork = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Work File:</span>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        record.workFile === 'Yes' 
-                          ? 'bg-green-100 text-green-700' 
-                          : 'bg-red-100 text-red-700'
-                      }`}>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${record.workFile === 'Yes'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700'
+                        }`}>
                         {record.workFile}
                       </span>
                     </div>

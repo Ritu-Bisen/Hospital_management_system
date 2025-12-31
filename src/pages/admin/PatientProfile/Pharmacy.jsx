@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Pill, Plus, X, Eye, Edit, Trash2, Search, CheckCircle } from 'lucide-react';
-import { useOutletContext } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Pill, Plus, X, Eye, Edit, Trash2, Search, CheckCircle, Save, Check, AlertCircle } from 'lucide-react';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const StatusBadge = ({ status }) => {
   const getColors = () => {
@@ -27,23 +28,52 @@ export default function Pharmacy() {
   const [successModal, setSuccessModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedIndent, setSelectedIndent] = useState(null);
-  const [submittedIndents, setSubmittedIndents] = useState([]);
+  const [submittedIndents, setSubmittedIndents] = useState([]); // This stores the list for the table
   const [loading, setLoading] = useState(true);
+  const { showNotification } = useNotification();
   const [successData, setSuccessData] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
-  // State for fetched data
-  const [medicineNames, setMedicineNames] = useState([]);
-  const [pathologyTests, setPathologyTests] = useState([]);
-  const [xrayTests, setXrayTests] = useState([]);
-  const [ctScanTests, setCtScanTests] = useState([]);
-  const [usgTests, setUsgTests] = useState([]);
-  const [staffNames, setStaffNames] = useState([]);
+  // New state from PharmacyIndent.jsx
+  const [medicineSearchTerm, setMedicineSearchTerm] = useState('');
+  const [showMedicineDropdown, setShowMedicineDropdown] = useState(null);
+  const [medicinesList, setMedicinesList] = useState([]);
+
+  // Investigation tests state
+  const [investigationTests, setInvestigationTests] = useState({
+    Pathology: [],
+    'X-ray': [],
+    'CT-scan': [],
+    USG: []
+  });
+
+  // User name from local storage
+  const getCurrentUser = () => {
+    try {
+      const storedUser = localStorage.getItem('mis_user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        return user.name || '';
+      }
+    } catch (error) {
+      console.error('Error parsing user from localStorage:', error);
+    }
+    return '';
+  };
 
   const [formData, setFormData] = useState({
-    diagnosis: '',
-    staffName: ''
+    admissionNumber: '',
+    staffName: getCurrentUser(),
+    consultantName: '',
+    patientName: '',
+    uhidNumber: '',
+    age: '',
+    gender: '',
+    wardLocation: '',
+    category: '',
+    room: '',
+    diagnosis: ''
   });
 
   const [requestTypes, setRequestTypes] = useState({
@@ -54,6 +84,7 @@ export default function Pharmacy() {
   });
 
   const [medicines, setMedicines] = useState([]);
+  const [investigations, setInvestigations] = useState([]); // Added for compatibility if needed
   const [investigationAdvice, setInvestigationAdvice] = useState({
     priority: 'Medium',
     adviceCategory: '',
@@ -63,24 +94,91 @@ export default function Pharmacy() {
     remarks: ''
   });
 
-  // Fetch all required data from Supabase
+  // Static pathology tests as fallback
+  const staticPathologyTests = [
+    'LFT', 'RFT', 'Lipid Profile', 'CBC', 'HBA1C', 'Electrolyte', 'PT/INR', 'Blood Group',
+    'ESR', 'CRP', 'Sugar', 'Urine R/M', 'Viral Marker', 'Malaria', 'Dengue', 'Widal',
+    'Troponin-I', 'Troponin-T', 'SGOT', 'SGPT', 'Serum Urea', 'Serum Creatinine', 'CT-BT',
+    'ABG', 'Urine C/S', 'Thyroid Profile', 'UPT', 'HB', 'PPD', 'Sickling', 'Peripheral Smear',
+    'ASO Titre', 'DS-DNA', 'Serum Amylase', 'TSH', 'D-Dimer', 'Serum Lipase', 'SR Cortisol',
+    'Serum Magnesium', 'Serum Calcium', 'Urine Culture & Sensitivity', 'Blood Culture & Sensitivity',
+    'Pus Culture & Sensitivity', 'Pleural Fluid R/M', 'Pleural Fluid Culture & Sensitivity',
+    'Pleural Fluid ADA', 'Vitamin D3', 'Vitamin B12', 'HIV', 'HBsAg', 'HCV', 'VDRL',
+    'Ascitic Fluid R/M', 'Ascitic Culture & Sensitivity', 'Ascitic Fluid ADA', 'Urine Sugar Ketone',
+    'Serum Platelets', 'Serum Potassium', 'Serum Sodium', 'Sputum R/M', 'Sputum AFB', 'Sputum C/S',
+    'CBNAAT', 'CKMB', 'Cardiac SOB', 'Pro-BNP', 'Serum Uric Acid', 'Platelet Count', 'TB Gold',
+    'PCT', 'COVID IGG Antibodies', 'ANA Profile', 'Stool R/M', 'eGFR', '24 Hour Urine Protein Ratio',
+    'IGF-1', 'PTH', 'Serum FSH', 'Serum LH', 'Serum Prolactin', 'APTT', 'HB %', 'Biopsy Small',
+    'Biopsy Medium', 'Biopsy Large', 'Serum Homocysteine'
+  ];
+
+
+
+  // Load data from Supabase
   useEffect(() => {
     if (currentIpdNumber) {
-      fetchAllData();
+      loadData();
+      loadMedicinesList();
+      loadInvestigationTests();
     }
   }, [currentIpdNumber]);
 
-  const fetchAllData = async () => {
+  // Add effects to update form data when personal info changes
+  useEffect(() => {
+    const fetchAdmissionDetails = async () => {
+      if (currentIpdNumber) {
+        try {
+          // Fetch admission_no from ipd_admissions table
+          const { data: ipdData, error } = await supabase
+            .from('ipd_admissions')
+            .select('admission_no')
+            .eq('ipd_number', currentIpdNumber)
+            .single();
+
+          if (data?.personalInfo) {
+            setFormData(prev => ({
+              ...prev,
+              patientName: data.personalInfo.name || '',
+              uhidNumber: '', // User requested not to auto-fill UHID
+              ipdNumber: currentIpdNumber || '',
+              age: data.personalInfo.age || '',
+              gender: data.personalInfo.gender || '',
+              wardLocation: data.departmentInfo?.ward || '',
+              // New fields population
+              consultantName: data.personalInfo.consultantDr || '',
+              room: data.departmentInfo?.room || '',
+              admissionNumber: ipdData?.admission_no || '',
+            }));
+          }
+        } catch (err) {
+          console.error('Error fetching admission details:', err);
+        }
+      }
+    };
+
+    fetchAdmissionDetails();
+  }, [data, currentIpdNumber]);
+
+  // Add delay close for medicine dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showMedicineDropdown && !event.target.closest('.medicine-dropdown-container')) {
+        setShowMedicineDropdown(null);
+        setMedicineSearchTerm('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMedicineDropdown]);
+
+  const loadData = async () => {
     try {
       setLoading(true);
-      
       await fetchIndents();
-      await fetchMedicines();
-      await fetchInvestigationTests();
-      await fetchStaffNames();
-      
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Error loading data:', error);
+      showNotification('Error loading data', 'error');
     } finally {
       setLoading(false);
     }
@@ -116,7 +214,9 @@ export default function Pharmacy() {
         category: indent.category,
         room: indent.room,
         ipdNumber: indent.ipd_number,
-        slip_image: indent.slip_image
+        slip_image: indent.slip_image,
+        actual2: indent.actual2,
+        plannedTime: indent.planned1 ? new Date(indent.planned1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
       }));
 
       setSubmittedIndents(formattedIndents);
@@ -126,79 +226,96 @@ export default function Pharmacy() {
     }
   };
 
-  const fetchMedicines = async () => {
+  const loadMedicinesList = async () => {
     try {
-      const { data: medicines, error } = await supabase
+      const { data, error } = await supabase
         .from('medicine')
-        .select('medicine_name')
-        .order('medicine_name');
+        .select('medicine_name');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading medicines:', error);
+        setMedicinesList([
+          'Paracetamol 500mg', 'Amoxicillin 250mg', 'Ibuprofen 400mg', 'Cough Syrup',
+          'Vitamin D3', 'Omeprazole 20mg', 'Aspirin 75mg', 'Metformin 500mg',
+          'Cetirizine 10mg', 'Azithromycin 500mg'
+        ]);
+        return;
+      }
 
-      const medicineList = (medicines || []).map(med => med.medicine_name);
-      setMedicineNames(medicineList);
+      if (data && data.length > 0) {
+        const medNames = data.map(item => item.medicine_name).filter(name => name);
+        setMedicinesList(medNames);
+      } else {
+        setMedicinesList([
+          'Paracetamol 500mg', 'Amoxicillin 250mg', 'Ibuprofen 400mg', 'Cough Syrup',
+          'Vitamin D3', 'Omeprazole 20mg', 'Aspirin 75mg', 'Metformin 500mg',
+          'Cetirizine 10mg', 'Azithromycin 500mg'
+        ]);
+      }
     } catch (error) {
-      console.error('Error fetching medicines:', error);
-      setMedicineNames([]);
+      console.error('Error loading medicines list:', error);
     }
   };
 
-  const fetchInvestigationTests = async () => {
+  const loadInvestigationTests = async () => {
     try {
-      const { data: allInvestigations, error } = await supabase
+      // Load Pathology
+      const { data: pathologyData, error: pathologyError } = await supabase
         .from('investigation')
         .select('name, type')
+        .eq('type', 'Pathology')
         .order('name');
 
-      if (error) throw error;
+      if (!pathologyError && pathologyData?.length > 0) {
+        const tests = pathologyData.map(test => test.name).filter(name => name);
+        setInvestigationTests(prev => ({ ...prev, Pathology: tests }));
+      } else {
+        setInvestigationTests(prev => ({ ...prev, Pathology: staticPathologyTests }));
+      }
 
-      const investigations = allInvestigations || [];
-      
-      const pathology = investigations
-        .filter(item => item.type === 'Pathology')
-        .map(item => item.name);
-      
-      const xray = investigations
-        .filter(item => item.type === 'X-ray')
-        .map(item => item.name);
-      
-      const ctScan = investigations
-        .filter(item => item.type === 'CT Scan')
-        .map(item => item.name);
-      
-      const usg = investigations
-        .filter(item => item.type === 'USG')
-        .map(item => item.name);
-
-      setPathologyTests(pathology);
-      setXrayTests(xray);
-      setCtScanTests(ctScan);
-      setUsgTests(usg);
-
-    } catch (error) {
-      console.error('Error fetching investigation tests:', error);
-      setPathologyTests([]);
-      setXrayTests([]);
-      setCtScanTests([]);
-      setUsgTests([]);
-    }
-  };
-
-  const fetchStaffNames = async () => {
-    try {
-      const { data: staff, error } = await supabase
-        .from('all_staff')
-        .select('name')
-        .eq('designation', 'Staff Nurse')
+      // Load X-ray
+      const { data: xrayData, error: xrayError } = await supabase
+        .from('investigation')
+        .select('name, type')
+        .eq('type', 'X-ray')
         .order('name');
 
-      if (error) throw error;
+      if (!xrayError && xrayData?.length > 0) {
+        const tests = xrayData.map(test => test.name).filter(name => name);
+        setInvestigationTests(prev => ({ ...prev, 'X-ray': tests }));
+      } else {
+        const fallbackXray = [
+          'X-Ray', 'Barium Enema', 'Barium Swallow', 'Cologram', 'Nephrostrogram', 'R.G.P.',
+          'Retrograde Urethrogram', 'Urethogram', 'X Ray Abdomen Upright', 'X Ray Cystogram',
+          'X Ray Hand Both', 'X Ray LS Spine Extension Flexion', 'X Ray Thoracic Spine',
+          'X Ray Tibia Fibula AP/Lat (Left/Right)', 'X-Ray Abdomen Erect/Standing/Upright',
+          'X-Ray Abdomen Flat Plate', 'X-Ray Abdomen KUB', 'X-Ray Ankle Joint AP And Lat (Left/Right)',
+          'X-Ray Chest PA', 'X-Ray Chest AP', 'X-Ray Chest Lateral View', 'X-Ray KUB',
+          'X-Ray LS Spine AP/Lat', 'X-Ray Pelvis AP', 'X-Ray Skull AP/Lat'
+        ];
+        setInvestigationTests(prev => ({ ...prev, 'X-ray': fallbackXray }));
+      }
 
-      const staffList = (staff || []).map(s => s.name);
-      setStaffNames(staffList);
+      // Load CT-scan (Simplified for brevity, similar specific logic)
+      const { data: ctScanData } = await supabase.from('investigation').select('name').eq('type', 'CT Scan');
+      if (ctScanData?.length > 0) {
+        setInvestigationTests(prev => ({ ...prev, 'CT-scan': ctScanData.map(t => t.name) }));
+      } else {
+        const fallbackCT = ['CT Scan', 'CT Brain', 'CT Chest', 'CECT Abdomen', 'HRCT'];
+        setInvestigationTests(prev => ({ ...prev, 'CT-scan': fallbackCT }));
+      }
+
+      // Load USG
+      const { data: usgData } = await supabase.from('investigation').select('name').eq('type', 'USG');
+      if (usgData?.length > 0) {
+        setInvestigationTests(prev => ({ ...prev, USG: usgData.map(t => t.name) }));
+      } else {
+        const fallbackUSG = ['USG', 'USG Whole Abdomen', 'USG KUB', 'TVS', 'USG Upper Abdomen'];
+        setInvestigationTests(prev => ({ ...prev, USG: fallbackUSG }));
+      }
+
     } catch (error) {
-      console.error('Error fetching staff names:', error);
-      setStaffNames([]);
+      console.error('Error loading investigation tests:', error);
     }
   };
 
@@ -211,10 +328,46 @@ export default function Pharmacy() {
   };
 
   const handleCheckboxChange = (type) => {
-    setRequestTypes(prev => ({
-      ...prev,
-      [type]: !prev[type]
-    }));
+    // Logic from PharmacyIndent.jsx with explicit exclusivity
+    if (type === 'medicineSlip') {
+      setRequestTypes(prev => ({
+        ...prev,
+        medicineSlip: !prev.medicineSlip,
+        investigation: false
+      }));
+      if (!requestTypes.medicineSlip) {
+        setInvestigations([]);
+        setInvestigationAdvice({
+          priority: 'Medium',
+          adviceCategory: '',
+          pathologyTests: [],
+          radiologyType: '',
+          radiologyTests: [],
+          remarks: ''
+        });
+      }
+    } else if (type === 'investigation') {
+      setRequestTypes(prev => ({
+        ...prev,
+        investigation: !prev.investigation,
+        medicineSlip: false
+      }));
+      if (!requestTypes.investigation) {
+        setMedicines([]);
+      }
+    } else if (type === 'package') {
+      setRequestTypes(prev => ({
+        ...prev,
+        package: !prev.package,
+        nonPackage: false
+      }));
+    } else if (type === 'nonPackage') {
+      setRequestTypes(prev => ({
+        ...prev,
+        nonPackage: !prev.nonPackage,
+        package: false
+      }));
+    }
   };
 
   const addMedicine = () => {
@@ -266,109 +419,124 @@ export default function Pharmacy() {
 
   const getRadiologyTests = () => {
     switch (investigationAdvice.radiologyType) {
-      case 'X-ray': return xrayTests;
-      case 'CT-scan': return ctScanTests;
-      case 'USG': return usgTests;
+      case 'X-ray': return investigationTests['X-ray'];
+      case 'CT-scan': return investigationTests['CT-scan'];
+      case 'USG': return investigationTests.USG;
       default: return [];
     }
   };
 
   const generateIndentNumber = () => {
-    const timestamp = Date.now();
-    return `IND-${timestamp.toString().slice(-9)}`;
+    const timestamp = Date.now().toString().slice(-9);
+    return `IND-${timestamp}`;
   };
 
   const handleSubmit = async () => {
+    // Validation logic from PharmacyIndent.jsx
+    if (!formData.diagnosis.trim()) {
+      showNotification('Please enter Diagnosis', 'error');
+      return;
+    }
+
+    const hasRequestType = Object.values(requestTypes).some(value => value);
+    if (!hasRequestType) {
+      showNotification('Please select at least one Request Type', 'error');
+      return;
+    }
+
+    if (requestTypes.medicineSlip && medicines.length === 0) {
+      showNotification('Please add at least one medicine', 'error');
+      return;
+    }
+
+    const incompleteMedicines = medicines.some(med => !med.name || !med.quantity);
+    if (requestTypes.medicineSlip && incompleteMedicines) {
+      showNotification('Please fill all medicine details', 'error');
+      return;
+    }
+
+    if (requestTypes.investigation) {
+      if (!investigationAdvice.adviceCategory) {
+        showNotification('Please select Pathology or Radiology for investigation', 'error');
+        return;
+      }
+      if (investigationAdvice.adviceCategory === 'Pathology' && investigationAdvice.pathologyTests.length === 0) {
+        showNotification('Please select at least one pathology test', 'error');
+        return;
+      }
+      if (investigationAdvice.adviceCategory === 'Radiology') {
+        if (!investigationAdvice.radiologyType) {
+          showNotification('Please select radiology type', 'error');
+          return;
+        }
+        if (investigationAdvice.radiologyTests.length === 0) {
+          showNotification('Please select at least one radiology test', 'error');
+          return;
+        }
+      }
+    }
+
     try {
-      if (!formData.diagnosis) {
-        alert('Please enter Diagnosis');
-        return;
-      }
-
-      const hasRequestType = Object.values(requestTypes).some(value => value);
-      if (!hasRequestType) {
-        alert('Please select at least one Request Type');
-        return;
-      }
-
-      if (requestTypes.medicineSlip && medicines.length === 0) {
-        alert('Please add at least one medicine');
-        return;
-      }
-
-      const incompleteMedicines = medicines.some(med => !med.name || !med.quantity);
-      if (requestTypes.medicineSlip && incompleteMedicines) {
-        alert('Please fill all medicine details');
-        return;
-      }
-
-      if (requestTypes.investigation) {
-        if (!investigationAdvice.adviceCategory) {
-          alert('Please select Pathology or Radiology for investigation');
-          return;
-        }
-
-        if (investigationAdvice.adviceCategory === 'Pathology' && investigationAdvice.pathologyTests.length === 0) {
-          alert('Please select at least one pathology test');
-          return;
-        }
-
-        if (investigationAdvice.adviceCategory === 'Radiology') {
-          if (!investigationAdvice.radiologyType) {
-            alert('Please select radiology type');
-            return;
-          }
-          if (investigationAdvice.radiologyTests.length === 0) {
-            alert('Please select at least one radiology test');
-            return;
-          }
-        }
-      }
-
-      let indentNumber;
-      let totalMedicines = requestTypes.medicineSlip ? medicines.reduce((sum, med) => sum + parseInt(med.quantity || 0), 0) : 0;
+      setLoading(true);
 
       const pharmacyData = {
-        timestamp: new Date().toISOString(),
-        indent_no: editMode && selectedIndent ? selectedIndent.indentNumber : generateIndentNumber(),
-        admission_number: currentIpdNumber || '',
+        timestamp: new Date().toLocaleString("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour12: false
+        }).replace(',', ''),
+        // indent_number provided by insert trigger or generated here
+        indent_no: editMode && selectedIndent ? selectedIndent.indentNumber : generateIndentNumber(), // Careful with field name, PharmacyIndent uses indent_number or indent_no depending on schema. Pharmacy.jsx seems to use indent_no. 
+        admission_number: formData.admissionNumber || '',
         ipd_number: currentIpdNumber || '',
         staff_name: formData.staffName || '',
-        patient_name: data.personalInfo.name,
-        uhid_number: data.personalInfo.uhid || '',
-        age: data.personalInfo.age || '',
-        gender: data.personalInfo.gender || '',
-        diagnosis: formData.diagnosis,
+        consultant_name: formData.consultantName || '',
+        patient_name: formData.patientName,
+        uhid_number: formData.uhidNumber || '',
+        age: formData.age || '',
+        gender: formData.gender || '',
+        ward_location: formData.wardLocation || '',
+        category: formData.category || '',
+        room: formData.room || '',
+        diagnosis: formData.diagnosis.trim(),
         request_types: JSON.stringify(requestTypes),
         medicines: JSON.stringify(medicines),
+        investigations: JSON.stringify(investigations || []),
         investigation_advice: JSON.stringify(investigationAdvice),
-        status: 'Pending'
+        status: 'pending', // PharmacyIndent uses lowercase 'pending'
+        planned1: new Date().toLocaleString("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour12: false
+        }).replace(',', ''),
       };
 
+
       if (editMode && selectedIndent) {
+        // Update existing indent - using indent_no as key
         const { error } = await supabase
           .from('pharmacy')
           .update(pharmacyData)
           .eq('indent_no', selectedIndent.indentNumber);
 
         if (error) throw error;
-        indentNumber = selectedIndent.indentNumber;
+        showNotification('Indent updated successfully!');
       } else {
-        const { data: newIndent, error } = await supabase
+        // Create new indent
+        // We need to omit indent_no if it is auto-generated in DB, but generateIndentNumber() is used here so we include it.
+        const { error } = await supabase
           .from('pharmacy')
-          .insert([pharmacyData])
-          .select()
-          .single();
+          .insert([pharmacyData]);
 
         if (error) throw error;
-        indentNumber = newIndent.indent_no;
+        showNotification('Indent created successfully!');
       }
 
       await fetchIndents();
 
+      const totalMedicines = requestTypes.medicineSlip ? medicines.reduce((sum, med) => sum + parseInt(med.quantity || 0), 0) : 0;
+
       setSuccessData({
-        indentNumber: indentNumber,
-        patientName: data.personalInfo.name,
+        indentNumber: pharmacyData.indent_no,
+        patientName: formData.patientName,
         admissionNo: currentIpdNumber || '',
         totalMedicines: totalMedicines
       });
@@ -380,7 +548,9 @@ export default function Pharmacy() {
 
     } catch (error) {
       console.error('Error saving indent:', error);
-      alert('Error saving indent. Please try again.');
+      showNotification(`Failed to save indent: ${error.message}`, 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -395,19 +565,53 @@ export default function Pharmacy() {
         if (error) throw error;
 
         await fetchIndents();
-        alert('Indent deleted successfully');
+        showPopup('Indent deleted successfully');
       } catch (error) {
         console.error('Error deleting indent:', error);
-        alert('Error deleting indent');
+        showPopup('Error deleting indent', 'error');
       }
     }
   };
 
+  const parseJsonField = (field) => {
+    try {
+      return field ? JSON.parse(field) : {};
+    } catch (error) {
+      console.error('Error parsing JSON field:', error);
+      return {};
+    }
+  };
+
+  const getSummaryData = () => {
+    if (requestTypes.medicineSlip && medicines.length > 0) {
+      const medicineMap = {};
+      medicines.forEach(med => {
+        if (med.name && med.quantity) {
+          if (medicineMap[med.name]) {
+            medicineMap[med.name] += parseInt(med.quantity);
+          } else {
+            medicineMap[med.name] = parseInt(med.quantity);
+          }
+        }
+      });
+      return Object.entries(medicineMap).map(([name, quantity], index) => ({
+        srNo: index + 1,
+        name,
+        quantity
+      }));
+    }
+    return [];
+  };
+
+  const summaryData = getSummaryData();
+  const totalQuantity = summaryData.reduce((sum, item) => sum + item.quantity, 0);
+
   const resetForm = () => {
-    setFormData({
+    setFormData(prev => ({
+      ...prev,
       diagnosis: '',
-      staffName: ''
-    });
+      // Do not reset patient info
+    }));
     setRequestTypes({
       medicineSlip: false,
       investigation: false,
@@ -424,8 +628,9 @@ export default function Pharmacy() {
       remarks: ''
     });
     setSelectedIndent(null);
+    setMedicineSearchTerm('');
+    setShowMedicineDropdown(null);
   };
-
   const handleView = (indent) => {
     setSelectedIndent(indent);
     setViewModal(true);
@@ -433,10 +638,10 @@ export default function Pharmacy() {
 
   const handleEdit = (indent) => {
     if (indent.ipdNumber !== currentIpdNumber && indent.admissionNo !== currentIpdNumber) {
-      alert('You can only edit indents for the current patient');
+      showNotification('You can only edit indents for the current patient', 'error');
       return;
     }
-    
+
     setSelectedIndent(indent);
     setFormData({
       diagnosis: indent.diagnosis,
@@ -458,7 +663,7 @@ export default function Pharmacy() {
 
   const getFilteredIndents = () => {
     return submittedIndents.filter(indent => {
-      const matchesSearch = 
+      const matchesSearch =
         indent.indentNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         indent.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         indent.admissionNo?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -485,15 +690,26 @@ export default function Pharmacy() {
             <div>
               <h1 className="text-xl md:text-2xl font-bold">Pharmacy Indents</h1>
               <p className="text-xs opacity-90 mt-1">
-                {currentIpdNumber && currentIpdNumber !== 'N/A' 
-                  ? `${data.personalInfo.name} - IPD: ${currentIpdNumber}` 
+                {currentIpdNumber && currentIpdNumber !== 'N/A'
+                  ? `${data.personalInfo.name} - IPD: ${currentIpdNumber}`
                   : data.personalInfo.name}
               </p>
             </div>
           </div>
-          
+
           {/* Right side: Search and Filter - ALL INLINE */}
           <div className="flex items-center gap-3">
+            {/* Create Indent Button */}
+            <button
+              onClick={() => {
+                resetForm();
+                setShowModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-green-600 rounded-lg font-medium hover:bg-green-50 transition-colors shadow-sm text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Create Indent
+            </button>
             {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-300 w-4 h-4" />
@@ -505,7 +721,7 @@ export default function Pharmacy() {
                 className="w-48 pl-9 pr-3 py-2 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-sm"
               />
             </div>
-            
+
             {/* Status Filter */}
             <select
               value={filterStatus}
@@ -529,8 +745,8 @@ export default function Pharmacy() {
               <div className="flex-1">
                 <h1 className="text-xl font-bold">Pharmacy Indents</h1>
                 <p className="text-xs opacity-90 mt-1">
-                  {currentIpdNumber && currentIpdNumber !== 'N/A' 
-                    ? `${data.personalInfo.name} - IPD: ${currentIpdNumber}` 
+                  {currentIpdNumber && currentIpdNumber !== 'N/A'
+                    ? `${data.personalInfo.name} - IPD: ${currentIpdNumber}`
                     : data.personalInfo.name}
                 </p>
               </div>
@@ -538,6 +754,15 @@ export default function Pharmacy() {
 
             {/* Search and Filter in same row */}
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  resetForm();
+                  setShowModal(true);
+                }}
+                className="p-1.5 bg-white text-green-600 rounded-lg shadow-sm flex-shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-300 w-3 h-3" />
                 <input
@@ -548,7 +773,7 @@ export default function Pharmacy() {
                   className="w-full pl-8 pr-3 py-1.5 bg-white/10 border border-green-400 rounded-lg focus:ring-2 focus:ring-white focus:border-transparent placeholder-green-300 text-white text-xs"
                 />
               </div>
-              
+
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
@@ -587,14 +812,14 @@ export default function Pharmacy() {
                       </div>
                       <StatusBadge status={indent.status || 'Pending'} />
                     </div>
-                    
+
                     <div className="space-y-3">
                       {/* Diagnosis */}
                       <div className="text-sm">
                         <span className="font-medium text-gray-700">Diagnosis: </span>
                         <span className="text-gray-600 truncate">{indent.diagnosis}</span>
                       </div>
-                      
+
                       {/* Request Types */}
                       <div className="text-sm">
                         <span className="font-medium text-gray-700">Request Types: </span>
@@ -613,7 +838,7 @@ export default function Pharmacy() {
                           )}
                         </div>
                       </div>
-                      
+
                       {/* Medicines Count */}
                       {indent.requestTypes.medicineSlip && indent.medicines.length > 0 && (
                         <div className="text-sm">
@@ -621,7 +846,7 @@ export default function Pharmacy() {
                           <span className="text-gray-600">{indent.medicines.length} items</span>
                         </div>
                       )}
-                      
+
                       {/* UHID */}
                       {indent.uhidNumber && (
                         <div className="text-sm">
@@ -629,7 +854,7 @@ export default function Pharmacy() {
                           <span className="text-gray-600">{indent.uhidNumber}</span>
                         </div>
                       )}
-                      
+
                       {/* Actions - Fixed to stay inside card */}
                       <div className="pt-3 border-t border-gray-100">
                         <div className="grid grid-cols-3 gap-2">
@@ -669,8 +894,8 @@ export default function Pharmacy() {
                 <p className="text-gray-500 text-xs mt-1">
                   {currentIpdNumber && currentIpdNumber !== 'N/A'
                     ? `No indents found for IPD: ${currentIpdNumber}`
-                    : searchTerm 
-                      ? 'No indents match your search' 
+                    : searchTerm
+                      ? 'No indents match your search'
                       : 'No indents available'
                   }
                 </p>
@@ -701,9 +926,11 @@ export default function Pharmacy() {
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Indent No</th>
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Patient</th>
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">IPD No</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Planned Time</th>
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Diagnosis</th>
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Request Type</th>
-                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Status</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Approval</th>
+                    <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Indent Status</th>
                     <th className="px-4 py-3 font-bold text-gray-700 uppercase text-xs">Actions</th>
                   </tr>
                 </thead>
@@ -721,6 +948,9 @@ export default function Pharmacy() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-700">{indent.admissionNo || indent.ipdNumber}</span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        {indent.plannedTime}
                       </td>
                       <td className="px-4 py-3">
                         <div className="text-xs text-gray-500 truncate max-w-xs">{indent.diagnosis}</div>
@@ -743,6 +973,15 @@ export default function Pharmacy() {
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={indent.status || 'Pending'} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {indent.actual2 ? (
+                          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">Complete</span>
+                        ) : indent.status?.toLowerCase() === 'rejected' ? (
+                          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">Rejected</span>
+                        ) : (
+                          <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">Pending</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
@@ -782,8 +1021,8 @@ export default function Pharmacy() {
                 <p className="text-gray-500 text-xs mt-1">
                   {currentIpdNumber && currentIpdNumber !== 'N/A'
                     ? `No indents found for IPD: ${currentIpdNumber}`
-                    : searchTerm 
-                      ? 'No indents match your search' 
+                    : searchTerm
+                      ? 'No indents match your search'
                       : 'No indents available'
                   }
                 </p>
@@ -793,25 +1032,16 @@ export default function Pharmacy() {
         </div>
       </div>
 
-      {/* Create New Indent Button - Fixed position at bottom right */}
-      <div className="fixed bottom-6 right-6 z-10">
-        <button
-          onClick={() => {
-            resetForm();
-            setShowModal(true);
-          }}
-          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white p-3 rounded-full shadow-lg transition-all hover:shadow-xl"
-          title="Create New Indent"
-        >
-          <Plus className="w-6 h-6" />
-        </button>
-      </div>
+
+
+
 
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-green-600 text-white px-6 py-4 flex justify-between items-center">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-green-600 text-white px-6 py-4 flex justify-between items-center z-10">
               <h2 className="text-xl font-bold">{editMode ? 'Edit Indent' : 'Create New Indent'}</h2>
               <button
                 onClick={() => {
@@ -819,7 +1049,8 @@ export default function Pharmacy() {
                   resetForm();
                   setEditMode(false);
                 }}
-                className="text-white hover:bg-green-700 rounded-full p-1"
+                className="text-white hover:bg-green-700 rounded-full p-1 transition-colors"
+                disabled={loading}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -829,37 +1060,88 @@ export default function Pharmacy() {
               {/* Patient Information */}
               <div className="mb-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Patient Information</h3>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Patient Name</label>
                     <input
                       type="text"
-                      value={data.personalInfo.name}
+                      value={formData.patientName}
                       readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
                     />
                   </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">UHID Number</label>
                     <input
                       type="text"
-                      value={data.personalInfo.uhid || ''}
-                      readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                      name="uhidNumber"
+                      value={formData.uhidNumber}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">IPD Number</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">IPD/Admission No</label>
                     <input
                       type="text"
-                      value={currentIpdNumber || ''}
+                      value={currentIpdNumber}
                       readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                    <input
+                      type="text"
+                      value={formData.age}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                    <input
+                      type="text"
+                      value={formData.gender}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Ward Location</label>
+                    <input
+                      type="text"
+                      name="wardLocation"
+                      value={formData.wardLocation}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                      placeholder="Ward Location"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Staff Name (Nurse)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.staffName}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 cursor-not-allowed"
+                    />
+                    <p className="mt-1 text-xs text-green-600">Auto-filled from login</p>
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Diagnosis <span className="text-red-500">*</span>
@@ -871,23 +1153,8 @@ export default function Pharmacy() {
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                       placeholder="Enter diagnosis"
+                      required
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Staff Name (Nurse)
-                    </label>
-                    <select
-                      name="staffName"
-                      value={formData.staffName}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    >
-                      <option value="">Select Staff Nurse</option>
-                      {staffNames.map((name, index) => (
-                        <option key={index} value={name}>{name}</option>
-                      ))}
-                    </select>
                   </div>
                 </div>
               </div>
@@ -902,11 +1169,12 @@ export default function Pharmacy() {
                     { id: 'package', label: 'Package' },
                     { id: 'nonPackage', label: 'Non Package' }
                   ].map((type) => (
-                    <label key={type.id} className="flex items-center cursor-pointer">
+                    <label key={type.id} className="flex items-center cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors">
                       <input
                         type="checkbox"
                         checked={requestTypes[type.id]}
                         onChange={() => handleCheckboxChange(type.id)}
+                        disabled={loading}
                         className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
                       />
                       <span className="ml-2 text-sm text-gray-700">{type.label}</span>
@@ -915,28 +1183,83 @@ export default function Pharmacy() {
                 </div>
               </div>
 
-              {/* Medicines Section */}
+              {/* Medicines Section with Search */}
               {requestTypes.medicineSlip && (
                 <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Medicines</h3>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Medicines</h3>
+                  </div>
+
                   <div className="space-y-3 mb-4">
                     {medicines.map((medicine, index) => (
-                      <div key={medicine.id} className="flex gap-3 items-end">
-                        <div className="w-8 h-10 flex items-center justify-center bg-green-600 text-white rounded font-semibold">
+                      <div key={medicine.id} className="flex gap-3 items-end p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="w-8 h-10 flex items-center justify-center bg-green-600 text-white rounded font-semibold text-sm">
                           {index + 1}
                         </div>
-                        <div className="flex-1">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Medicine Name</label>
-                          <select
-                            value={medicine.name}
-                            onChange={(e) => updateMedicine(medicine.id, 'name', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                          >
-                            <option value="">Select Medicine</option>
-                            {medicineNames.map((med, index) => (
-                              <option key={index} value={med}>{med}</option>
-                            ))}
-                          </select>
+                        <div className="flex-1 medicine-dropdown-container">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Medicine Name
+                          </label>
+                          <div className="relative">
+                            <div className="flex items-center">
+                              <Search className="absolute left-3 w-4 h-4 text-gray-400" />
+                              <input
+                                type="text"
+                                value={medicine.name}
+                                onChange={(e) => updateMedicine(medicine.id, 'name', e.target.value)}
+                                onFocus={() => setShowMedicineDropdown(medicine.id)}
+                                placeholder="Search for medicine..."
+                                className="px-3 py-2 pl-10 w-full rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                              />
+                            </div>
+
+                            {/* Medicine dropdown */}
+                            {showMedicineDropdown === medicine.id && (
+                              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                <div className="p-2 border-b bg-gray-50 sticky top-0">
+                                  <div className="relative">
+                                    <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-400" />
+                                    <input
+                                      type="text"
+                                      placeholder="Filter medicines..."
+                                      className="w-full pl-8 pr-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                      onChange={(e) => setMedicineSearchTerm(e.target.value)}
+                                      value={medicineSearchTerm}
+                                      autoFocus
+                                    />
+                                  </div>
+                                </div>
+                                <div className="max-h-48 overflow-y-auto">
+                                  {medicinesList
+                                    .filter(med =>
+                                      medicineSearchTerm === '' ||
+                                      med.toLowerCase().includes(medicineSearchTerm.toLowerCase())
+                                    )
+                                    .map((med, idx) => (
+                                      <div
+                                        key={`${med}-${idx}`}
+                                        onClick={() => {
+                                          updateMedicine(medicine.id, 'name', med);
+                                          setShowMedicineDropdown(null);
+                                          setMedicineSearchTerm('');
+                                        }}
+                                        className="px-4 py-2 hover:bg-green-50 cursor-pointer border-b border-gray-100 last:border-b-0 text-sm transition-colors"
+                                      >
+                                        {med}
+                                      </div>
+                                    ))}
+                                  {medicinesList.filter(med =>
+                                    medicineSearchTerm === '' ||
+                                    med.toLowerCase().includes(medicineSearchTerm.toLowerCase())
+                                  ).length === 0 && (
+                                      <div className="px-4 py-3 text-center text-gray-500 text-sm">
+                                        No medicines found
+                                      </div>
+                                    )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div className="w-32">
                           <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
@@ -945,22 +1268,27 @@ export default function Pharmacy() {
                             min="1"
                             value={medicine.quantity}
                             onChange={(e) => updateMedicine(medicine.id, 'quantity', e.target.value)}
+                            disabled={loading}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                            placeholder="0"
+                            placeholder="Qty"
                           />
                         </div>
                         <button
                           onClick={() => removeMedicine(medicine.id)}
-                          className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg h-10"
+                          disabled={loading}
+                          className="px-3 py-2 bg-white border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 rounded-lg h-10 transition-colors"
+                          title="Remove Medicine"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     ))}
                   </div>
+
                   <button
                     onClick={addMedicine}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm w-full justify-center"
+                    disabled={loading}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm w-full justify-center disabled:bg-green-300 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     Add Medicine
@@ -972,6 +1300,7 @@ export default function Pharmacy() {
               {requestTypes.investigation && (
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Investigation Advice</h3>
+
                   <div className="space-y-4 p-4 bg-green-50 rounded-lg border border-green-200">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -980,6 +1309,7 @@ export default function Pharmacy() {
                           name="priority"
                           value={investigationAdvice.priority}
                           onChange={handleInvestigationAdviceChange}
+                          disabled={loading}
                           className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
                         >
                           <option value="High">High</option>
@@ -987,12 +1317,14 @@ export default function Pharmacy() {
                           <option value="Low">Low</option>
                         </select>
                       </div>
+
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Pathology & Radiology *</label>
                         <select
                           name="adviceCategory"
                           value={investigationAdvice.adviceCategory}
                           onChange={handleInvestigationAdviceChange}
+                          disabled={loading}
                           className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
                         >
                           <option value="">Select Category</option>
@@ -1009,23 +1341,20 @@ export default function Pharmacy() {
                           Select Pathology Tests * ({investigationAdvice.pathologyTests.length} selected)
                         </label>
                         <div className="p-4 max-h-60 overflow-y-auto bg-white rounded-lg border border-gray-300">
-                          {pathologyTests.length > 0 ? (
-                            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-                              {pathologyTests.map((test, index) => (
-                                <label key={index} className="flex items-start gap-2 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={investigationAdvice.pathologyTests.includes(test)}
-                                    onChange={() => handleAdviceCheckboxChange(test, 'pathology')}
-                                    className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                                  />
-                                  <span className="text-sm text-gray-700">{test}</span>
-                                </label>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 text-sm">No pathology tests available</p>
-                          )}
+                          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                            {(investigationTests.Pathology || []).map((test) => (
+                              <label key={test} className="flex items-start gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                <input
+                                  type="checkbox"
+                                  checked={investigationAdvice.pathologyTests.includes(test)}
+                                  onChange={() => handleAdviceCheckboxChange(test, 'pathology')}
+                                  disabled={loading}
+                                  className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                />
+                                <span className="text-sm text-gray-700">{test}</span>
+                              </label>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1039,6 +1368,7 @@ export default function Pharmacy() {
                             name="radiologyType"
                             value={investigationAdvice.radiologyType}
                             onChange={handleInvestigationAdviceChange}
+                            disabled={loading}
                             className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
                           >
                             <option value="">Select Type</option>
@@ -1054,23 +1384,20 @@ export default function Pharmacy() {
                               Select {investigationAdvice.radiologyType} Tests * ({investigationAdvice.radiologyTests.length} selected)
                             </label>
                             <div className="p-4 max-h-60 overflow-y-auto bg-white rounded-lg border border-gray-300">
-                              {getRadiologyTests().length > 0 ? (
-                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                                  {getRadiologyTests().map((test, index) => (
-                                    <label key={index} className="flex items-start gap-2 cursor-pointer">
-                                      <input
-                                        type="checkbox"
-                                        checked={investigationAdvice.radiologyTests.includes(test)}
-                                        onChange={() => handleAdviceCheckboxChange(test, 'radiology')}
-                                        className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                                      />
-                                      <span className="text-sm text-gray-700">{test}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-gray-500 text-sm">No {investigationAdvice.radiologyType} tests available</p>
-                              )}
+                              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                {getRadiologyTests().map((test) => (
+                                  <label key={test} className="flex items-start gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                    <input
+                                      type="checkbox"
+                                      checked={investigationAdvice.radiologyTests.includes(test)}
+                                      onChange={() => handleAdviceCheckboxChange(test, 'radiology')}
+                                      disabled={loading}
+                                      className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                    />
+                                    <span className="text-sm text-gray-700">{test}</span>
+                                  </label>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1086,9 +1413,43 @@ export default function Pharmacy() {
                         onChange={handleInvestigationAdviceChange}
                         rows="3"
                         placeholder="Add any additional notes or instructions..."
+                        disabled={loading}
                         className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Medicine Summary Section */}
+              {requestTypes.medicineSlip && summaryData.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Medicine Summary</h3>
+                  <div className="bg-green-50 rounded-lg overflow-hidden border border-green-200">
+                    <table className="min-w-full">
+                      <thead className="bg-green-600 text-white">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-sm font-semibold">Sr No</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold">Medicine Name</th>
+                          <th className="px-4 py-3 text-left text-sm font-semibold">Quantity</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-green-200 bg-white">
+                        {summaryData.map((item) => (
+                          <tr key={item.srNo}>
+                            <td className="px-4 py-3 text-sm">{item.srNo}</td>
+                            <td className="px-4 py-3 text-sm font-medium">{item.name}</td>
+                            <td className="px-4 py-3 text-sm">{item.quantity}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-green-100">
+                        <tr>
+                          <td colSpan="2" className="px-4 py-3 text-sm font-bold text-gray-800">Total Items: {summaryData.length}</td>
+                          <td className="px-4 py-3 text-sm font-bold text-gray-800">Total Qty: {totalQuantity}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 </div>
               )}
@@ -1101,16 +1462,27 @@ export default function Pharmacy() {
                     resetForm();
                     setEditMode(false);
                   }}
-                  className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium"
+                  disabled={loading}
+                  className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium disabled:bg-gray-100 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSubmit}
-                  className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium"
+                  disabled={loading}
+                  className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:bg-green-300 transition-colors shadow-sm"
                 >
-                  <CheckCircle className="w-4 h-4" />
-                  {editMode ? 'Update Indent' : 'Submit Indent'}
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      {editMode ? 'Updating...' : 'Submitting...'}
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      {editMode ? 'Update Indent' : 'Submit Indent'}
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -1151,7 +1523,7 @@ export default function Pharmacy() {
                 >
                   Done
                 </button>
-                <button
+                {/* <button
                   onClick={() => {
                     setSuccessModal(false);
                     resetForm();
@@ -1160,7 +1532,7 @@ export default function Pharmacy() {
                   className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium"
                 >
                   Create New
-                </button>
+                </button> */}
               </div>
             </div>
           </div>
@@ -1168,23 +1540,206 @@ export default function Pharmacy() {
       )}
 
       {/* View Modal */}
+      {/* View Modal */}
       {viewModal && selectedIndent && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-green-600 text-white px-6 py-4 flex justify-between items-center">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-green-600 text-white px-6 py-4 flex justify-between items-center z-10">
               <h2 className="text-xl font-bold">Indent Details - {selectedIndent.indentNumber}</h2>
               <button
                 onClick={() => {
                   setViewModal(false);
                   setSelectedIndent(null);
                 }}
-                className="text-white hover:bg-green-700 rounded-full p-1"
+                className="text-white hover:bg-green-700 rounded-full p-1 transition-colors"
+                title="Close"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
+
+            {/* Modal Body */}
             <div className="p-6">
-             <img src={selectedIndent.slip_image} alt="Indent" className="w-full h-auto rounded-lg" />
+              {/* Patient Information */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Patient Information</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-500">Indent Number</p>
+                    <p className="font-medium text-gray-900">{selectedIndent.indentNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Admission/IPD No</p>
+                    <p className="font-medium text-gray-900">{selectedIndent.admissionNo}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Patient Name</p>
+                    <p className="font-medium text-gray-900">{selectedIndent.patientName}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">UHID Number</p>
+                    <p className="font-medium text-gray-900">{selectedIndent.uhidNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Age / Gender</p>
+                    <p className="font-medium text-gray-900">{selectedIndent.age} / {selectedIndent.gender}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Category</p>
+                    <p className="font-medium text-gray-900">{selectedIndent.category}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Ward / Room</p>
+                    <p className="font-medium text-gray-900">{selectedIndent.wardLocation} / {selectedIndent.room}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Staff Name</p>
+                    <p className="font-medium text-gray-900">{selectedIndent.staffName}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Consultant</p>
+                    <p className="font-medium text-gray-900">{selectedIndent.consultantName}</p>
+                  </div>
+                  <div className="col-span-full">
+                    <p className="text-gray-500">Diagnosis</p>
+                    <p className="font-medium text-gray-900">{selectedIndent.diagnosis}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Request Types */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Request Types</h3>
+                <div className="flex flex-wrap gap-2">
+                  {selectedIndent.requestTypes?.medicineSlip && (
+                    <span className="px-3 py-2 bg-green-100 text-green-700 text-sm rounded-lg font-medium">Medicine Slip</span>
+                  )}
+                  {selectedIndent.requestTypes?.investigation && (
+                    <span className="px-3 py-2 bg-green-100 text-green-700 text-sm rounded-lg font-medium">Investigation</span>
+                  )}
+                  {selectedIndent.requestTypes?.package && (
+                    <span className="px-3 py-2 bg-purple-100 text-purple-700 text-sm rounded-lg font-medium">Package</span>
+                  )}
+                  {selectedIndent.requestTypes?.nonPackage && (
+                    <span className="px-3 py-2 bg-orange-100 text-orange-700 text-sm rounded-lg font-medium">Non-Package</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Medicines */}
+              {selectedIndent.requestTypes?.medicineSlip && selectedIndent.medicines?.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Medicines</h3>
+                  <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-green-600">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">#</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Medicine Name</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Quantity</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {selectedIndent.medicines.map((medicine, index) => (
+                          <tr key={index}>
+                            <td className="px-4 py-3 text-sm text-gray-900">{index + 1}</td>
+                            <td className="px-4 py-3 text-sm text-gray-900 font-medium">{medicine.name}</td>
+                            <td className="px-4 py-3 text-sm text-gray-900">{medicine.quantity}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Investigation Advice Details */}
+              {selectedIndent.requestTypes?.investigation && selectedIndent.investigationAdvice && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Investigation Advice</h3>
+                  <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <div className="space-y-4 text-sm">
+                      <div className="flex justify-between items-center border-b border-green-200 pb-2">
+                        <span className="text-gray-600">Priority:</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${selectedIndent.investigationAdvice.priority === 'High' ? 'bg-red-100 text-red-700' :
+                          selectedIndent.investigationAdvice.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                          {selectedIndent.investigationAdvice.priority}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-600 block mb-1">Category:</span>
+                        <div className="font-medium text-gray-900">{selectedIndent.investigationAdvice.adviceCategory}</div>
+                      </div>
+
+                      {/* Pathology Tests */}
+                      {selectedIndent.investigationAdvice.adviceCategory === 'Pathology' && selectedIndent.investigationAdvice.pathologyTests?.length > 0 && (
+                        <div>
+                          <span className="text-gray-600 block mb-1">Pathology Tests:</span>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedIndent.investigationAdvice.pathologyTests.map((test, index) => (
+                              <span key={index} className="px-2 py-1 text-xs bg-white border border-green-200 text-green-700 rounded-full shadow-sm">
+                                {test}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Radiology Tests */}
+                      {selectedIndent.investigationAdvice.adviceCategory === 'Radiology' && (
+                        <>
+                          <div>
+                            <span className="text-gray-600 block mb-1">Radiology Type:</span>
+                            <div className="font-medium text-gray-900">{selectedIndent.investigationAdvice.radiologyType}</div>
+                          </div>
+                          {selectedIndent.investigationAdvice.radiologyTests?.length > 0 && (
+                            <div>
+                              <span className="text-gray-600 block mb-1">Tests:</span>
+                              <div className="flex flex-wrap gap-2">
+                                {selectedIndent.investigationAdvice.radiologyTests.map((test, index) => (
+                                  <span key={index} className="px-2 py-1 text-xs bg-white border border-purple-200 text-purple-700 rounded-full shadow-sm">
+                                    {test}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Remarks */}
+                      {selectedIndent.investigationAdvice.remarks && (
+                        <div className="pt-2 border-t border-green-200 mt-2">
+                          <span className="text-gray-600 block mb-1">Remarks:</span>
+                          <div className="p-2 bg-white rounded border border-green-100 text-gray-700 italic">
+                            {selectedIndent.investigationAdvice.remarks}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Timestamp and Footer */}
+              <div className="flex justify-between items-center pt-6 border-t mt-6">
+                <div className="text-sm text-gray-500">
+                  Submitted: {new Date(selectedIndent.submittedAt || Date.now()).toLocaleString()}
+                </div>
+                <button
+                  onClick={() => {
+                    setViewModal(false);
+                    setSelectedIndent(null);
+                  }}
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

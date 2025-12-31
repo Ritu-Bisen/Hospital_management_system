@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, UserPlus, Save, X, Stethoscope, User, AlertCircle, Calendar, Clock, RefreshCw, ClipboardList, Check, CheckCircle, CalendarDays, LogOut, ChevronDown, ChevronUp, Phone, MapPin, Bed } from 'lucide-react';
 import supabase from '../SupabaseClient';
+import { useNotification } from '../contexts/NotificationContext';
 
 const PMS = () => {
     const [patients, setPatients] = useState([]);
@@ -11,6 +12,7 @@ const PMS = () => {
     const [assignments, setAssignments] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const { showNotification } = useNotification();
 
     // Tab states
     const [activeTab, setActiveTab] = useState('rmo');
@@ -47,7 +49,7 @@ const PMS = () => {
     useEffect(() => {
         fetchIPDAdmissions();
         fetchStaffLists();
-        
+
         const storedAssignments = localStorage.getItem('pmsStaffAssignments');
         if (storedAssignments) {
             setAssignments(JSON.parse(storedAssignments));
@@ -84,23 +86,23 @@ const PMS = () => {
     const loadPatientData = async () => {
         setTasksLoading(true);
         console.log('Starting to load ALL patient data...');
-        
+
         try {
             console.log('Step 1: Checking OT status...');
             await checkOTStatus();
-            
+
             console.log('Step 2: Checking discharge status...');
             await checkDischargeStatus();
-            
+
             console.log('Step 3: Checking Inform To RMO completion...');
             await checkInformToRMOCompletion();
-            
+
             console.log('Step 4: Fetching nurse tasks...');
             await fetchNurseTasks();
-            
+
             console.log('Step 5: Fetching assigned tasks...');
             await fetchAssignedTasks();
-            
+
             console.log('All patient data loaded successfully!');
         } catch (err) {
             console.error('Error loading patient data:', err);
@@ -165,9 +167,9 @@ const PMS = () => {
         try {
             setIsLoadingOTStatus(true);
             console.log('Checking OT status for IPD:', selectedPatient.ipd_number);
-            
+
             setOtStatus(null);
-            
+
             const { data, error } = await supabase
                 .from('ot_information')
                 .select('actual2, planned2')
@@ -209,9 +211,9 @@ const PMS = () => {
 
         try {
             console.log('Checking discharge status for IPD:', selectedPatient.ipd_number);
-            
+
             setDischargeStatus(null);
-            
+
             const { data, error } = await supabase
                 .from('discharge')
                 .select('planned5, actual5')
@@ -247,7 +249,7 @@ const PMS = () => {
         try {
             setIsCheckingRMOCompletion(true);
             console.log('Checking Inform To RMO completion for IPD:', selectedPatient.ipd_number);
-            
+
             const { data, error } = await supabase
                 .from('nurse_assign_task')
                 .select('planned1, actual1')
@@ -264,7 +266,7 @@ const PMS = () => {
             }
 
             console.log('Inform To RMO check result:', data);
-            
+
             if (data && data.planned1 && data.actual1) {
                 console.log('Inform To RMO task is COMPLETED for patient:', selectedPatient.ipd_number);
                 setIsInformToRMOCompleted(true);
@@ -283,7 +285,7 @@ const PMS = () => {
     const fetchRmoTasks = async () => {
         try {
             console.log('Fetching RMO tasks... isInformToRMOCompleted:', isInformToRMOCompleted);
-            
+
             if (!isInformToRMOCompleted) {
                 console.log('Not fetching RMO tasks - Inform To RMO not completed');
                 setRmoTasks([]);
@@ -312,9 +314,9 @@ const PMS = () => {
     const fetchNurseTasks = async () => {
         try {
             console.log('Fetching nurse tasks with status:', { otStatus, dischargeStatus });
-            
+
             let allNurseTasks = [];
-            
+
             console.log('Fetching regular nurse tasks...');
             const { data: normalNurseTasksData, error: normalNurseError } = await supabase
                 .from('pre_defined_task')
@@ -413,7 +415,7 @@ const PMS = () => {
 
     const handleAssignClick = (patient) => {
         console.log('Opening modal for patient:', patient.ipd_number);
-        
+
         setIsInformToRMOCompleted(false);
         setRmoTasks([]);
         setNurseTasks([]);
@@ -421,11 +423,11 @@ const PMS = () => {
         setAssignedNurseTasks([]);
         setOtStatus(null);
         setDischargeStatus(null);
-        
+
         setSelectedPatient(patient);
         setShowModal(true);
         setActiveTab('nurse');
-        
+
         setAssignmentFormData({
             shift: '',
             assign_staff: '',
@@ -443,33 +445,33 @@ const PMS = () => {
         if (!selectedPatient) return;
 
         if (!assignmentFormData.assign_staff) {
-            alert(`Please select a ${activeTab === 'rmo' ? 'RMO' : 'Nurse'}`);
+            showNotification(`Please select a ${activeTab === 'rmo' ? 'RMO' : 'Nurse'}`, 'info');
             return;
         }
 
         if (!assignmentFormData.shift) {
-            alert('Please select a shift');
+            showNotification('Please select a shift', 'info');
             return;
         }
 
         try {
             const currentTasks = activeTab === 'rmo' ? rmoTasks : nurseTasks;
             const alreadyAssignedTasks = activeTab === 'rmo' ? assignedRmoTasks : assignedNurseTasks;
-            
-            const tasksToAssign = currentTasks.filter(task => 
+
+            const tasksToAssign = currentTasks.filter(task =>
                 !alreadyAssignedTasks.includes(task.task)
             );
 
             if (tasksToAssign.length === 0) {
-                alert(`All ${activeTab === 'rmo' ? 'RMO' : 'Nurse'} tasks are already assigned for this patient.`);
+                showNotification(`All ${activeTab === 'rmo' ? 'RMO' : 'Nurse'} tasks are already assigned for this patient.`, 'info');
                 return;
             }
 
             const assignmentsToInsert = tasksToAssign.map(task => {
                 const baseData = {
-                    timestamp: new Date().toLocaleString("en-CA", { 
-                        timeZone: "Asia/Kolkata", 
-                        hour12: false 
+                    timestamp: new Date().toLocaleString("en-CA", {
+                        timeZone: "Asia/Kolkata",
+                        hour12: false
                     }).replace(',', ''),
                     patient_name: selectedPatient.patient_name,
                     patient_location: selectedPatient.bed_location || selectedPatient.ward_type || '',
@@ -480,9 +482,9 @@ const PMS = () => {
                     reminder: assignmentFormData.reminder,
                     start_date: assignmentFormData.start_date,
                     task: task.task,
-                    planned1: new Date().toLocaleString("en-CA", { 
-                        timeZone: "Asia/Kolkata", 
-                        hour12: false 
+                    planned1: new Date().toLocaleString("en-CA", {
+                        timeZone: "Asia/Kolkata",
+                        hour12: false
                     }).replace(',', ''),
                 };
 
@@ -493,7 +495,7 @@ const PMS = () => {
                 } else {
                     baseData.Ipd_number = selectedPatient.ipd_number;
                     baseData.assign_nurse = assignmentFormData.assign_staff;
-                    
+
                     if (task.ot_task === 'pre OT') {
                         baseData.staff = 'pre ot';
                     } else if (task.ot_task === 'post OT') {
@@ -522,7 +524,7 @@ const PMS = () => {
                 setAssignedRmoTasks(prev => [...prev, ...tasksToAssign.map(task => task.task)]);
             } else {
                 setAssignedNurseTasks(prev => [...prev, ...tasksToAssign.map(task => task.task)]);
-                
+
                 const hasInformToRMOTask = tasksToAssign.some(task => task.task === "Inform To RMO");
                 if (hasInformToRMOTask) {
                     console.log('"Inform To RMO" task was assigned. Will check completion in 2 seconds...');
@@ -532,11 +534,11 @@ const PMS = () => {
                 }
             }
 
-            alert(`${tasksToAssign.length} tasks assigned successfully to ${assignmentFormData.assign_staff}`);
-            
+            showNotification(`${tasksToAssign.length} tasks assigned successfully to ${assignmentFormData.assign_staff}`, 'success');
+
         } catch (err) {
             console.error('Error assigning tasks:', err);
-            alert('Failed to assign tasks. Please try again.');
+            showNotification('Failed to assign tasks. Please try again.', 'error');
         }
     };
 
@@ -555,16 +557,16 @@ const PMS = () => {
     const formatPlannedDate = (dateString) => {
         if (!dateString) return 'Not Scheduled';
         const date = new Date(dateString);
-        return date.toLocaleDateString('en-IN') + ' ' + date.toLocaleTimeString('en-IN', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+        return date.toLocaleDateString('en-IN') + ' ' + date.toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit'
         });
     };
 
     const getAvailableTasks = () => {
         const allTasks = activeTab === 'rmo' ? rmoTasks : nurseTasks;
         const alreadyAssigned = activeTab === 'rmo' ? assignedRmoTasks : assignedNurseTasks;
-        
+
         return allTasks.filter(task => !alreadyAssigned.includes(task.task));
     };
 
@@ -611,7 +613,7 @@ const PMS = () => {
                                 Assign tasks to RMO and Nursing staff for IPD patients
                             </p>
                         </div>
-                        
+
                         <div className="flex flex-col sm:flex-row gap-2">
                             <div className="relative w-full sm:w-64">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -632,7 +634,7 @@ const PMS = () => {
                             </button>
                         </div>
                     </div>
-                    
+
                     {error && (
                         <div className="bg-red-50 border-l-4 border-red-400 p-3 text-sm">
                             <div className="flex items-start">
@@ -658,7 +660,7 @@ const PMS = () => {
                     filteredPatientsList.map((patient) => {
                         const assignment = assignments[patient.ipd_number];
                         const isExpanded = expandedPatient === patient.ipd_number;
-                        
+
                         return (
                             <div key={patient.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 {/* Card Header */}
@@ -670,9 +672,8 @@ const PMS = () => {
                                                 <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-medium">
                                                     IPD: {patient.ipd_number || 'N/A'}
                                                 </span>
-                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                                    assignment ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                                                }`}>
+                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${assignment ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                                    }`}>
                                                     {assignment ? 'Assigned' : 'Pending'}
                                                 </span>
                                             </div>
@@ -684,7 +685,7 @@ const PMS = () => {
                                             {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                                         </button>
                                     </div>
-                                    
+
                                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                                         <div>
                                             <p className="text-xs text-gray-500">Admission No</p>
@@ -696,7 +697,7 @@ const PMS = () => {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 {/* Expanded Content */}
                                 {isExpanded && (
                                     <div className="border-t px-4 py-3 bg-gray-50">
@@ -713,12 +714,12 @@ const PMS = () => {
                                                     <p className="text-sm font-medium">{patient.ward_type || 'N/A'}</p>
                                                 </div>
                                             </div>
-                                            
+
                                             <div>
                                                 <p className="text-xs text-gray-500">Planned Admission</p>
                                                 <p className="text-sm font-medium">{formatPlannedDate(patient.planned1)}</p>
                                             </div>
-                                            
+
                                             <div className="space-y-2">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
@@ -729,7 +730,7 @@ const PMS = () => {
                                                         {assignment?.rmoName || 'Not Assigned'}
                                                     </span>
                                                 </div>
-                                                
+
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <User className="w-4 h-4 text-blue-600" />
@@ -740,7 +741,7 @@ const PMS = () => {
                                                     </span>
                                                 </div>
                                             </div>
-                                            
+
                                             <button
                                                 onClick={() => handleAssignClick(patient)}
                                                 className="w-full mt-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2 text-sm"
@@ -873,22 +874,22 @@ const PMS = () => {
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                        <button 
+                                        <button
                                             onClick={refreshPatientData}
                                             className="p-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded text-sm flex items-center"
                                             disabled={tasksLoading}
                                         >
                                             <RefreshCw className={`w-3 h-3 ${tasksLoading ? 'animate-spin' : ''}`} />
                                         </button>
-                                        <button 
-                                            onClick={() => setShowModal(false)} 
+                                        <button
+                                            onClick={() => setShowModal(false)}
                                             className="text-white hover:text-blue-100 p-1"
                                         >
                                             <X className="w-5 h-5" />
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 {/* Status Indicators - Mobile Stacked */}
                                 <div className="flex flex-wrap gap-2 mt-3">
                                     {isLoadingOTStatus ? (
@@ -907,23 +908,22 @@ const PMS = () => {
                                             <span>Post-OT</span>
                                         </div>
                                     ) : null}
-                                    
+
                                     {dischargeStatus === 'discharge' && (
                                         <div className="flex items-center gap-1 bg-red-600 px-2 py-1 rounded text-xs">
                                             <LogOut className="w-3 h-3" />
                                             <span>Discharge</span>
                                         </div>
                                     )}
-                                    
+
                                     {isCheckingRMOCompletion ? (
                                         <div className="flex items-center gap-1 bg-blue-700 px-2 py-1 rounded text-xs">
                                             <div className="animate-spin rounded-full h-2 w-2 border-b-2 border-white"></div>
                                             <span>Checking RMO...</span>
                                         </div>
                                     ) : (
-                                        <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                                            isInformToRMOCompleted ? 'bg-green-700' : 'bg-yellow-600'
-                                        }`}>
+                                        <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${isInformToRMOCompleted ? 'bg-green-700' : 'bg-yellow-600'
+                                            }`}>
                                             {isInformToRMOCompleted ? (
                                                 <>
                                                     <CheckCircle className="w-3 h-3" />
@@ -946,11 +946,10 @@ const PMS = () => {
                             <nav className="flex">
                                 <button
                                     onClick={() => setActiveTab('rmo')}
-                                    className={`flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm ${
-                                        activeTab === 'rmo'
+                                    className={`flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm ${activeTab === 'rmo'
                                             ? 'border-blue-500 text-blue-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                    }`}
+                                        }`}
                                 >
                                     <div className="flex flex-col items-center gap-1">
                                         <Stethoscope className="w-4 h-4" />
@@ -959,11 +958,10 @@ const PMS = () => {
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('nurse')}
-                                    className={`flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm ${
-                                        activeTab === 'nurse'
+                                    className={`flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm ${activeTab === 'nurse'
                                             ? 'border-blue-500 text-blue-600'
                                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                    }`}
+                                        }`}
                                 >
                                     <div className="flex flex-col items-center gap-1">
                                         <User className="w-4 h-4" />
@@ -1082,7 +1080,7 @@ const PMS = () => {
                                                 </p>
                                             </div>
                                         </div>
-                                        
+
                                         <div className="overflow-y-auto max-h-[300px] md:max-h-[400px]">
                                             {tasksLoading ? (
                                                 <div className="flex justify-center items-center py-8">
@@ -1163,7 +1161,7 @@ const PMS = () => {
                                         <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-3 md:mb-4">
                                             Assign All {activeTab === 'rmo' ? 'RMO' : 'Nurse'} Tasks
                                         </h3>
-                                        
+
                                         <form onSubmit={handleAssignAllTasks} className="space-y-3 md:space-y-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1237,17 +1235,15 @@ const PMS = () => {
                                                 </select>
                                             </div>
 
-                                            <div className={`border rounded-lg p-3 md:p-4 mt-4 md:mt-6 ${
-                                                activeTab === 'rmo' && !isInformToRMOCompleted 
-                                                ? 'bg-gray-100 border-gray-300' 
-                                                : 'bg-yellow-50 border-yellow-200'
-                                            }`}>
+                                            <div className={`border rounded-lg p-3 md:p-4 mt-4 md:mt-6 ${activeTab === 'rmo' && !isInformToRMOCompleted
+                                                    ? 'bg-gray-100 border-gray-300'
+                                                    : 'bg-yellow-50 border-yellow-200'
+                                                }`}>
                                                 <div className="flex items-start gap-2 md:gap-3">
-                                                    <AlertCircle className={`w-4 h-4 md:w-5 md:h-5 flex-shrink-0 ${
-                                                        activeTab === 'rmo' && !isInformToRMOCompleted 
-                                                        ? 'text-gray-400' 
-                                                        : 'text-yellow-600'
-                                                    }`} />
+                                                    <AlertCircle className={`w-4 h-4 md:w-5 md:h-5 flex-shrink-0 ${activeTab === 'rmo' && !isInformToRMOCompleted
+                                                            ? 'text-gray-400'
+                                                            : 'text-yellow-600'
+                                                        }`} />
                                                     <div className="flex-1 min-w-0">
                                                         {activeTab === 'rmo' && !isInformToRMOCompleted ? (
                                                             <>
@@ -1274,13 +1270,12 @@ const PMS = () => {
 
                                             <button
                                                 type="submit"
-                                                className={`w-full mt-3 md:mt-4 px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2 text-sm ${
-                                                    activeTab === 'rmo' && !isInformToRMOCompleted
+                                                className={`w-full mt-3 md:mt-4 px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2 text-sm ${activeTab === 'rmo' && !isInformToRMOCompleted
                                                         ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
                                                         : getAvailableTasks().length === 0
-                                                        ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
-                                                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                                                }`}
+                                                            ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                                                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                    }`}
                                                 disabled={getAvailableTasks().length === 0 || (activeTab === 'rmo' && !isInformToRMOCompleted)}
                                             >
                                                 <Save className="w-4 h-4 md:w-5 md:h-5" />

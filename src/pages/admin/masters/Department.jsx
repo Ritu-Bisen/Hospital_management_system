@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Save, Building, Hash, Calendar } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const Department = () => {
   const [departments, setDepartments] = useState([]);
@@ -8,7 +9,8 @@ const Department = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState(null);
-  
+  const { showNotification } = useNotification();
+
   // Form state
   const [formData, setFormData] = useState({
     department: ''
@@ -27,7 +29,7 @@ const Department = () => {
       setDepartments(data || []);
     } catch (error) {
       console.error('Error fetching departments:', error);
-      alert('Error loading department data');
+      showNotification('Error loading department data', 'error');
     } finally {
       setLoading(false);
     }
@@ -81,22 +83,22 @@ const Department = () => {
   // Validate form
   const validateForm = () => {
     if (!formData.department.trim()) {
-      alert('Department name is required');
+      showNotification('Department name is required', 'error');
       return false;
     }
-    
+
     // Check for duplicates (case insensitive)
     const duplicate = departments.find(
-      dept => 
+      dept =>
         dept.department?.toLowerCase() === formData.department.toLowerCase() &&
         (!editingDepartment || dept.id !== editingDepartment.id)
     );
-    
+
     if (duplicate) {
-      alert(`Department "${formData.department}" already exists`);
+      showNotification(`Department "${formData.department}" already exists`, 'error');
       return false;
     }
-    
+
     return true;
   };
 
@@ -117,7 +119,7 @@ const Department = () => {
           .eq('id', editingDepartment.id);
 
         if (error) throw error;
-        alert('Department updated successfully!');
+        showNotification('Department updated successfully!', 'success');
       } else {
         // Insert new department
         const { error } = await supabase
@@ -125,14 +127,14 @@ const Department = () => {
           .insert([departmentData]);
 
         if (error) throw error;
-        alert('Department added successfully!');
+        showNotification('Department added successfully!', 'success');
       }
 
       fetchDepartments();
       closeModal();
     } catch (error) {
       console.error('Error saving department:', error);
-      alert('Error saving department');
+      showNotification('Error saving department', 'error');
     }
   };
 
@@ -149,11 +151,11 @@ const Department = () => {
         .eq('id', id);
 
       if (error) throw error;
-      alert('Department deleted successfully!');
+      showNotification('Department deleted successfully!', 'success');
       fetchDepartments();
     } catch (error) {
       console.error('Error deleting department:', error);
-      alert('Error deleting department');
+      showNotification('Error deleting department', 'error');
     }
   };
 
@@ -275,10 +277,10 @@ const Department = () => {
                   </td>
                 </tr>
               ) : (
-                filteredDepartments.map((dept,index) => (
+                filteredDepartments.map((dept, index) => (
                   <tr key={dept.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      #{index+1}
+                      #{index + 1}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">

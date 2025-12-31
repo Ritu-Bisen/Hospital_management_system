@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, X, Clock, CheckCircle, Image, Upload } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const DischargeBill = () => {
   const [activeTab, setActiveTab] = useState('pending');
@@ -11,11 +12,11 @@ const DischargeBill = () => {
   const [billStatus, setBillStatus] = useState('');
   const [billImageFile, setBillImageFile] = useState(null);
   const [billImagePreview, setBillImagePreview] = useState('');
-  const [viewImageModal, setViewImageModal] = useState(false);
-  const [viewingImage, setViewingImage] = useState(null);
-  const [submitError, setSubmitError] = useState('');
+  const { showNotification } = useNotification();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewImageModal, setViewImageModal] = useState(false);
+  const [viewingImage, setViewingImage] = useState(null);
 
   // Load data on component mount and set interval
   useEffect(() => {
@@ -29,7 +30,7 @@ const DischargeBill = () => {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      
+
       // Fetch pending records (planned5 is not null and actual5 is null)
       const { data: pendingData, error: pendingError } = await supabase
         .from('discharge')
@@ -39,7 +40,16 @@ const DischargeBill = () => {
         .order('planned5', { ascending: true });
 
       if (pendingError) throw pendingError;
-      setPendingRecords(pendingData || []);
+      const formattedPending = (pendingData || []).map(record => ({
+        ...record,
+        planned5Date: record.planned5 ? new Date(record.planned5).toLocaleDateString('en-GB') : 'N/A',
+        planned5Time: record.planned5 ? new Date(record.planned5).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }) : 'N/A',
+      }));
+      setPendingRecords(formattedPending || []);
 
       // Fetch history records (both planned5 and actual5 are not null)
       const { data: historyData, error: historyError } = await supabase
@@ -50,12 +60,26 @@ const DischargeBill = () => {
         .order('actual5', { ascending: false });
 
       if (historyError) throw historyError;
-      setHistoryRecords(historyData || []);
+      const formattedHistory = (historyData || []).map(record => ({
+        ...record,
+        planned5Date: record.planned5 ? new Date(record.planned5).toLocaleDateString('en-GB') : 'N/A',
+        planned5Time: record.planned5 ? new Date(record.planned5).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }) : 'N/A',
+        actual5Date: record.actual5 ? new Date(record.actual5).toLocaleDateString('en-GB') : 'N/A',
+        actual5Time: record.actual5 ? new Date(record.actual5).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }) : 'N/A',
+      }));
+      setHistoryRecords(formattedHistory || []);
 
     } catch (error) {
       console.error('Error loading data from Supabase:', error);
-      setSubmitError('Failed to load data');
-      setTimeout(() => setSubmitError(''), 3000);
+      showNotification('Failed to load data', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -66,7 +90,6 @@ const DischargeBill = () => {
     setBillStatus('');
     setBillImageFile(null);
     setBillImagePreview('');
-    setSubmitError('');
     setShowBillModal(true);
   };
 
@@ -76,21 +99,19 @@ const DischargeBill = () => {
     setBillStatus('');
     setBillImageFile(null);
     setBillImagePreview('');
-    setSubmitError('');
   };
 
   const handleBillImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        setSubmitError('Image size should be less than 5MB');
-        setTimeout(() => setSubmitError(''), 3000);
+        showNotification('Image size should be less than 5MB', 'error');
         return;
       }
 
       // Store the file object for later upload
       setBillImageFile(file);
-      
+
       // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -130,58 +151,67 @@ const DischargeBill = () => {
     }
   };
 
- const handleSubmitBill = async () => {
-  if (!billStatus) {
-    setSubmitError('Please select Bill Status');
-    setTimeout(() => setSubmitError(''), 3000);
-    return;
-  }
-
-  try {
-    setIsSubmitting(true);
-    setSubmitError('');
-
-    let billImageUrl = null;
-    
-    // Only upload image if provided (now optional)
-    if (billImageFile) {
-      billImageUrl = await uploadImageToStorage(billImageFile);
+  const handleSubmitBill = async () => {
+    if (!billStatus) {
+      showNotification('Please select Bill Status', 'error');
+      return;
     }
 
-    // Step 2: Update the record in Supabase database
-    const { error } = await supabase
-      .from('discharge')
-      .update({
-        actual5: new Date().toLocaleString("en-CA", { 
-          timeZone: "Asia/Kolkata", 
-          hour12: false 
-        }).replace(',', ''),
-        bill_status: billStatus,
-        bill_image: billImageUrl, // This will be null if no image was uploaded
-      })
-      .eq('admission_no', selectedRecord.admission_no);
+    try {
+      setIsSubmitting(true);
 
-    if (error) throw error;
+      let billImageUrl = null;
 
-    handleCloseBillModal();
-    await loadData();
+      // Only upload image if provided (now optional)
+      if (billImageFile) {
+        billImageUrl = await uploadImageToStorage(billImageFile);
+      }
 
-  } catch (error) {
-    console.error('Error updating Discharge Bill data:', error);
-    setSubmitError(error.message || 'Failed to save. Please try again.');
-    setTimeout(() => setSubmitError(''), 3000);
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+      // Step 2: Update the record in Supabase database
+      const { error } = await supabase
+        .from('discharge')
+        .update({
+          actual5: new Date().toLocaleString("en-CA", {
+            timeZone: "Asia/Kolkata",
+            hour12: false
+          }).replace(',', ''),
+          bill_status: billStatus,
+          bill_image: billImageUrl, // This will be null if no image was uploaded
+        })
+        .eq('admission_no', selectedRecord.admission_no);
+
+      if (error) throw error;
+      const { error: updateError } = await supabase
+        .from('ipd_admissions')
+        .update({
+          actual1: new Date().toLocaleString("en-CA", {
+            timeZone: "Asia/Kolkata",
+            hour12: false
+          }).replace(',', ''),
+        })
+        .eq('admission_no', selectedRecord.admission_no);
+
+      if (updateError) throw updateError;
+
+      handleCloseBillModal();
+      showNotification('Discharge Bill added successfully!', 'success');
+      await loadData();
+
+    } catch (error) {
+      console.error('Error updating Discharge Bill data:', error);
+      showNotification(error.message || 'Failed to save. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const calculateDelay = (plannedDate) => {
     if (!plannedDate) return 'On Time';
-    
+
     const planned = new Date(plannedDate);
     const actual = new Date();
     const diffHours = Math.floor((actual - planned) / (1000 * 60 * 60));
-    
+
     if (diffHours <= 0) return 'On Time';
     return `${diffHours} hour${diffHours > 1 ? 's' : ''} delay`;
   };
@@ -191,7 +221,7 @@ const DischargeBill = () => {
     setViewImageModal(true);
   };
 
- 
+
 
   return (
     <div className="p-3 space-y-4 md:p-6 bg-white min-h-screen">
@@ -205,22 +235,14 @@ const DischargeBill = () => {
             Process discharge bills after authority approval
           </p>
         </div>
-        {/* {isLoading && (
-          <div className="text-sm text-gray-500 animate-pulse">
-            Loading...
-          </div>
-        )} */}
       </div>
-
-      {/* Tabs */}
       <div className="flex gap-2 border-b border-gray-200">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-            activeTab === 'pending'
-              ? 'text-green-600 border-b-2 border-green-600'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
+          className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'pending'
+            ? 'text-green-600 border-b-2 border-green-600'
+            : 'text-gray-600 hover:text-gray-900'
+            }`}
         >
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4" />
@@ -234,11 +256,10 @@ const DischargeBill = () => {
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-            activeTab === 'history'
-              ? 'text-green-600 border-b-2 border-green-600'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
+          className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'history'
+            ? 'text-green-600 border-b-2 border-green-600'
+            : 'text-gray-600 hover:text-gray-900'
+            }`}
         >
           <div className="flex items-center gap-2">
             <CheckCircle className="w-4 h-4" />
@@ -260,26 +281,26 @@ const DischargeBill = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-green-600 text-white">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Action</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Admission No</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Patient Name</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Department</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Consultant</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Staff Name</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Discharge Date</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Status</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">RMO Name</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Summary Report</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Work File</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Concern Dept</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Authority</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Action</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Admission No</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Patient Name</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Department</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Consultant</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Staff Name</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Planned Bill</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Status</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">RMO Name</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Summary Report</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Work File</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Concern Dept</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Authority</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {pendingRecords.length > 0 ? (
                   pendingRecords.map((record) => (
                     <tr key={record.id} className="hover:bg-green-50">
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <button
                           onClick={() => handleOpenBillModal(record)}
                           className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700"
@@ -304,7 +325,7 @@ const DischargeBill = () => {
                         {record.staff_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {record.planned5 ? new Date(record.planned5).toLocaleDateString('en-GB') : 'N/A'}
+                        {record.planned5Date} {record.planned5Time}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                         {record.rmo_status}
@@ -312,7 +333,7 @@ const DischargeBill = () => {
                       <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                         {record.rmo_name}
                       </td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
                         {record.summary_report_image ? (
                           <button
                             onClick={() => openImageViewer(record.summary_report_image)}
@@ -326,21 +347,19 @@ const DischargeBill = () => {
                           <span className="text-gray-500">No image</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          record.work_file === 'Yes'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${record.work_file === 'Yes'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                          }`}>
                           {record.work_file || '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          record.concern_dept === 'Yes'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${record.concern_dept === 'Yes'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                          }`}>
                           {record.concern_dept || '-'}
                         </span>
                       </td>
@@ -381,7 +400,7 @@ const DischargeBill = () => {
                     <div><span className="text-gray-600">Dept:</span> <strong>{record.department}</strong></div>
                     <div><span className="text-gray-600">Consultant:</span> {record.consultant_name || 'N/A'}</div>
                     <div><span className="text-gray-600">Staff:</span> {record.staff_name}</div>
-                    <div><span className="text-gray-600">Planned:</span> {record.planned5 ? new Date(record.planned5).toLocaleDateString('en-GB') : 'N/A'}</div>
+                    <div><span className="text-gray-600">Planned Bill:</span> {record.planned5Date} {record.planned5Time}</div>
                     <div><span className="text-gray-600">RMO:</span> {record.rmo_name}</div>
                     <div><span className="text-gray-600">Authority:</span>{' '}
                       <span className={record.concern_dept === 'Yes' ? 'text-green-700' : 'text-red-700'}>
@@ -429,39 +448,43 @@ const DischargeBill = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-green-600 text-white">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Admission No</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Patient Name</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Department</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Consultant</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Staff Name</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Discharge Date</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Status</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">RMO Name</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Summary Report</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Work File</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Concern dept</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Authority</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Bill Status</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left uppercase">Bill Image</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Admission No</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Patient Name</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Department</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Consultant</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Staff Name</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Planned Bill Date</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Actual Bill Date</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Status</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">RMO Name</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Summary Report</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Work File</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Concern dept</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Authority</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Bill Status</th>
+                  <th className="px-4 py-3 text-xs font-medium text-left uppercase whitespace-nowrap">Bill Image</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {historyRecords.length > 0 ? (
                   historyRecords.map((record) => (
                     <tr key={record.id} className="hover:bg-green-50">
-                      <td className="px-4 py-3 text-sm font-medium text-green-600">{record.admission_no}</td>
-                      <td className="px-4 py-3 text-sm">{record.patient_name}</td>
-                      <td className="px-4 py-3 text-sm">{record.department}</td>
-                      <td className="px-4 py-3 text-sm">{record.consultant_name || 'N/A'}</td>
-                      <td className="px-4 py-3 text-sm">{record.staff_name}</td>
-                      <td className="px-4 py-3 text-sm">
-                        {record.planned5 ? new Date(record.planned5).toLocaleDateString('en-GB') : 'N/A'}
+                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.admission_no}</td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">{record.patient_name}</td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">{record.department}</td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">{record.consultant_name || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">{record.staff_name}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {record.planned5Date} {record.planned5Time}
                       </td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                        {record.actual5Date} {record.actual5Time}
+                      </td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
                         {record.rmo_status}
                       </td>
-                      <td className="px-4 py-3 text-sm">{record.rmo_name}</td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">{record.rmo_name}</td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
                         {record.summary_report_image ? (
                           <button
                             onClick={() => openImageViewer(record.summary_report_image)}
@@ -471,35 +494,32 @@ const DischargeBill = () => {
                           </button>
                         ) : 'No image'}
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          record.work_file === 'Yes'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs rounded-full ${record.work_file === 'Yes'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                          }`}>
                           {record.work_file || '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          record.concern_dept === 'Yes'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs rounded-full ${record.concern_dept === 'Yes'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                          }`}>
                           {record.concern_dept || '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm">{record.concern_authority_work_file}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          record.bill_status === 'Yes'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">{record.concern_authority_work_file}</td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs rounded-full ${record.bill_status === 'Yes'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                          }`}>
                           {record.bill_status || '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
                         {record.bill_image ? (
                           <button
                             onClick={() => openImageViewer(record.bill_image)}
@@ -513,7 +533,7 @@ const DischargeBill = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="14" className="py-12 text-center text-gray-500">
+                    <td colSpan="15" className="py-12 text-center text-gray-500">
                       <CheckCircle className="mx-auto mb-4 w-12 h-12 text-gray-300" />
                       <p>No completed bills yet</p>
                     </td>
@@ -532,11 +552,10 @@ const DischargeBill = () => {
                     <div className="text-sm font-medium text-green-600">{record.admission_no}</div>
                     <div className="font-semibold">{record.patient_name}</div>
                   </div>
-                  <span className={`px-2 py-1 text-xs rounded-full ${
-                    record.delay5 === 'On Time' || !record.delay5
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700'
-                  }`}>
+                  <span className={`px-2 py-1 text-xs rounded-full ${record.delay5 === 'On Time' || !record.delay5
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-red-100 text-red-700'
+                    }`}>
                     {record.delay5 || 'N/A'}
                   </span>
                 </div>
@@ -544,8 +563,8 @@ const DischargeBill = () => {
                   <div>Dept: <strong>{record.department}</strong></div>
                   <div>Consultant: {record.consultant_name || 'N/A'}</div>
                   <div>Staff: {record.staff_name}</div>
-                  <div>Planned: {record.planned5 ? new Date(record.planned5).toLocaleDateString('en-GB') : 'N/A'}</div>
-                  <div>Actual: {record.actual5 ? new Date(record.actual5).toLocaleDateString('en-GB') : 'N/A'}</div>
+                  <div>Planned Bill: {record.planned5Date} {record.planned5Time}</div>
+                  <div>Actual Bill: {record.actual5Date} {record.actual5Time}</div>
                   <div>Authority: <strong className={record.concern_dept === 'Yes' ? 'text-green-700' : 'text-red-700'}>{record.concern_dept}</strong></div>
                   <div>Bill Status: <strong className={record.bill_status === 'Yes' ? 'text-green-700' : 'text-red-700'}>{record.bill_status}</strong></div>
                 </div>
@@ -577,11 +596,7 @@ const DischargeBill = () => {
             </div>
 
             <div className="p-6 space-y-4">
-              {submitError && (
-                <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg">
-                  {submitError}
-                </div>
-              )}
+
 
               {/* Pre-filled Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -711,9 +726,8 @@ const DischargeBill = () => {
                 <button
                   onClick={handleSubmitBill}
                   disabled={isSubmitting}
-                  className={`flex-1 px-4 py-2.5 text-white rounded-lg font-medium ${
-                    isSubmitting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
-                  }`}
+                  className={`flex-1 px-4 py-2.5 text-white rounded-lg font-medium ${isSubmitting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+                    }`}
                 >
                   {isSubmitting ? 'Uploading Image...' : 'Submit Bill'}
                 </button>

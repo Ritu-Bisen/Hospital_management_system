@@ -6,6 +6,9 @@ const Payment = () => {
   const [activeTab, setActiveTab] = useState('pending');
   const [pendingPayments, setPendingPayments] = useState([]);
   const [historyPayments, setHistoryPayments] = useState([]);
+  const [selectedPatient, setSelectedPatient] = useState('');
+  const [patientNames, setPatientNames] = useState([]);
+  const [selectedDate, setSelectedDate] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
@@ -14,12 +17,12 @@ const Payment = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  
+
   // Notification state
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState('success'); // 'success' or 'error'
-  
+
   const [formData, setFormData] = useState({
     payment: '',
     billImage: null
@@ -30,7 +33,7 @@ const Payment = () => {
     if (showNotification) {
       const timer = setTimeout(() => {
         setShowNotification(false);
-      }, 3000);
+      }, 1000);
       return () => clearTimeout(timer);
     }
   }, [showNotification]);
@@ -69,14 +72,14 @@ const Payment = () => {
   const loadData = async () => {
     try {
       setInitialLoading(true);
-      
+
       // Load pending payments (planned1 IS NOT NULL AND actually IS NULL AND payment_status IS NULL)
       const { data: pendingData, error: pendingError } = await supabase
         .from('lab')
         .select(`*`)
         .not('planned1', 'is', null)
         .is('actual1', null)
-        .is('payment_status', null)
+
         .order('timestamp', { ascending: false });
 
       if (pendingError) throw pendingError;
@@ -85,7 +88,7 @@ const Payment = () => {
         // Generate advice number from record.id (UUID)
         const idString = record.id?.toString() || '';
         const adviceNo = record.advice_no || `ADV-${idString.substring(0, 8)}`;
-        
+
         return {
           id: record.id,
           uniqueNumber: record.admission_no || 'N/A', // Changed from unique_number to admission_no
@@ -107,7 +110,8 @@ const Payment = () => {
           planned1: record.planned1,
           actual1: record.actual1, // Note: column name is "actually" not "actual1"
           paymentId: record.id,
-          admissionNo: record.admission_no // Added this to show full admission_no
+          admissionNo: record.admission_no, // Added this to show full admission_no
+          planned3: record.planned1 // Added planned3
         };
       });
 
@@ -118,7 +122,7 @@ const Payment = () => {
         .from('lab')
         .select(`*`)
         .not('planned1', 'is', null)
-         .not('actual1', 'is', null)
+        .not('actual1', 'is', null)
         .order('timestamp', { ascending: false });
 
       if (historyError) throw historyError;
@@ -127,7 +131,7 @@ const Payment = () => {
         // Generate advice number from record.id (UUID)
         const idString = record.id?.toString() || '';
         const adviceNo = record.advice_no || `ADV-${idString.substring(0, 8)}`;
-        
+
         return {
           id: record.id,
           uniqueNumber: record.admission_no || 'N/A', // Changed from unique_number to admission_no
@@ -150,11 +154,20 @@ const Payment = () => {
           billImage: record.bill_image_url, // Note: column name is "kill_image_url" not "bill_image_url"
           processedDate: record.actual1,
           paymentId: record.id,
-          admissionNo: record.admission_no // Added this to show full admission_no
+          admissionNo: record.admission_no, // Added this to show full admission_no
+          planned1: record.planned1, // Added planned1
+          actual1: record.actual1 // Added actual1
         };
       });
 
       setHistoryPayments(formattedHistory);
+
+      // Extract unique patient names from both lists
+      const allRecords = [...formattedPending, ...formattedHistory];
+      const uniquePatients = [...new Set(allRecords.map(r => r.patientName))]
+        .filter(name => name && name !== 'N/A')
+        .sort();
+      setPatientNames(uniquePatients);
     } catch (error) {
       console.error('Failed to load data:', error);
       showNotificationPopup('Failed to load payment data. Please try again.', 'error');
@@ -183,7 +196,7 @@ const Payment = () => {
         setModalError('File size should be less than 5MB');
         return;
       }
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setFormData(prev => ({
@@ -196,100 +209,100 @@ const Payment = () => {
     }
   };
 
-const handleSubmit = async () => {
-  if (!formData.payment) {
-    setModalError('Please select payment status');
-    return;
-  }
+  const handleSubmit = async () => {
+    if (!formData.payment) {
+      setModalError('Please select payment status');
+      return;
+    }
 
-  // Only require bill image if payment is "Yes"
-  if (formData.payment === 'Yes' && !formData.billImage) {
-    setModalError('Please upload bill image');
-    return;
-  }
+    // Only require bill image if payment is "Yes"
+    // if (formData.payment === 'Yes' && !formData.billImage) {
+    //   setModalError('Please upload bill image');
+    //   return;
+    // }
 
-  try {
-    setLoading(true);
-    
-    let publicUrl = null;
-    
-    // Only process image upload if payment is "Yes" and billImage exists
-    if (formData.payment === 'Yes' && formData.billImage) {
-      // Convert base64 to blob
-      const base64Data = formData.billImage.split(',')[1];
-      const binaryData = atob(base64Data);
-      const arrayBuffer = new ArrayBuffer(binaryData.length);
-      const uint8Array = new Uint8Array(arrayBuffer);
-      
-      for (let i = 0; i < binaryData.length; i++) {
-        uint8Array[i] = binaryData.charCodeAt(i);
+    try {
+      setLoading(true);
+
+      let publicUrl = null;
+
+      // Only process image upload if payment is "Yes" and billImage exists
+      if (formData.payment === 'Yes' && formData.billImage) {
+        // Convert base64 to blob
+        const base64Data = formData.billImage.split(',')[1];
+        const binaryData = atob(base64Data);
+        const arrayBuffer = new ArrayBuffer(binaryData.length);
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        for (let i = 0; i < binaryData.length; i++) {
+          uint8Array[i] = binaryData.charCodeAt(i);
+        }
+
+        const blob = new Blob([uint8Array], { type: 'image/jpeg' });
+
+        // Upload image to Supabase Storage
+        const fileName = `bill_${selectedRecord.id}_${Date.now()}.jpg`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('bill_image')
+          .upload(fileName, blob, {
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data: { publicUrl: url } } = supabase.storage
+          .from('bill_image')
+          .getPublicUrl(fileName);
+
+        publicUrl = url;
       }
-      
-      const blob = new Blob([uint8Array], { type: 'image/jpeg' });
-      
-      // Upload image to Supabase Storage
-      const fileName = `bill_${selectedRecord.id}_${Date.now()}.jpg`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('bill_image')
-        .upload(fileName, blob, {
-          contentType: 'image/jpeg',
-          upsert: true
-        });
 
-      if (uploadError) throw uploadError;
+      // Prepare update data
+      const updateData = {
+        payment_status: formData.payment,
+        planned2: new Date().toLocaleString("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour12: false
+        }).replace(',', ''),
+        actual1: new Date().toLocaleString("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour12: false
+        }).replace(',', ''),
+      };
 
-      // Get public URL
-      const { data: { publicUrl: url } } = supabase.storage
-        .from('bill_image')
-        .getPublicUrl(fileName);
-      
-      publicUrl = url;
+      // Only include bill_image_url if payment is "Yes" and we have a URL
+      if (formData.payment === 'Yes' && publicUrl) {
+        updateData.bill_image_url = publicUrl;
+      } else if (formData.payment !== 'Yes') {
+        // If payment is not "Yes", set bill_image_url to null or empty string
+        updateData.bill_image_url = null;
+      }
+
+      // Update lab record with payment info
+      const { error: updateError } = await supabase
+        .from('lab')
+        .update(updateData)
+        .eq('id', selectedRecord.id);
+
+      if (updateError) throw updateError;
+
+      // Reload data
+      await loadData();
+
+      // Show success notification
+      showNotificationPopup('Payment processed successfully!', 'success');
+
+      setShowModal(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to process payment:', error);
+      showNotificationPopup('Failed to process payment. Please try again.', 'error');
+    } finally {
+      setLoading(false);
     }
-
-    // Prepare update data
-    const updateData = {
-      payment_status: formData.payment,
-      planned2: new Date().toLocaleString("en-CA", { 
-        timeZone: "Asia/Kolkata", 
-        hour12: false 
-      }).replace(',', ''),
-      actual1: new Date().toLocaleString("en-CA", { 
-        timeZone: "Asia/Kolkata", 
-        hour12: false 
-      }).replace(',', ''),
-    };
-
-    // Only include bill_image_url if payment is "Yes" and we have a URL
-    if (formData.payment === 'Yes' && publicUrl) {
-      updateData.bill_image_url = publicUrl;
-    } else if (formData.payment !== 'Yes') {
-      // If payment is not "Yes", set bill_image_url to null or empty string
-      updateData.bill_image_url = null;
-    }
-
-    // Update lab record with payment info
-    const { error: updateError } = await supabase
-      .from('lab')
-      .update(updateData)
-      .eq('id', selectedRecord.id);
-
-    if (updateError) throw updateError;
-
-    // Reload data
-    await loadData();
-    
-    // Show success notification
-    showNotificationPopup('Payment processed successfully!', 'success');
-    
-    setShowModal(false);
-    resetForm();
-  } catch (error) {
-    console.error('Failed to process payment:', error);
-    showNotificationPopup('Failed to process payment. Please try again.', 'error');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const resetForm = () => {
     setFormData({
@@ -312,7 +325,7 @@ const handleSubmit = async () => {
       showNotificationPopup('No bill image available', 'error');
       return;
     }
-    
+
     const newWindow = window.open();
     newWindow.document.write(`
       <html>
@@ -320,9 +333,29 @@ const handleSubmit = async () => {
         <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;">
           <img src="${imageUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
         </body>
+
       </html>
     `);
   };
+
+  // Filter Logic
+  const applyFilters = (records) => {
+    return records.filter(record => {
+      // Filter by Patient Name
+      if (selectedPatient && record.patientName !== selectedPatient) return false;
+
+      // Filter by Date (comparing with planned1)
+      if (selectedDate && record.planned1) {
+        const recordDate = new Date(record.planned1).toISOString().split('T')[0];
+        if (recordDate !== selectedDate) return false;
+      }
+
+      return true;
+    });
+  };
+
+  const filteredPendingPayments = applyFilters(pendingPayments);
+  const filteredHistoryPayments = applyFilters(historyPayments);
 
   // Calculate statistics
   const totalPathology = [...pendingPayments, ...historyPayments].filter(r => r.category === 'Pathology').length;
@@ -344,44 +377,48 @@ const handleSubmit = async () => {
   }
 
   return (
-    <div className="p-3 space-y-4 md:p-6 bg-gray-50 min-h-screen">
+    <div className="flex flex-col h-screen bg-gray-50">
+      {/* Fixed Header */}
+      <div className="flex-none bg-white border-b border-gray-200">
+        <div className="px-4 py-3 sm:px-6">
+          <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 sm:text-2xl lg:text-3xl">Payment Management</h1>
+              <p className="hidden mt-1 text-sm text-gray-500 sm:block">Process payments and manage billing records</p>
+            </div>
+          </div>
+        </div>
+      </div>
       {/* Notification Popup */}
       {showNotification && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className={`relative w-full max-w-md transform transition-all duration-300 ${
-            showNotification ? 'animate-scale-in opacity-100' : 'opacity-0 scale-95'
-          }`}>
-            <div className={`rounded-lg shadow-2xl overflow-hidden ${
-              notificationType === 'success' 
-                ? 'bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200' 
-                : 'bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200'
-            }`}>
+          <div className={`relative w-full max-w-md transform transition-all duration-300 ${showNotification ? 'animate-scale-in opacity-100' : 'opacity-0 scale-95'
+            } `}>
+            <div className={`rounded-lg shadow-2xl overflow-hidden ${notificationType === 'success'
+              ? 'bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200'
+              : 'bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200'
+              } `}>
               <div className="p-6 text-center">
-                <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
-                  notificationType === 'success' ? 'bg-green-100' : 'bg-red-100'
-                }`}>
+                <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${notificationType === 'success' ? 'bg-green-100' : 'bg-red-100'
+                  } `}>
                   {notificationType === 'success' ? (
                     <Check className="w-8 h-8 text-green-600" />
                   ) : (
                     <X className="w-8 h-8 text-red-600" />
                   )}
                 </div>
-                <h3 className={`text-lg font-bold mb-2 ${
-                  notificationType === 'success' ? 'text-green-800' : 'text-red-800'
-                }`}>
+                <h3 className={`text-lg font-bold mb-2 ${notificationType === 'success' ? 'text-green-800' : 'text-red-800'
+                  } `}>
                   {notificationType === 'success' ? 'Success!' : 'Error!'}
                 </h3>
-                <p className={`text-sm ${
-                  notificationType === 'success' ? 'text-green-600' : 'text-red-600'
-                }`}>
+                <p className={`text-sm ${notificationType === 'success' ? 'text-green-600' : 'text-red-600'
+                  } `}>
                   {notificationMessage}
                 </p>
-                <div className={`mt-4 h-1 w-full ${
-                  notificationType === 'success' ? 'bg-green-200' : 'bg-red-200'
-                }`}>
-                  <div className={`h-full ${
-                    notificationType === 'success' ? 'bg-green-500' : 'bg-red-500'
-                  } animate-progress`}></div>
+                <div className={`mt-4 h-1 w-full ${notificationType === 'success' ? 'bg-green-200' : 'bg-red-200'
+                  } `}>
+                  <div className={`h-full ${notificationType === 'success' ? 'bg-green-500' : 'bg-red-500'
+                    } animate-progress`}></div>
                 </div>
               </div>
             </div>
@@ -389,340 +426,496 @@ const handleSubmit = async () => {
         </div>
       )}
 
-      <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Payment Management</h1>
-          <p className="mt-1 text-sm text-gray-600">Process payments and manage billing records</p>
-        </div>
-      </div>
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto px-3 sm:px-4 pb-4">
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-2 gap-3 mb-4 md:grid-cols-3 lg:grid-cols-6 pt-4">
+          <div className="p-3 bg-white rounded-lg border border-green-200 shadow-sm sm:p-4">
+            <div className="flex flex-col">
+              <span className="text-xs font-medium text-gray-600 uppercase truncate">Total Path</span>
+              <span className="text-lg font-bold text-green-600 mt-1 sm:text-l">{totalPathology}</span>
+            </div>
+          </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <div className="p-4 bg-white rounded-lg border border-green-200 shadow-sm">
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-gray-600 uppercase">Total Pathology</span>
-            <span className="text-2xl font-bold text-green-600 mt-1">{totalPathology}</span>
+          <div className="p-3 bg-white rounded-lg border border-purple-200 shadow-sm sm:p-4">
+            <div className="flex flex-col">
+              <span className="text-xs font-medium text-gray-600 uppercase truncate">Total Rad</span>
+              <span className="text-lg font-bold text-purple-600 mt-1 sm:text-l">{totalRadiology}</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-white rounded-lg border border-green-200 shadow-sm sm:p-4">
+            <div className="flex flex-col">
+              <span className="text-xs font-medium text-gray-600 uppercase truncate">Comp Path</span>
+              <span className="text-lg font-bold text-green-600 mt-1 sm:text-l">{completePathology}</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-white rounded-lg border border-teal-200 shadow-sm sm:p-4">
+            <div className="flex flex-col">
+              <span className="text-xs font-medium text-gray-600 uppercase truncate">Comp Rad</span>
+              <span className="text-lg font-bold text-teal-600 mt-1 sm:text-l">{completeRadiology}</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-white rounded-lg border border-orange-200 shadow-sm sm:p-4">
+            <div className="flex flex-col">
+              <span className="text-xs font-medium text-gray-600 uppercase truncate">Pend Path</span>
+              <span className="text-lg font-bold text-orange-600 mt-1 sm:text-l">{pendingPathology}</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-white rounded-lg border border-red-200 shadow-sm sm:p-4">
+            <div className="flex flex-col">
+              <span className="text-xs font-medium text-gray-600 uppercase truncate">Pend Rad</span>
+              <span className="text-lg font-bold text-red-600 mt-1 sm:text-l">{pendingRadiology}</span>
+            </div>
           </div>
         </div>
 
-        <div className="p-4 bg-white rounded-lg border border-purple-200 shadow-sm">
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-gray-600 uppercase">Total Radiology</span>
-            <span className="text-2xl font-bold text-purple-600 mt-1">{totalRadiology}</span>
+        {/* Tabs & Filters */}
+        <div className="border-b border-gray-200 mb-4">
+          {/* Desktop: Tabs left, Filters right */}
+          <div className="hidden lg:flex lg:items-center lg:justify-between pb-0">
+            {/* Tabs */}
+            <nav className="flex gap-4 -mb-[1px]">
+              <button
+                onClick={() => setActiveTab('pending')}
+                className={`px-6 py-3 text-base font-medium border-b-2 transition-colors ${activeTab === 'pending'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                Pending ({filteredPendingPayments.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`px-6 py-3 text-base font-medium border-b-2 transition-colors ${activeTab === 'history'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                History ({filteredHistoryPayments.length})
+              </button>
+            </nav>
+
+            {/* Filters - Desktop */}
+            <div className="flex gap-3 items-center">
+              {/* Patient Name Filter */}
+              <select
+                value={selectedPatient}
+                onChange={(e) => setSelectedPatient(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm min-w-[180px]"
+              >
+                <option value="">All Patients</option>
+                {patientNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Date Filter */}
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+              />
+
+              {/* Clear Filters Button */}
+              {(selectedPatient || selectedDate) && (
+                <button
+                  onClick={() => {
+                    setSelectedPatient('');
+                    setSelectedDate('');
+                  }}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-sm font-medium whitespace-nowrap"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Mobile & Tablet: Stacked layout */}
+          <div className="lg:hidden flex flex-col gap-2 sm:gap-3 pb-2 sm:pb-3">
+            {/* Tabs */}
+            <nav className="flex gap-2 sm:gap-4 -mb-[1px]">
+              <button
+                onClick={() => setActiveTab('pending')}
+                className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-medium border-b-2 transition-colors ${activeTab === 'pending'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                Pending ({filteredPendingPayments.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-medium border-b-2 transition-colors ${activeTab === 'history'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                History ({filteredHistoryPayments.length})
+              </button>
+            </nav>
+
+            {/* Filters - Mobile */}
+            <div className="flex flex-wrap gap-2">
+              {/* Patient Name Filter */}
+              <select
+                value={selectedPatient}
+                onChange={(e) => setSelectedPatient(e.target.value)}
+                className="flex-1 min-w-[140px] px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs sm:text-sm"
+              >
+                <option value="">All Patients</option>
+                {patientNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Date Filter */}
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="flex-1 min-w-[140px] px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs sm:text-sm"
+              />
+
+              {/* Clear Filters Button */}
+              {(selectedPatient || selectedDate) && (
+                <button
+                  onClick={() => {
+                    setSelectedPatient('');
+                    setSelectedDate('');
+                  }}
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-xs sm:text-sm font-medium whitespace-nowrap"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="p-4 bg-white rounded-lg border border-green-200 shadow-sm">
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-gray-600 uppercase">Complete Pathology</span>
-            <span className="text-2xl font-bold text-green-600 mt-1">{completePathology}</span>
-          </div>
-        </div>
-
-        <div className="p-4 bg-white rounded-lg border border-teal-200 shadow-sm">
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-gray-600 uppercase">Complete Radiology</span>
-            <span className="text-2xl font-bold text-teal-600 mt-1">{completeRadiology}</span>
-          </div>
-        </div>
-
-        <div className="p-4 bg-white rounded-lg border border-orange-200 shadow-sm">
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-gray-600 uppercase">Pending Pathology</span>
-            <span className="text-2xl font-bold text-orange-600 mt-1">{pendingPathology}</span>
-          </div>
-        </div>
-
-        <div className="p-4 bg-white rounded-lg border border-red-200 shadow-sm">
-          <div className="flex flex-col">
-            <span className="text-xs font-medium text-gray-600 uppercase">Pending Radiology</span>
-            <span className="text-2xl font-bold text-red-600 mt-1">{pendingRadiology}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-white rounded-lg border border-gray-200 shadow-sm">
-        <button
-          onClick={() => setActiveTab('pending')}
-          className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            activeTab === 'pending'
-              ? 'bg-green-600 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          Pending ({pendingPayments.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            activeTab === 'history'
-              ? 'bg-green-600 text-white'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          History ({historyPayments.length})
-        </button>
-      </div>
-
-      {/* Pending Section */}
-      {activeTab === 'pending' && (
-        <>
-          {/* Desktop Table */}
-          <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Admission No</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone Number</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Reason For Visit</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Age</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Bed No.</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Location</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Ward Type</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Room</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Priority</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Category</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Tests</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {pendingPayments.length > 0 ? (
-                  pendingPayments.map((record) => (
-                    <tr key={record.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <button
-                          onClick={() => handleActionClick(record)}
-                          className="px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700"
-                        >
-                          Process
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">
-                        {record.admissionNo || record.uniqueNumber}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.wardType}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.room}</td>
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          record.priority === 'High' ? 'bg-red-100 text-red-700' :
-                          record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-green-100 text-green-700'
-                        }`}>
-                          {record.priority}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                        {record.category === 'Pathology'
-                          ? record.pathologyTests?.slice(0, 2).join(', ') + (record.pathologyTests?.length > 2 ? '...' : '')
-                          : record.radiologyTests?.slice(0, 2).join(', ') + (record.radiologyTests?.length > 2 ? '...' : '')}
+        {/* Pending Section */}
+        {activeTab === 'pending' && (
+          <>
+            {/* Desktop Table */}
+            <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
+                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Admission No</th>
+                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
+                    {/* <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone Number</th> */}
+                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50 min-w-[200px]">Reason For Visit</th>
+                    {/* <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Age</th> */}
+                    {/* <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Bed No</th> */}
+                    {/* <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Location</th> */}
+                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Ward Type</th>
+                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Room</th>
+                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Priority</th>
+                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Category</th>
+                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Tests</th>
+                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Planned </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredPendingPayments.length > 0 ? (
+                    filteredPendingPayments.map((record) => (
+                      <tr key={record.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">
+                          <button
+                            onClick={() => handleActionClick(record)}
+                            className="px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700"
+                          >
+                            Process
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">
+                          {record.admissionNo || record.uniqueNumber}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
+                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td> */}
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-[250px] whitespace-normal break-words">{record.reasonForVisit}</td>
+                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td> */}
+                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td> */}
+                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td> */}
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.wardType}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.room}</td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.priority === 'High' ? 'bg-red-100 text-red-700' :
+                            record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-green-100 text-green-700'
+                            } `}>
+                            {record.priority}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                          {record.category === 'Pathology'
+                            ? record.pathologyTests?.slice(0, 2).join(', ') + (record.pathologyTests?.length > 2 ? '...' : '')
+                            : record.radiologyTests?.slice(0, 2).join(', ') + (record.radiologyTests?.length > 2 ? '...' : '')}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                          {record.planned3 ? new Date(record.planned3).toLocaleString('en-GB', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            day: '2-digit',
+                            month: 'short'
+                          }) : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
+                        <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                        <p className="text-lg font-medium text-gray-900">No pending payments</p>
+                        <p className="text-sm text-gray-500 mt-1">Records with planned tests will appear here</p>
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
-                      <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                      <p className="text-lg font-medium text-gray-900">No pending payments</p>
-                      <p className="text-sm text-gray-500 mt-1">Records with planned tests will appear here</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-          {/* Mobile Card View */}
-          <div className="space-y-3 md:hidden">
-            {pendingPayments.length > 0 ? (
-              pendingPayments.map((record) => (
-                <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo || record.uniqueNumber}</div>
-                      <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
+            {/* Mobile Card View */}
+            <div className="space-y-3 md:hidden">
+              {filteredPendingPayments.length > 0 ? (
+                filteredPendingPayments.map((record) => (
+                  <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo || record.uniqueNumber}</div>
+                        <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
+                      </div>
+                      <button
+                        onClick={() => handleActionClick(record)}
+                        className="flex-shrink-0 px-3 py-1.5 text-xs text-white bg-green-600 rounded-lg shadow-sm"
+                      >
+                        Process
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleActionClick(record)}
-                      className="flex-shrink-0 px-3 py-1.5 text-xs text-white bg-green-600 rounded-lg shadow-sm"
-                    >
-                      Process
-                    </button>
-                  </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Phone:</span>
-                      <span className="font-medium text-gray-900">{record.phoneNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Age:</span>
-                      <span className="font-medium text-gray-900">{record.age}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Bed/Room:</span>
-                      <span className="font-medium text-gray-900">{record.bedNo} / {record.room}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Priority:</span>
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        record.priority === 'High' ? 'bg-red-100 text-red-700' :
-                        record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-green-100 text-green-700'
-                      }`}>
-                        {record.priority}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Category:</span>
-                      <span className="font-medium text-gray-900">{record.category}</span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
-                <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                <p className="text-sm font-medium text-gray-900">No pending payments</p>
-                <p className="text-xs text-gray-500 mt-1">Records with planned tests will appear here</p>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* History Section */}
-      {activeTab === 'history' && (
-        <>
-          {/* Desktop Table */}
-          <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Reason For Visit</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Age</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Bed No.</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Location</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Ward Type</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Room</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Priority</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Category</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Payment Status</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Bill Image</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {historyPayments.length > 0 ? (
-                  historyPayments.map((record) => (
-                    <tr key={record.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">
-                        {record.admissionNo || record.uniqueNumber}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.wardType}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.room}</td>
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          record.priority === 'High' ? 'bg-red-100 text-red-700' :
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Phone:</span>
+                        <span className="font-medium text-gray-900">{record.phoneNumber}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Age:</span>
+                        <span className="font-medium text-gray-900">{record.age}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Bed/Room:</span>
+                        <span className="font-medium text-gray-900">{record.bedNo} / {record.room}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Priority:</span>
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.priority === 'High' ? 'bg-red-100 text-red-700' :
                           record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-green-100 text-green-700'
-                        }`}>
+                            'bg-green-100 text-green-700'
+                          } `}>
                           {record.priority}
                         </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Category:</span>
+                        <span className="font-medium text-gray-900">{record.category}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Planned (Report):</span>
+                        <span className="font-medium text-gray-900">
+                          {record.planned3 ? new Date(record.planned3).toLocaleString('en-GB', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            day: '2-digit',
+                            month: 'short'
+                          }) : '-'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                  <p className="text-sm font-medium text-gray-900">No pending payments</p>
+                  <p className="text-xs text-gray-500 mt-1">Records with planned tests will appear here</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* History Section */}
+        {activeTab === 'history' && (
+          <>
+            {/* Desktop Table */}
+            <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
+                    {/* <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th> */}
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase bg-gray-50 min-w-[200px]">Reason For Visit</th>
+                    {/* <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Age</th>
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Bed No</th>
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Location</th> */}
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Ward Type</th>
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Room</th>
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Priority</th>
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Category</th>
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Planned</th>
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Completed</th>
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Payment Status</th>
+                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Bill Image</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredHistoryPayments.length > 0 ? (
+                    filteredHistoryPayments.map((record) => (
+                      <tr key={record.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">
+                          {record.admissionNo || record.uniqueNumber}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
+                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td> */}
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-[250px] whitespace-normal break-words">{record.reasonForVisit}</td>
+                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td> */}
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.wardType}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.room}</td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.priority === 'High' ? 'bg-red-100 text-red-700' :
+                            record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-green-100 text-green-700'
+                            } `}>
+                            {record.priority}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                          {record.planned1 ? new Date(record.planned1).toLocaleString('en-GB', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            day: '2-digit',
+                            month: 'short'
+                          }) : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                          {record.actual1 ? new Date(record.actual1).toLocaleString('en-GB', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            day: '2-digit',
+                            month: 'short'
+                          }) : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.paymentStatus === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            } `}>
+                            {record.paymentStatus === 'Yes' ? 'Paid' : 'Unpaid'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">
+                          <button
+                            onClick={() => handleViewClick(record)}
+                            className="flex gap-1 items-center px-3 py-1.5 text-green-600 bg-green-50 rounded-lg shadow-sm hover:bg-green-100"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="15" className="px-4 py-8 text-center text-gray-500">
+                        <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                        <p className="text-lg font-medium text-gray-900">No history records</p>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          record.paymentStatus === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        }`}>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="space-y-3 md:hidden">
+              {filteredHistoryPayments.length > 0 ? (
+                filteredHistoryPayments.map((record) => (
+                  <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo || record.uniqueNumber}</div>
+                        <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
+                      </div>
+                      <button
+                        onClick={() => handleViewClick(record)}
+                        className="flex-shrink-0 px-3 py-1.5 text-xs text-green-600 bg-green-50 rounded-lg"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Phone:</span>
+                        <span className="font-medium text-gray-900">{record.phoneNumber}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Age:</span>
+                        <span className="font-medium text-gray-900">{record.age}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Payment Status:</span>
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.paymentStatus === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          } `}>
                           {record.paymentStatus === 'Yes' ? 'Paid' : 'Unpaid'}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <button
-                          onClick={() => handleViewClick(record)}
-                          className="flex gap-1 items-center px-3 py-1.5 text-green-600 bg-green-50 rounded-lg shadow-sm hover:bg-green-100"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
-                      <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                      <p className="text-lg font-medium text-gray-900">No history records</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Card View */}
-          <div className="space-y-3 md:hidden">
-            {historyPayments.length > 0 ? (
-              historyPayments.map((record) => (
-                <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo || record.uniqueNumber}</div>
-                      <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
-                    </div>
-                    <button
-                      onClick={() => handleViewClick(record)}
-                      className="flex-shrink-0 px-3 py-1.5 text-xs text-green-600 bg-green-50 rounded-lg"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Phone:</span>
-                      <span className="font-medium text-gray-900">{record.phoneNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Age:</span>
-                      <span className="font-medium text-gray-900">{record.age}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Payment Status:</span>
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        record.paymentStatus === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {record.paymentStatus === 'Yes' ? 'Paid' : 'Unpaid'}
-                      </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Planned:</span>
+                        <span className="font-medium text-gray-900">
+                          {record.planned1 ? new Date(record.planned1).toLocaleString('en-GB', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            day: '2-digit',
+                            month: 'short'
+                          }) : '-'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Completed:</span>
+                        <span className="font-medium text-gray-900">
+                          {record.actual1 ? new Date(record.actual1).toLocaleString('en-GB', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            day: '2-digit',
+                            month: 'short'
+                          }) : '-'}
+                        </span>
+                      </div>
                     </div>
                   </div>
+                ))
+              ) : (
+                <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                  <p className="text-sm font-medium text-gray-900">No history records</p>
                 </div>
-              ))
-            ) : (
-              <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
-                <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                <p className="text-sm font-medium text-gray-900">No history records</p>
-              </div>
-            )}
-          </div>
-        </>
-      )}
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Payment Processing Modal */}
       {showModal && selectedRecord && (
@@ -804,7 +997,11 @@ const handleSubmit = async () => {
                 </div>
 
                 <div>
-                  <label className="block mb-1 text-sm font-medium text-gray-700">Upload Bill Image *</label>
+                  {/* Change this line: */}
+                  <label className="block mb-1 text-sm font-medium text-gray-700">
+                    Upload Bill Image (Optional)
+                  </label>
+
                   <div className="mt-1">
                     <input
                       type="file"
@@ -833,7 +1030,7 @@ const handleSubmit = async () => {
                       ) : (
                         <div className="text-center">
                           <Upload className="mx-auto w-12 h-12 text-gray-400 mb-2" />
-                          <p className="text-sm text-gray-600">Click to upload bill image</p>
+                          <p className="text-sm text-gray-600">Click to upload bill image (Optional)</p>
                           <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</p>
                         </div>
                       )}
@@ -942,15 +1139,14 @@ const handleSubmit = async () => {
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">Priority:</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      viewingRecord.priority === 'High' ? 'bg-red-100 text-red-700' :
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${viewingRecord.priority === 'High' ? 'bg-red-100 text-red-700' :
                       viewingRecord.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
+                        'bg-green-100 text-green-700'
+                      } `}>
                       {viewingRecord.priority}
                     </span>
                   </div>
-                  
+
                   <div>
                     <span className="text-gray-600">Category:</span>
                     <div className="font-medium text-gray-900 mt-1">{viewingRecord.category}</div>
@@ -993,9 +1189,8 @@ const handleSubmit = async () => {
                   <div className="pt-3 border-t border-green-300">
                     <div className="flex justify-between items-center mb-3">
                       <span className="text-gray-600">Payment Status:</span>
-                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                        viewingRecord.paymentStatus === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
+                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${viewingRecord.paymentStatus === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                        } `}>
                         {viewingRecord.paymentStatus === 'Yes' ? 'Paid' : 'Unpaid'}
                       </span>
                     </div>
@@ -1052,7 +1247,7 @@ const handleSubmit = async () => {
       )}
 
       <style>{`
-        @keyframes scale-in {
+@keyframes scale-in {
           from {
             opacity: 0;
             transform: scale(0.95);
@@ -1062,7 +1257,7 @@ const handleSubmit = async () => {
             transform: scale(1);
           }
         }
-        
+
         @keyframes progress {
           from {
             width: 100%;
@@ -1079,7 +1274,7 @@ const handleSubmit = async () => {
         .animate-progress {
           animation: progress 3s linear forwards;
         }
-      `}</style>
+`}</style>
     </div>
   );
 };

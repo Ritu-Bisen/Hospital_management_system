@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Save, Pill, Package, DollarSign } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const Medicine = () => {
   const [medicines, setMedicines] = useState([]);
@@ -8,7 +9,8 @@ const Medicine = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState(null);
-  
+  const { showNotification } = useNotification();
+
   // Form state
   const [formData, setFormData] = useState({
     medicine_name: '',
@@ -28,7 +30,7 @@ const Medicine = () => {
       setMedicines(data || []);
     } catch (error) {
       console.error('Error fetching medicines:', error);
-      alert('Error loading medicine data');
+      showNotification('Error loading medicine data', 'error');
     } finally {
       setLoading(false);
     }
@@ -111,21 +113,21 @@ const Medicine = () => {
   // Validate form
   const validateForm = () => {
     if (!formData.medicine_name.trim()) {
-      alert('Medicine name is required');
+      showNotification('Medicine name is required', 'error');
       return false;
     }
-    
+
     if (!formData.price.trim()) {
-      alert('Price is required');
+      showNotification('Price is required', 'error');
       return false;
     }
-    
+
     const price = parseFloat(formData.price);
     if (isNaN(price) || price < 0) {
-      alert('Please enter a valid price');
+      showNotification('Please enter a valid price', 'error');
       return false;
     }
-    
+
     return true;
   };
 
@@ -147,7 +149,7 @@ const Medicine = () => {
           .eq('id', editingMedicine.id);
 
         if (error) throw error;
-        alert('Medicine updated successfully!');
+        showNotification('Medicine updated successfully!', 'success');
       } else {
         // Insert new medicine
         const { error } = await supabase
@@ -155,14 +157,14 @@ const Medicine = () => {
           .insert([medicineData]);
 
         if (error) throw error;
-        alert('Medicine added successfully!');
+        showNotification('Medicine added successfully!', 'success');
       }
 
       fetchMedicines();
       closeModal();
     } catch (error) {
       console.error('Error saving medicine:', error);
-      alert('Error saving medicine');
+      showNotification('Error saving medicine', 'error');
     }
   };
 
@@ -179,11 +181,11 @@ const Medicine = () => {
         .eq('id', id);
 
       if (error) throw error;
-      alert('Medicine deleted successfully!');
+      showNotification('Medicine deleted successfully!', 'success');
       fetchMedicines();
     } catch (error) {
       console.error('Error deleting medicine:', error);
-      alert('Error deleting medicine');
+      showNotification('Error deleting medicine', 'error');
     }
   };
 
@@ -307,18 +309,18 @@ const Medicine = () => {
                   </td>
                 </tr>
               ) : (
-                filteredMedicines.map((medicine,index) => {
+                filteredMedicines.map((medicine, index) => {
                   const date = new Date(medicine.timestamp);
                   const formattedDate = date.toLocaleDateString('en-IN', {
                     day: '2-digit',
                     month: 'short',
                     year: 'numeric'
                   });
-                  
+
                   return (
                     <tr key={medicine.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        #{index+1}
+                        #{index + 1}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">

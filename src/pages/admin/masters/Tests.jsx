@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, X, Save, FlaskConical, IndianRupee } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 const Tests = () => {
   const [tests, setTests] = useState([]);
@@ -8,7 +9,8 @@ const Tests = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTest, setEditingTest] = useState(null);
-  
+  const { showNotification } = useNotification();
+
   // Form state
   const [formData, setFormData] = useState({
     type: '',
@@ -38,7 +40,7 @@ const Tests = () => {
       setTests(data || []);
     } catch (error) {
       console.error('Error fetching tests:', error);
-      alert('Error loading test data');
+      showNotification('Error loading test data', 'error');
     } finally {
       setLoading(false);
     }
@@ -54,7 +56,7 @@ const Tests = () => {
     if (test.type !== activeTab) {
       return false;
     }
-    
+
     // Apply search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -62,18 +64,18 @@ const Tests = () => {
       const testPrice = test.price?.toString() || '';
       return testName.includes(searchLower) || testPrice.includes(searchLower);
     }
-    
+
     return true;
   });
 
   // Get counts for each tab
   const getTabCounts = () => {
     const counts = {};
-    
+
     tabs.forEach(tab => {
       counts[tab.id] = tests.filter(test => test.type === tab.id).length;
     });
-    
+
     return counts;
   };
 
@@ -147,39 +149,39 @@ const Tests = () => {
   // Validate form
   const validateForm = () => {
     if (!formData.type.trim()) {
-      alert('Test type is required');
+      showNotification('Test type is required', 'error');
       return false;
     }
-    
+
     if (!formData.name.trim()) {
-      alert('Test name is required');
+      showNotification('Test name is required', 'error');
       return false;
     }
-    
+
     if (!formData.price.trim()) {
-      alert('Price is required');
+      showNotification('Price is required', 'error');
       return false;
     }
-    
+
     const price = parseFloat(formData.price);
     if (isNaN(price) || price < 0) {
-      alert('Please enter a valid price');
+      showNotification('Please enter a valid price', 'error');
       return false;
     }
-    
+
     // Check for duplicates (case insensitive, same type and name)
     const duplicate = tests.find(
-      test => 
+      test =>
         test.type === formData.type &&
         test.name?.toLowerCase() === formData.name.toLowerCase() &&
         (!editingTest || test.id !== editingTest.id)
     );
-    
+
     if (duplicate) {
-      alert(`Test "${formData.name}" of type "${formData.type}" already exists`);
+      showNotification(`Test "${formData.name}" of type "${formData.type}" already exists`, 'error');
       return false;
     }
-    
+
     return true;
   };
 
@@ -202,7 +204,7 @@ const Tests = () => {
           .eq('id', editingTest.id);
 
         if (error) throw error;
-        alert('Test updated successfully!');
+        showNotification('Test updated successfully!', 'success');
       } else {
         // Insert new test
         const { error } = await supabase
@@ -210,14 +212,14 @@ const Tests = () => {
           .insert([testData]);
 
         if (error) throw error;
-        alert('Test added successfully!');
+        showNotification('Test added successfully!', 'success');
       }
 
       fetchTests();
       closeModal();
     } catch (error) {
       console.error('Error saving test:', error);
-      alert('Error saving test');
+      showNotification('Error saving test', 'error');
     }
   };
 
@@ -234,11 +236,11 @@ const Tests = () => {
         .eq('id', id);
 
       if (error) throw error;
-      alert('Test deleted successfully!');
+      showNotification('Test deleted successfully!', 'success');
       fetchTests();
     } catch (error) {
       console.error('Error deleting test:', error);
-      alert('Error deleting test');
+      showNotification('Error deleting test', 'error');
     }
   };
 
@@ -305,11 +307,10 @@ const Tests = () => {
               `}
             >
               {tab.name}
-              <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                activeTab === tab.id
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-600'
-              }`}>
+              <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${activeTab === tab.id
+                ? 'bg-green-100 text-green-800'
+                : 'bg-gray-100 text-gray-600'
+                }`}>
                 {tabCounts[tab.id] || 0}
               </span>
             </button>
@@ -317,7 +318,7 @@ const Tests = () => {
         </nav>
       </div>
 
- 
+
 
       {/* Search Bar */}
       <div className="relative">
@@ -355,8 +356,8 @@ const Tests = () => {
               {filteredTests.length === 0 ? (
                 <tr>
                   <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
-                    {searchTerm 
-                      ? `No ${activeTab} tests found matching "${searchTerm}"` 
+                    {searchTerm
+                      ? `No ${activeTab} tests found matching "${searchTerm}"`
                       : `No ${activeTab} tests found. Add your first ${activeTab} test!`}
                   </td>
                 </tr>
@@ -498,7 +499,7 @@ const Tests = () => {
                 </p>
               </div>
 
-           
+
             </div>
 
             <div className="p-6 border-t flex justify-end gap-3">
