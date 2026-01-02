@@ -140,6 +140,7 @@ export default function GivenTask() {
   const [completingTask, setCompletingTask] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [userRole, setUserRole] = useState('');
+  const [userName, setUserName] = useState('');
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [showOtCompletionModal, setShowOtCompletionModal] = useState(false);
   const [selectedOtTask, setSelectedOtTask] = useState(null);
@@ -165,15 +166,19 @@ export default function GivenTask() {
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
-        setUserRole(user.role || '');
+        const role = user.role || '';
+        const name = user.name || '';
+
+        setUserRole(role);
+        setUserName(name);
 
         // Set initial active tab based on role
-        if (user.role) {
-          const role = user.role.toLowerCase();
-          if (role === 'nurse') setActiveTab('nurse');
-          else if (role === 'rmo') setActiveTab('rmo');
-          else if (role === 'ot' || role === 'ot staff') setActiveTab('ot');
-          else if (role === 'dressing') setActiveTab('dressing');
+        if (role) {
+          const lowerRole = role.toLowerCase();
+          if (lowerRole === 'nurse') setActiveTab('nurse');
+          else if (lowerRole === 'rmo') setActiveTab('rmo');
+          else if (lowerRole === 'ot' || lowerRole === 'ot staff') setActiveTab('ot');
+          else if (lowerRole === 'dressing' || lowerRole === 'dressing staff') setActiveTab('dressing');
         }
       } catch (error) {
         console.error('Error parsing user from localStorage:', error);
@@ -199,19 +204,19 @@ export default function GivenTask() {
     const role = userRole.toLowerCase();
 
     // Return only ONE tab based on role
-    if (role === 'nurse') {
+    if (role.includes('nurse')) {
       return [{ key: 'nurse', label: 'Nurse', icon: User, count: nurseTasks.length }];
     }
 
-    if (role === 'rmo') {
+    if (role.includes('rmo')) {
       return [{ key: 'rmo', label: 'RMO ', icon: Stethoscope, count: rmoTasks.length }];
     }
 
-    if (role === 'ot' || role === 'ot staff') {
+    if (role.includes('ot')) {
       return [{ key: 'ot', label: 'OT ', icon: Scissors, count: otTasks.length }];
     }
 
-    if (role === 'dressing') {
+    if (role.includes('dressing')) {
       return [{ key: 'dressing', label: 'Dressing ', icon: Syringe, count: dressingTasks.length }];
     }
 
@@ -262,6 +267,11 @@ export default function GivenTask() {
       // Add IPD filter only if we have a valid IPD number
       if (ipdNumber && ipdNumber !== 'N/A') {
         query = query.eq('Ipd_number', ipdNumber);
+      }
+
+      // Filter by nurse name if role is nurse
+      if (userRole && userRole.toLowerCase().includes('nurse') && userName) {
+        query = query.ilike('assign_nurse', userName);
       }
 
       const { data, error } = await query;
@@ -315,6 +325,11 @@ export default function GivenTask() {
         query = query.eq('ipd_number', ipdNumber);
       }
 
+      // Filter by RMO name if role is rmo
+      if (userRole && userRole.toLowerCase().includes('rmo') && userName) {
+        query = query.ilike('assign_rmo', userName);
+      }
+
       const { data, error } = await query;
 
       if (error) throw error;
@@ -365,6 +380,11 @@ export default function GivenTask() {
       // Add IPD filter only if we have a valid IPD number
       if (ipdNumber && ipdNumber !== 'N/A') {
         query = query.eq('Ipd_number', ipdNumber);
+      }
+
+      // Filter by nurse/staff name if role is OT
+      if (userRole && userRole.toLowerCase().includes('ot') && userName) {
+        query = query.ilike('assign_nurse', userName);
       }
 
       const { data, error } = await query;
@@ -456,47 +476,39 @@ export default function GivenTask() {
 
   // Fetch tasks based on user role
   useEffect(() => {
-    if (!userRole) {
-      // If no role yet, fetch all tasks
-      fetchNurseTasks();
-      fetchRmoTasks();
-      fetchOtTasks();
-      fetchDressingTasks();
-      return;
-    }
+    // Wait until user info is loaded from localStorage
+    if (!userRole) return;
 
     const role = userRole.toLowerCase();
-    console.log('Fetching tasks for role:', role);
 
-    // Fetch only tasks relevant to user role
-    if (role === 'nurse') {
+    if (role.includes('nurse')) {
       fetchNurseTasks();
-      fetchDressingTasks(); // Nurses might have dressing tasks too
+      fetchDressingTasks();
       fetchRmoTasks();
       fetchOtTasks();
-    } else if (role === 'rmo') {
+    } else if (role.includes('rmo')) {
       fetchRmoTasks();
-      fetchDressingTasks(); // RMOs might have dressing tasks too
+      fetchDressingTasks();
       fetchNurseTasks();
       fetchOtTasks();
-    } else if (role === 'ot' || role === 'ot staff') {
+    } else if (role.includes('ot')) {
       fetchOtTasks();
       fetchNurseTasks();
       fetchRmoTasks();
       fetchDressingTasks();
-    } else if (role === 'dressing') {
+    } else if (role.includes('dressing')) {
       fetchDressingTasks();
       fetchNurseTasks();
       fetchRmoTasks();
       fetchOtTasks();
     } else {
-      // Unknown role, fetch all
+      // For admin or other roles, fetch all tasks without specific filtering
       fetchNurseTasks();
       fetchRmoTasks();
       fetchOtTasks();
       fetchDressingTasks();
     }
-  }, [userRole, ipdNumber]);
+  }, [userRole, userName, ipdNumber]);
 
   // Handle completing a task
   const handleCompleteTask = async (taskId, tableName) => {
@@ -538,6 +550,7 @@ export default function GivenTask() {
           timeZone: "Asia/Kolkata",
           hour12: false
         }).replace(',', ''),
+        submitted_by: userName // Add submitted_by field
       };
 
       // Special handling for different tables
@@ -599,7 +612,8 @@ export default function GivenTask() {
         .from('nurse_assign_task')
         .update({
           check_up: vitalsData,
-          actual1: timestamp
+          actual1: timestamp,
+          submitted_by: userName // Add submitted_by field
         })
         .eq('id', selectedVitalsTask.id);
 
@@ -634,7 +648,8 @@ export default function GivenTask() {
       // Prepare update data for rmo_assign_task table
       let updateData = {
         actual1: timestamp,
-        ot_information: otCompletionType
+        ot_information: otCompletionType,
+        submitted_by: userName // Add submitted_by field
       };
 
       // For surgical type, post to ot_information table
@@ -647,7 +662,9 @@ export default function GivenTask() {
           ward_type: selectedOtTask.ward_type || null,
           room: selectedOtTask.room || null,
           bed_no: selectedOtTask.bed_no || null,
-          planned1: timestamp
+          bed_no: selectedOtTask.bed_no || null,
+          planned1: timestamp,
+          submitted_by: userName // Add submitted_by field
         };
 
         const { error: otError } = await supabase

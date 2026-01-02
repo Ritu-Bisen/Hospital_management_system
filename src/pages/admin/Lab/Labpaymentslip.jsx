@@ -25,10 +25,11 @@ const Payment = () => {
 
   const [formData, setFormData] = useState({
     payment: '',
-    billImage: null
+    billImage: null,
+    fileType: null // 'image' or 'pdf'
   });
 
-  // Auto-hide notification after 3 seconds
+  // Auto-hide notification after 1 second
   useEffect(() => {
     if (showNotification) {
       const timer = setTimeout(() => {
@@ -79,41 +80,34 @@ const Payment = () => {
         .select(`*`)
         .not('planned1', 'is', null)
         .is('actual1', null)
-
         .order('timestamp', { ascending: false });
 
       if (pendingError) throw pendingError;
 
-      const formattedPending = pendingData.map(record => {
-        // Generate advice number from record.id (UUID)
-        const idString = record.id?.toString() || '';
-        const adviceNo = record.advice_no || `ADV-${idString.substring(0, 8)}`;
-
-        return {
-          id: record.id,
-          uniqueNumber: record.admission_no || 'N/A', // Changed from unique_number to admission_no
-          patientName: record.patient_name || 'N/A',
-          phoneNumber: record.phone_no || 'N/A',
-          age: record.age || 'N/A', // sgs seems to be age field
-          gender: record.gender || 'N/A',
-          bedNo: record.bed_no || 'N/A', // Fixed typo: bad_no to bed_no
-          location: record.location || 'N/A',
-          wardType: record.ward_type || 'N/A', // Fixed typo: word_type to ward_type
-          room: record.room || 'N/A',
-          reasonForVisit: record.reason_for_visit || 'N/A',
-          adviceNo: record.admission_no || 'N/A', // Use admission_no as advice number
-          category: record.category,
-          priority: record.priority,
-          pathologyTests: record.pathology_tests || [],
-          radiologyTests: record.radiology_tests || [],
-          radiologyType: record.radiology_type,
-          planned1: record.planned1,
-          actual1: record.actual1, // Note: column name is "actually" not "actual1"
-          paymentId: record.id,
-          admissionNo: record.admission_no, // Added this to show full admission_no
-          planned3: record.planned1 // Added planned3
-        };
-      });
+      const formattedPending = pendingData.map(record => ({
+        id: record.id,
+        uniqueNumber: record.admission_no || 'N/A',
+        patientName: record.patient_name || 'N/A',
+        phoneNumber: record.phone_no || 'N/A',
+        age: record.age || 'N/A',
+        gender: record.gender || 'N/A',
+        bedNo: record.bed_no || 'N/A',
+        location: record.location || 'N/A',
+        wardType: record.ward_type || 'N/A',
+        room: record.room || 'N/A',
+        reasonForVisit: record.reason_for_visit || 'N/A',
+        adviceNo: record.admission_no || 'N/A',
+        category: record.category,
+        priority: record.priority,
+        pathologyTests: record.pathology_tests || [],
+        radiologyTests: record.radiology_tests || [],
+        radiologyType: record.radiology_type,
+        planned1: record.planned1,
+        actual1: record.actual1,
+        paymentId: record.id,
+        admissionNo: record.admission_no,
+        planned3: record.planned1
+      }));
 
       setPendingPayments(formattedPending);
 
@@ -127,42 +121,36 @@ const Payment = () => {
 
       if (historyError) throw historyError;
 
-      const formattedHistory = historyData.map(record => {
-        // Generate advice number from record.id (UUID)
-        const idString = record.id?.toString() || '';
-        const adviceNo = record.advice_no || `ADV-${idString.substring(0, 8)}`;
-
-        return {
-          id: record.id,
-          uniqueNumber: record.admission_no || 'N/A', // Changed from unique_number to admission_no
-          patientName: record.patient_name || 'N/A',
-          phoneNumber: record.phone_no || 'N/A',
-          age: record.age || 'N/A', // sgs seems to be age field
-          gender: record.gender || 'N/A',
-          bedNo: record.bed_no || 'N/A', // Fixed typo: bad_no to bed_no
-          location: record.location || 'N/A',
-          wardType: record.ward_type || 'N/A', // Fixed typo: word_type to ward_type
-          room: record.room || 'N/A',
-          reasonForVisit: record.reason_for_visit || 'N/A',
-          adviceNo: record.admission_no || 'N/A', // Use admission_no as advice number
-          category: record.category,
-          priority: record.priority,
-          pathologyTests: record.pathology_tests || [],
-          radiologyTests: record.radiology_tests || [],
-          radiologyType: record.radiology_type,
-          paymentStatus: record.payment_status,
-          billImage: record.bill_image_url, // Note: column name is "kill_image_url" not "bill_image_url"
-          processedDate: record.actual1,
-          paymentId: record.id,
-          admissionNo: record.admission_no, // Added this to show full admission_no
-          planned1: record.planned1, // Added planned1
-          actual1: record.actual1 // Added actual1
-        };
-      });
+      const formattedHistory = historyData.map(record => ({
+        id: record.id,
+        uniqueNumber: record.admission_no || 'N/A',
+        patientName: record.patient_name || 'N/A',
+        phoneNumber: record.phone_no || 'N/A',
+        age: record.age || 'N/A',
+        gender: record.gender || 'N/A',
+        bedNo: record.bed_no || 'N/A',
+        location: record.location || 'N/A',
+        wardType: record.ward_type || 'N/A',
+        room: record.room || 'N/A',
+        reasonForVisit: record.reason_for_visit || 'N/A',
+        adviceNo: record.admission_no || 'N/A',
+        category: record.category,
+        priority: record.priority,
+        pathologyTests: record.pathology_tests || [],
+        radiologyTests: record.radiology_tests || [],
+        radiologyType: record.radiology_type,
+        paymentStatus: record.payment_status,
+        billImage: record.bill_image_url,
+        processedDate: record.actual1,
+        paymentId: record.id,
+        admissionNo: record.admission_no,
+        planned1: record.planned1,
+        actual1: record.actual1
+      }));
 
       setHistoryPayments(formattedHistory);
 
-      // Extract unique patient names from both lists
+      // Extract unique patient names
       const allRecords = [...formattedPending, ...formattedHistory];
       const uniquePatients = [...new Set(allRecords.map(r => r.patientName))]
         .filter(name => name && name !== 'N/A')
@@ -192,8 +180,19 @@ const Payment = () => {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Check file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
         setModalError('File size should be less than 5MB');
+        return;
+      }
+
+      // Check file type
+      const fileType = file.type;
+      const isImage = fileType.startsWith('image/');
+      const isPDF = fileType === 'application/pdf';
+
+      if (!isImage && !isPDF) {
+        setModalError('Please upload an image or PDF file');
         return;
       }
 
@@ -201,7 +200,8 @@ const Payment = () => {
       reader.onloadend = () => {
         setFormData(prev => ({
           ...prev,
-          billImage: reader.result
+          billImage: reader.result,
+          fileType: isPDF ? 'pdf' : 'image'
         }));
         setImagePreview(reader.result);
       };
@@ -215,85 +215,53 @@ const Payment = () => {
       return;
     }
 
-    // Only require bill image if payment is "Yes"
-    // if (formData.payment === 'Yes' && !formData.billImage) {
-    //   setModalError('Please upload bill image');
-    //   return;
-    // }
-
     try {
       setLoading(true);
-
       let publicUrl = null;
 
-      // Only process image upload if payment is "Yes" and billImage exists
       if (formData.payment === 'Yes' && formData.billImage) {
-        // Convert base64 to blob
         const base64Data = formData.billImage.split(',')[1];
         const binaryData = atob(base64Data);
         const arrayBuffer = new ArrayBuffer(binaryData.length);
         const uint8Array = new Uint8Array(arrayBuffer);
-
         for (let i = 0; i < binaryData.length; i++) {
           uint8Array[i] = binaryData.charCodeAt(i);
         }
 
-        const blob = new Blob([uint8Array], { type: 'image/jpeg' });
+        // Determine content type and file extension based on fileType
+        const isPDF = formData.fileType === 'pdf';
+        const contentType = isPDF ? 'application/pdf' : 'image/jpeg';
+        const fileExtension = isPDF ? 'pdf' : 'jpg';
 
-        // Upload image to Supabase Storage
-        const fileName = `bill_${selectedRecord.id}_${Date.now()}.jpg`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const blob = new Blob([uint8Array], { type: contentType });
+        const fileName = `bill_${selectedRecord.id}_${Date.now()}.${fileExtension}`;
+        const { error: uploadError } = await supabase.storage
           .from('bill_image')
-          .upload(fileName, blob, {
-            contentType: 'image/jpeg',
-            upsert: true
-          });
+          .upload(fileName, blob, { contentType, upsert: true });
 
         if (uploadError) throw uploadError;
-
-        // Get public URL
-        const { data: { publicUrl: url } } = supabase.storage
-          .from('bill_image')
-          .getPublicUrl(fileName);
-
+        const { data: { publicUrl: url } } = supabase.storage.from('bill_image').getPublicUrl(fileName);
         publicUrl = url;
       }
 
-      // Prepare update data
+      const now = new Date().toLocaleString("en-CA", { timeZone: "Asia/Kolkata", hour12: false }).replace(',', '');
       const updateData = {
         payment_status: formData.payment,
-        planned2: new Date().toLocaleString("en-CA", {
-          timeZone: "Asia/Kolkata",
-          hour12: false
-        }).replace(',', ''),
-        actual1: new Date().toLocaleString("en-CA", {
-          timeZone: "Asia/Kolkata",
-          hour12: false
-        }).replace(',', ''),
+        planned2: now,
+        actual1: now,
       };
 
-      // Only include bill_image_url if payment is "Yes" and we have a URL
       if (formData.payment === 'Yes' && publicUrl) {
         updateData.bill_image_url = publicUrl;
       } else if (formData.payment !== 'Yes') {
-        // If payment is not "Yes", set bill_image_url to null or empty string
         updateData.bill_image_url = null;
       }
 
-      // Update lab record with payment info
-      const { error: updateError } = await supabase
-        .from('lab')
-        .update(updateData)
-        .eq('id', selectedRecord.id);
-
+      const { error: updateError } = await supabase.from('lab').update(updateData).eq('id', selectedRecord.id);
       if (updateError) throw updateError;
 
-      // Reload data
       await loadData();
-
-      // Show success notification
       showNotificationPopup('Payment processed successfully!', 'success');
-
       setShowModal(false);
       resetForm();
     } catch (error) {
@@ -305,10 +273,7 @@ const Payment = () => {
   };
 
   const resetForm = () => {
-    setFormData({
-      payment: '',
-      billImage: null
-    });
+    setFormData({ payment: '', billImage: null });
     setImagePreview(null);
     setModalError('');
     setSelectedRecord(null);
@@ -321,11 +286,9 @@ const Payment = () => {
 
   const handleViewImage = (imageUrl) => {
     if (!imageUrl) {
-      // Show notification instead of alert
       showNotificationPopup('No bill image available', 'error');
       return;
     }
-
     const newWindow = window.open();
     newWindow.document.write(`
       <html>
@@ -333,23 +296,17 @@ const Payment = () => {
         <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;">
           <img src="${imageUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
         </body>
-
       </html>
     `);
   };
 
-  // Filter Logic
   const applyFilters = (records) => {
     return records.filter(record => {
-      // Filter by Patient Name
       if (selectedPatient && record.patientName !== selectedPatient) return false;
-
-      // Filter by Date (comparing with planned1)
       if (selectedDate && record.planned1) {
         const recordDate = new Date(record.planned1).toISOString().split('T')[0];
         if (recordDate !== selectedDate) return false;
       }
-
       return true;
     });
   };
@@ -357,7 +314,6 @@ const Payment = () => {
   const filteredPendingPayments = applyFilters(pendingPayments);
   const filteredHistoryPayments = applyFilters(historyPayments);
 
-  // Calculate statistics
   const totalPathology = [...pendingPayments, ...historyPayments].filter(r => r.category === 'Pathology').length;
   const totalRadiology = [...pendingPayments, ...historyPayments].filter(r => r.category === 'Radiology').length;
   const completePathology = historyPayments.filter(r => r.category === 'Pathology').length;
@@ -377,904 +333,330 @@ const Payment = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      {/* Fixed Header */}
-      <div className="flex-none bg-white border-b border-gray-200">
-        <div className="px-4 py-3 sm:px-6">
-          <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
+    <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
+      {/* Fixed Section: Header, Notification, Stats, Tabs & Filters */}
+      <div className="flex-none bg-white border-b border-gray-200 shrink-0 shadow-sm z-10">
+        <div className="px-4 py-2 sm:px-6 border-b border-gray-100">
+          <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-xl font-bold text-gray-900 sm:text-2xl lg:text-3xl">Payment Management</h1>
-              <p className="hidden mt-1 text-sm text-gray-500 sm:block">Process payments and manage billing records</p>
+              <h1 className="text-lg font-bold text-gray-900 sm:text-2xl lg:text-3xl">Payment Management</h1>
+              <p className="hidden mt-0.5 text-xs text-gray-500 sm:block">Process payments and manage billing records</p>
             </div>
           </div>
         </div>
-      </div>
-      {/* Notification Popup */}
-      {showNotification && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className={`relative w-full max-w-md transform transition-all duration-300 ${showNotification ? 'animate-scale-in opacity-100' : 'opacity-0 scale-95'
-            } `}>
-            <div className={`rounded-lg shadow-2xl overflow-hidden ${notificationType === 'success'
-              ? 'bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200'
-              : 'bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200'
-              } `}>
-              <div className="p-6 text-center">
-                <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${notificationType === 'success' ? 'bg-green-100' : 'bg-red-100'
-                  } `}>
-                  {notificationType === 'success' ? (
-                    <Check className="w-8 h-8 text-green-600" />
-                  ) : (
-                    <X className="w-8 h-8 text-red-600" />
-                  )}
-                </div>
-                <h3 className={`text-lg font-bold mb-2 ${notificationType === 'success' ? 'text-green-800' : 'text-red-800'
-                  } `}>
-                  {notificationType === 'success' ? 'Success!' : 'Error!'}
-                </h3>
-                <p className={`text-sm ${notificationType === 'success' ? 'text-green-600' : 'text-red-600'
-                  } `}>
-                  {notificationMessage}
-                </p>
-                <div className={`mt-4 h-1 w-full ${notificationType === 'success' ? 'bg-green-200' : 'bg-red-200'
-                  } `}>
-                  <div className={`h-full ${notificationType === 'success' ? 'bg-green-500' : 'bg-red-500'
-                    } animate-progress`}></div>
+
+        {showNotification && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className={`relative w-full max-w-md transform transition-all duration-300 animate-scale-in opacity-100`}>
+              <div className={`rounded-lg shadow-2xl overflow-hidden ${notificationType === 'success' ? 'bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200' : 'bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200'} `}>
+                <div className="p-6 text-center">
+                  <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${notificationType === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
+                    {notificationType === 'success' ? <Check className="w-8 h-8 text-green-600" /> : <X className="w-8 h-8 text-red-600" />}
+                  </div>
+                  <h3 className={`text-lg font-bold mb-2 ${notificationType === 'success' ? 'text-green-800' : 'text-red-800'}`}>{notificationType === 'success' ? 'Success!' : 'Error!'}</h3>
+                  <p className={`text-sm ${notificationType === 'success' ? 'text-green-600' : 'text-red-600'}`}>{notificationMessage}</p>
+                  <div className={`mt-4 h-1 w-full ${notificationType === 'success' ? 'bg-green-200' : 'bg-red-200'}`}>
+                    <div className={`h-full ${notificationType === 'success' ? 'bg-green-500' : 'bg-red-500'} animate-progress`}></div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto px-3 sm:px-4 pb-4">
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-2 gap-3 mb-4 md:grid-cols-3 lg:grid-cols-6 pt-4">
-          <div className="p-3 bg-white rounded-lg border border-green-200 shadow-sm sm:p-4">
-            <div className="flex flex-col">
-              <span className="text-xs font-medium text-gray-600 uppercase truncate">Total Path</span>
-              <span className="text-lg font-bold text-green-600 mt-1 sm:text-l">{totalPathology}</span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-white rounded-lg border border-purple-200 shadow-sm sm:p-4">
-            <div className="flex flex-col">
-              <span className="text-xs font-medium text-gray-600 uppercase truncate">Total Rad</span>
-              <span className="text-lg font-bold text-purple-600 mt-1 sm:text-l">{totalRadiology}</span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-white rounded-lg border border-green-200 shadow-sm sm:p-4">
-            <div className="flex flex-col">
-              <span className="text-xs font-medium text-gray-600 uppercase truncate">Comp Path</span>
-              <span className="text-lg font-bold text-green-600 mt-1 sm:text-l">{completePathology}</span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-white rounded-lg border border-teal-200 shadow-sm sm:p-4">
-            <div className="flex flex-col">
-              <span className="text-xs font-medium text-gray-600 uppercase truncate">Comp Rad</span>
-              <span className="text-lg font-bold text-teal-600 mt-1 sm:text-l">{completeRadiology}</span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-white rounded-lg border border-orange-200 shadow-sm sm:p-4">
-            <div className="flex flex-col">
-              <span className="text-xs font-medium text-gray-600 uppercase truncate">Pend Path</span>
-              <span className="text-lg font-bold text-orange-600 mt-1 sm:text-l">{pendingPathology}</span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-white rounded-lg border border-red-200 shadow-sm sm:p-4">
-            <div className="flex flex-col">
-              <span className="text-xs font-medium text-gray-600 uppercase truncate">Pend Rad</span>
-              <span className="text-lg font-bold text-red-600 mt-1 sm:text-l">{pendingRadiology}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs & Filters */}
-        <div className="border-b border-gray-200 mb-4">
-          {/* Desktop: Tabs left, Filters right */}
-          <div className="hidden lg:flex lg:items-center lg:justify-between pb-0">
-            {/* Tabs */}
-            <nav className="flex gap-4 -mb-[1px]">
-              <button
-                onClick={() => setActiveTab('pending')}
-                className={`px-6 py-3 text-base font-medium border-b-2 transition-colors ${activeTab === 'pending'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                Pending ({filteredPendingPayments.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`px-6 py-3 text-base font-medium border-b-2 transition-colors ${activeTab === 'history'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                History ({filteredHistoryPayments.length})
-              </button>
-            </nav>
-
-            {/* Filters - Desktop */}
-            <div className="flex gap-3 items-center">
-              {/* Patient Name Filter */}
-              <select
-                value={selectedPatient}
-                onChange={(e) => setSelectedPatient(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm min-w-[180px]"
-              >
-                <option value="">All Patients</option>
-                {patientNames.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-
-              {/* Date Filter */}
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-              />
-
-              {/* Clear Filters Button */}
-              {(selectedPatient || selectedDate) && (
-                <button
-                  onClick={() => {
-                    setSelectedPatient('');
-                    setSelectedDate('');
-                  }}
-                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-sm font-medium whitespace-nowrap"
-                >
-                  Clear Filters
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Mobile & Tablet: Stacked layout */}
-          <div className="lg:hidden flex flex-col gap-2 sm:gap-3 pb-2 sm:pb-3">
-            {/* Tabs */}
-            <nav className="flex gap-2 sm:gap-4 -mb-[1px]">
-              <button
-                onClick={() => setActiveTab('pending')}
-                className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-medium border-b-2 transition-colors ${activeTab === 'pending'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                Pending ({filteredPendingPayments.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-medium border-b-2 transition-colors ${activeTab === 'history'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-              >
-                History ({filteredHistoryPayments.length})
-              </button>
-            </nav>
-
-            {/* Filters - Mobile */}
-            <div className="flex flex-wrap gap-2">
-              {/* Patient Name Filter */}
-              <select
-                value={selectedPatient}
-                onChange={(e) => setSelectedPatient(e.target.value)}
-                className="flex-1 min-w-[140px] px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs sm:text-sm"
-              >
-                <option value="">All Patients</option>
-                {patientNames.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-
-              {/* Date Filter */}
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="flex-1 min-w-[140px] px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs sm:text-sm"
-              />
-
-              {/* Clear Filters Button */}
-              {(selectedPatient || selectedDate) && (
-                <button
-                  onClick={() => {
-                    setSelectedPatient('');
-                    setSelectedDate('');
-                  }}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-xs sm:text-sm font-medium whitespace-nowrap"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Pending Section */}
-        {activeTab === 'pending' && (
-          <>
-            {/* Desktop Table */}
-            <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Admission No</th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
-                    {/* <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone Number</th> */}
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase bg-gray-50 min-w-[200px]">Reason For Visit</th>
-                    {/* <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Age</th> */}
-                    {/* <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Bed No</th> */}
-                    {/* <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Location</th> */}
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Ward Type</th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Room</th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Priority</th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Category</th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Tests</th>
-                    <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Planned </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredPendingPayments.length > 0 ? (
-                    filteredPendingPayments.map((record) => (
-                      <tr key={record.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm whitespace-nowrap">
-                          <button
-                            onClick={() => handleActionClick(record)}
-                            className="px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700"
-                          >
-                            Process
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">
-                          {record.admissionNo || record.uniqueNumber}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
-                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td> */}
-                        <td className="px-4 py-3 text-sm text-gray-900 max-w-[250px] whitespace-normal break-words">{record.reasonForVisit}</td>
-                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td> */}
-                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td> */}
-                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td> */}
-                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.wardType}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.room}</td>
-                        <td className="px-4 py-3 text-sm whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.priority === 'High' ? 'bg-red-100 text-red-700' :
-                            record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-green-100 text-green-700'
-                            } `}>
-                            {record.priority}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                          {record.category === 'Pathology'
-                            ? record.pathologyTests?.slice(0, 2).join(', ') + (record.pathologyTests?.length > 2 ? '...' : '')
-                            : record.radiologyTests?.slice(0, 2).join(', ') + (record.radiologyTests?.length > 2 ? '...' : '')}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                          {record.planned3 ? new Date(record.planned3).toLocaleString('en-GB', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            day: '2-digit',
-                            month: 'short'
-                          }) : '-'}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
-                        <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                        <p className="text-lg font-medium text-gray-900">No pending payments</p>
-                        <p className="text-sm text-gray-500 mt-1">Records with planned tests will appear here</p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Card View */}
-            <div className="space-y-3 md:hidden">
-              {filteredPendingPayments.length > 0 ? (
-                filteredPendingPayments.map((record) => (
-                  <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo || record.uniqueNumber}</div>
-                        <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
-                      </div>
-                      <button
-                        onClick={() => handleActionClick(record)}
-                        className="flex-shrink-0 px-3 py-1.5 text-xs text-white bg-green-600 rounded-lg shadow-sm"
-                      >
-                        Process
-                      </button>
-                    </div>
-                    <div className="space-y-2 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Phone:</span>
-                        <span className="font-medium text-gray-900">{record.phoneNumber}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Age:</span>
-                        <span className="font-medium text-gray-900">{record.age}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Bed/Room:</span>
-                        <span className="font-medium text-gray-900">{record.bedNo} / {record.room}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Priority:</span>
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.priority === 'High' ? 'bg-red-100 text-red-700' :
-                          record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-green-100 text-green-700'
-                          } `}>
-                          {record.priority}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Category:</span>
-                        <span className="font-medium text-gray-900">{record.category}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Planned (Report):</span>
-                        <span className="font-medium text-gray-900">
-                          {record.planned3 ? new Date(record.planned3).toLocaleString('en-GB', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            day: '2-digit',
-                            month: 'short'
-                          }) : '-'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                  <p className="text-sm font-medium text-gray-900">No pending payments</p>
-                  <p className="text-xs text-gray-500 mt-1">Records with planned tests will appear here</p>
-                </div>
-              )}
-            </div>
-          </>
         )}
 
-        {/* History Section */}
-        {activeTab === 'history' && (
-          <>
-            {/* Desktop Table */}
-            <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
-                    {/* <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th> */}
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase bg-gray-50 min-w-[200px]">Reason For Visit</th>
-                    {/* <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Age</th>
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Bed No</th>
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Location</th> */}
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Ward Type</th>
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Room</th>
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Priority</th>
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Category</th>
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Planned</th>
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Completed</th>
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Payment Status</th>
-                    <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Bill Image</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredHistoryPayments.length > 0 ? (
-                    filteredHistoryPayments.map((record) => (
+        <div className="px-3 sm:px-4 pt-2">
+          {/* Stats Grid - More compact */}
+          <div className="grid grid-cols-3 gap-2 mb-3 md:grid-cols-6">
+            {[
+              { label: 'Total Path', val: totalPathology, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100' },
+              { label: 'Total Rad', val: totalRadiology, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100' },
+              { label: 'Comp Path', val: completePathology, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100' },
+              { label: 'Comp Rad', val: completeRadiology, color: 'text-teal-600', bg: 'bg-teal-50', border: 'border-teal-100' },
+              { label: 'Pend Path', val: pendingPathology, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100' },
+              { label: 'Pend Rad', val: pendingRadiology, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100' }
+            ].map((s, idx) => (
+              <div key={idx} className={`p-1.5 sm:p-2 ${s.bg} rounded-lg border ${s.border} shadow-sm transition-all hover:shadow-md`}>
+                <div className="flex flex-col">
+                  <span className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase truncate leading-tight">{s.label}</span>
+                  <span className={`text-sm sm:text-base font-black ${s.color} mt-0.5 leading-none`}>{s.val}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Tabs and Filters Combined */}
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 pb-2">
+            <nav className="flex gap-2 w-full lg:w-auto overflow-x-auto no-scrollbar border-b lg:border-none">
+              {['pending', 'history'].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-2 text-sm font-bold whitespace-nowrap transition-all border-b-2 ${activeTab === tab
+                    ? 'border-green-600 text-green-700 bg-green-50/50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                  {tab.toUpperCase()} ({tab === 'pending' ? filteredPendingPayments.length : filteredHistoryPayments.length})
+                </button>
+              ))}
+            </nav>
+
+            <div className="flex flex-wrap lg:flex-nowrap gap-2 w-full lg:w-auto">
+              <select
+                value={selectedPatient}
+                onChange={(e) => setSelectedPatient(e.target.value)}
+                className="flex-1 lg:w-48 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-green-500 outline-none"
+              >
+                <option value="">All Patients</option>
+                {patientNames.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="flex-1 lg:w-40 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-green-500 outline-none"
+              />
+
+              {(selectedPatient || selectedDate) && (
+                <button
+                  onClick={() => { setSelectedPatient(''); setSelectedDate(''); }}
+                  className="px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg text-xs font-bold transition-colors"
+                >
+                  CLEAR
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-hidden p-3 md:p-4">
+        {activeTab === 'pending' && (
+          <div className="h-full flex flex-col">
+            <div className="hidden flex-1 overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm md:flex flex-col">
+              <div className="overflow-auto flex-1">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Action</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Planned</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase min-w-[200px]">Reason For Visit</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Ward Type</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Room</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Priority</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Category</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Tests</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredPendingPayments.length > 0 ? filteredPendingPayments.map(record => (
                       <tr key={record.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">
-                          {record.admissionNo || record.uniqueNumber}
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">
+                          <button onClick={() => handleActionClick(record)} className="px-3 py-1.5 text-white bg-green-600 rounded-lg hover:bg-green-700">Process</button>
                         </td>
+                        <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.admissionNo || record.uniqueNumber}</td>
                         <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
-                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td> */}
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                          {record.planned1 ? new Date(record.planned1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-900 max-w-[250px] whitespace-normal break-words">{record.reasonForVisit}</td>
-                        {/* <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td> */}
                         <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.wardType}</td>
                         <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.room}</td>
                         <td className="px-4 py-3 text-sm whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.priority === 'High' ? 'bg-red-100 text-red-700' :
-                            record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-green-100 text-green-700'
-                            } `}>
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.priority === 'High' ? 'bg-red-100 text-red-700' : record.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
                             {record.priority}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                          {record.planned1 ? new Date(record.planned1).toLocaleString('en-GB', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            day: '2-digit',
-                            month: 'short'
-                          }) : '-'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                          {record.actual1 ? new Date(record.actual1).toLocaleString('en-GB', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            day: '2-digit',
-                            month: 'short'
-                          }) : '-'}
-                        </td>
-                        <td className="px-4 py-3 text-sm whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.paymentStatus === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            } `}>
-                            {record.paymentStatus === 'Yes' ? 'Paid' : 'Unpaid'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm whitespace-nowrap">
-                          <button
-                            onClick={() => handleViewClick(record)}
-                            className="flex gap-1 items-center px-3 py-1.5 text-green-600 bg-green-50 rounded-lg shadow-sm hover:bg-green-100"
-                          >
-                            <Eye className="w-4 h-4" />
-                            View
-                          </button>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          <div className="max-w-[200px] whitespace-normal break-words">
+                            {record.category === 'Pathology'
+                              ? (record.pathologyTests && record.pathologyTests.length > 0
+                                ? record.pathologyTests.join(', ')
+                                : 'No tests')
+                              : (record.radiologyTests && record.radiologyTests.length > 0
+                                ? record.radiologyTests.join(', ')
+                                : 'No tests')}
+                          </div>
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="15" className="px-4 py-8 text-center text-gray-500">
-                        <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                        <p className="text-lg font-medium text-gray-900">No history records</p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    )) : <tr><td colSpan="10" className="px-4 py-8 text-center text-gray-500"><FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" /><p className="text-sm">No pending payments</p></td></tr>}
+                  </tbody>
+                </table>
+              </div>
             </div>
-
-            {/* Mobile Card View */}
-            <div className="space-y-3 md:hidden">
-              {filteredHistoryPayments.length > 0 ? (
-                filteredHistoryPayments.map((record) => (
-                  <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <div className="text-xs font-medium text-green-600 mb-1">Admission No: {record.admissionNo || record.uniqueNumber}</div>
-                        <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
-                      </div>
-                      <button
-                        onClick={() => handleViewClick(record)}
-                        className="flex-shrink-0 px-3 py-1.5 text-xs text-green-600 bg-green-50 rounded-lg"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="space-y-2 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Phone:</span>
-                        <span className="font-medium text-gray-900">{record.phoneNumber}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Age:</span>
-                        <span className="font-medium text-gray-900">{record.age}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Payment Status:</span>
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.paymentStatus === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          } `}>
-                          {record.paymentStatus === 'Yes' ? 'Paid' : 'Unpaid'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Planned:</span>
-                        <span className="font-medium text-gray-900">
-                          {record.planned1 ? new Date(record.planned1).toLocaleString('en-GB', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            day: '2-digit',
-                            month: 'short'
-                          }) : '-'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Completed:</span>
-                        <span className="font-medium text-gray-900">
-                          {record.actual1 ? new Date(record.actual1).toLocaleString('en-GB', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            day: '2-digit',
-                            month: 'short'
-                          }) : '-'}
-                        </span>
-                      </div>
-                    </div>
+            <div className="md:hidden h-full overflow-auto space-y-3 pb-8">
+              {filteredPendingPayments.map(record => (
+                <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-sm font-semibold">{record.patientName}</h3>
+                    <button onClick={() => handleActionClick(record)} className="text-xs text-white bg-green-600 px-2 py-1 rounded">Process</button>
                   </div>
-                ))
-              ) : (
-                <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                  <p className="text-sm font-medium text-gray-900">No history records</p>
+                  <div className="text-xs text-gray-600">Adm: {record.admissionNo} | {record.wardType} | {record.room}</div>
                 </div>
-              )}
+              ))}
             </div>
-          </>
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div className="h-full flex flex-col">
+            <div className="hidden flex-1 overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm md:flex flex-col">
+              <div className="overflow-auto flex-1">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Planned</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Actual</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase min-w-[200px]">Reason For Visit</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Ward Type</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Room</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Priority</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Payment</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredHistoryPayments.length > 0 ? filteredHistoryPayments.map(record => (
+                      <tr key={record.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.admissionNo || record.uniqueNumber}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                          {record.planned1 ? new Date(record.planned1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                          {record.actual1 ? new Date(record.actual1).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-[250px] whitespace-normal break-words">{record.reasonForVisit}</td>
+                        <td className="px-4 py-3 text-sm">{record.wardType}</td>
+                        <td className="px-4 py-3 text-sm">{record.room}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.priority === 'High' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{record.priority}</span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${record.paymentStatus === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{record.paymentStatus === 'Yes' ? 'Paid' : 'Unpaid'}</span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <button onClick={() => handleViewClick(record)} className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded hover:bg-green-100"><Eye className="w-4 h-4" />View</button>
+                        </td>
+                      </tr>
+                    )) : <tr><td colSpan="10" className="px-4 py-8 text-center text-gray-500">No history records</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="md:hidden h-full overflow-auto space-y-3 pb-8">
+              {filteredHistoryPayments.map(record => (
+                <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-sm font-semibold">{record.patientName}</h3>
+                    <button onClick={() => handleViewClick(record)} className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded"><Eye className="w-4 h-4" /></button>
+                  </div>
+                  <div className="text-xs text-gray-600">Status: {record.paymentStatus === 'Yes' ? 'Paid' : 'Unpaid'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Payment Processing Modal */}
       {showModal && selectedRecord && (
         <div className="overflow-y-auto fixed inset-0 z-50 flex justify-center items-center p-4 bg-black bg-opacity-50">
           <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-xl">
             <div className="sticky top-0 z-10 flex justify-between items-center p-4 bg-white border-b border-gray-200 md:p-6">
-              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Payment Processing</h2>
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  resetForm();
-                }}
-                className="p-1 text-gray-400 rounded-full hover:text-gray-600 hover:bg-gray-100"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              <h2 className="text-xl font-bold">Payment Processing</h2>
+              <button onClick={() => { setShowModal(false); resetForm(); }} className="p-1 text-gray-400 hover:text-gray-600 ring-1 ring-gray-200 rounded-full"><X className="w-6 h-6" /></button>
             </div>
-
             <div className="p-4 md:p-6">
-              {/* Pre-filled Patient Info */}
-              <div className="p-4 mb-6 bg-green-50 rounded-lg border border-green-200">
-                <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
-                <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
-                  <div>
-                    <span className="text-gray-600">Admission No:</span>
-                    <div className="font-medium text-green-600">{selectedRecord.admissionNo || selectedRecord.uniqueNumber}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Name:</span>
-                    <div className="font-medium text-gray-900">{selectedRecord.patientName}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Phone:</span>
-                    <div className="font-medium text-gray-900">{selectedRecord.phoneNumber}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Age:</span>
-                    <div className="font-medium text-gray-900">{selectedRecord.age}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Bed No:</span>
-                    <div className="font-medium text-gray-900">{selectedRecord.bedNo}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Location:</span>
-                    <div className="font-medium text-gray-900">{selectedRecord.location}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Ward Type:</span>
-                    <div className="font-medium text-gray-900">{selectedRecord.wardType}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Category:</span>
-                    <div className="font-medium text-gray-900">{selectedRecord.category}</div>
-                  </div>
-                  {selectedRecord.category === 'Radiology' && selectedRecord.radiologyType && (
-                    <div>
-                      <span className="text-gray-600">Radiology Type:</span>
-                      <div className="font-medium text-gray-900">{selectedRecord.radiologyType}</div>
-                    </div>
-                  )}
-                </div>
+              <div className="p-4 mb-6 bg-green-50 rounded-lg border border-green-200 grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
+                <div className="col-span-2 md:col-span-3 font-semibold text-gray-900 border-b pb-1 mb-1">Patient: {selectedRecord.patientName}</div>
+                <div><span className="text-gray-600">Adm:</span> {selectedRecord.admissionNo}</div>
+                <div><span className="text-gray-600">Category:</span> {selectedRecord.category}</div>
+                <div><span className="text-gray-600">Ward:</span> {selectedRecord.wardType}</div>
               </div>
-
-              {/* Payment Form */}
               <div className="space-y-4">
                 <div>
-                  <label className="block mb-1 text-sm font-medium text-gray-700">Payment Status *</label>
-                  <select
-                    name="payment"
-                    value={formData.payment}
-                    onChange={handleInputChange}
-                    className="px-3 py-2 w-full bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="">Select Payment Status</option>
-                    <option value="Yes">Yes - Paid</option>
-                    <option value="No">No - Unpaid</option>
+                  <label className="block mb-1 text-sm font-medium">Payment Status *</label>
+                  <select name="payment" value={formData.payment} onChange={handleInputChange} className="px-3 py-2 w-full border rounded-lg focus:ring-2 focus:ring-green-500">
+                    <option value="">Select Status</option>
+                    <option value="Yes">Paid</option>
+                    <option value="No">Unpaid</option>
                   </select>
                 </div>
-
-                <div>
-                  {/* Change this line: */}
-                  <label className="block mb-1 text-sm font-medium text-gray-700">
-                    Upload Bill Image (Optional)
-                  </label>
-
-                  <div className="mt-1">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="hidden"
-                      id="bill-image-upload"
-                    />
-                    <label
-                      htmlFor="bill-image-upload"
-                      className="flex flex-col items-center justify-center px-4 py-6 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:border-green-500 hover:bg-green-50 transition-colors"
-                    >
+                {formData.payment === 'Yes' && (
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">Upload Bill (Image or PDF - Optional)</label>
+                    <input type="file" accept="image/*,application/pdf" onChange={handleImageChange} className="hidden" id="bill-upload" />
+                    <label htmlFor="bill-upload" className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg cursor-pointer hover:bg-green-50">
                       {imagePreview ? (
-                        <div className="text-center">
-                          <img
-                            src={imagePreview}
-                            alt="Bill preview"
-                            className="max-h-40 mb-2 rounded"
-                          />
-                          <p className="text-sm text-green-600 font-medium flex items-center justify-center gap-1">
-                            <Check className="w-4 h-4" />
-                            Image uploaded successfully
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">Click to change image</p>
-                        </div>
+                        formData.fileType === 'pdf' ? (
+                          <div className="flex flex-col items-center">
+                            <FileText className="w-12 h-12 text-red-600 mb-2" />
+                            <p className="text-xs font-medium text-gray-700">PDF Uploaded</p>
+                          </div>
+                        ) : (
+                          <img src={imagePreview} className="max-h-32 rounded" alt="Bill preview" />
+                        )
                       ) : (
-                        <div className="text-center">
-                          <Upload className="mx-auto w-12 h-12 text-gray-400 mb-2" />
-                          <p className="text-sm text-gray-600">Click to upload bill image (Optional)</p>
-                          <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</p>
-                        </div>
+                        <>
+                          <Upload className="w-8 h-8 text-gray-400 mb-1" />
+                          <p className="text-xs text-gray-500">Upload Image or PDF</p>
+                        </>
                       )}
+                      <p className="text-xs text-gray-500 mt-1">{imagePreview ? 'Click to change' : 'Max 5MB'}</p>
                     </label>
                   </div>
-                </div>
+                )}
+                {modalError && <div className="text-sm text-red-600 bg-red-50 p-2 rounded">{modalError}</div>}
               </div>
-
-              {modalError && (
-                <div className="p-3 mt-4 text-sm text-red-700 bg-red-100 rounded-lg">
-                  {modalError}
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="flex flex-col gap-3 justify-end mt-6 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowModal(false);
-                    resetForm();
-                  }}
-                  className="px-6 py-2 w-full font-medium text-gray-700 bg-gray-100 rounded-lg transition-colors hover:bg-gray-200 sm:w-auto"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className="px-6 py-2 w-full font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700 disabled:opacity-50 sm:w-auto"
-                >
-                  {loading ? 'Processing...' : 'Save Payment'}
-                </button>
+              <div className="flex gap-3 justify-end mt-6">
+                <button onClick={() => { setShowModal(false); resetForm(); }} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg">Cancel</button>
+                <button onClick={handleSubmit} disabled={loading} className="px-4 py-2 text-white bg-green-600 rounded-lg disabled:opacity-50">{loading ? 'Processing...' : 'Save'}</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* View Details Modal */}
       {showViewModal && viewingRecord && (
         <div className="overflow-y-auto fixed inset-0 z-50 flex justify-center items-center p-4 bg-black bg-opacity-50">
           <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-xl">
-            <div className="sticky top-0 z-10 flex justify-between items-center p-4 bg-white border-b border-gray-200 md:p-6">
-              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Payment Details</h2>
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="p-1 text-gray-400 rounded-full hover:text-gray-600 hover:bg-gray-100"
-              >
-                <X className="w-6 h-6" />
-              </button>
+            <div className="sticky top-0 z-10 flex justify-between items-center p-4 bg-white border-b md:p-6">
+              <h2 className="text-xl font-bold">Details</h2>
+              <button onClick={() => setShowViewModal(false)} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-6 h-6" /></button>
             </div>
-
-            <div className="p-4 md:p-6 space-y-6">
-              {/* Patient Information */}
+            <div className="p-4 md:p-6 space-y-4">
               <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                <h3 className="mb-3 text-sm font-semibold text-gray-900">Patient Information</h3>
-                <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
-                  <div>
-                    <span className="text-gray-600">Admission No:</span>
-                    <div className="font-medium text-green-600">{viewingRecord.admissionNo || viewingRecord.uniqueNumber}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Name:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.patientName}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Phone:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.phoneNumber}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Age:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.age}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Gender:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.gender}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Bed No:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.bedNo}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Room:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.room}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Location:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.location}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Ward Type:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.wardType}</div>
-                  </div>
-                  <div className="col-span-2 md:col-span-3">
-                    <span className="text-gray-600">Reason for Visit:</span>
-                    <div className="font-medium text-gray-900">{viewingRecord.reasonForVisit}</div>
-                  </div>
+                <div className="text-sm font-semibold mb-2">{viewingRecord.patientName}</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>Adm: {viewingRecord.admissionNo}</div>
+                  <div>Category: {viewingRecord.category}</div>
+                  <div>Status: {viewingRecord.paymentStatus}</div>
                 </div>
               </div>
-
-              {/* Lab & Payment Details */}
-              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                <h3 className="mb-3 text-sm font-semibold text-gray-900">Lab & Payment Details</h3>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Priority:</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${viewingRecord.priority === 'High' ? 'bg-red-100 text-red-700' :
-                      viewingRecord.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-green-100 text-green-700'
-                      } `}>
-                      {viewingRecord.priority}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-gray-600">Category:</span>
-                    <div className="font-medium text-gray-900 mt-1">{viewingRecord.category}</div>
-                  </div>
-
-                  {viewingRecord.category === 'Pathology' && viewingRecord.pathologyTests?.length > 0 && (
-                    <div>
-                      <span className="text-gray-600">Pathology Tests ({viewingRecord.pathologyTests.length}):</span>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {viewingRecord.pathologyTests.map((test, index) => (
-                          <span key={index} className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
-                            {test}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {viewingRecord.category === 'Radiology' && (
-                    <>
-                      <div>
-                        <span className="text-gray-600">Radiology Type:</span>
-                        <div className="font-medium text-gray-900 mt-1">{viewingRecord.radiologyType}</div>
-                      </div>
-                      {viewingRecord.radiologyTests?.length > 0 && (
-                        <div>
-                          <span className="text-gray-600">Tests ({viewingRecord.radiologyTests.length}):</span>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {viewingRecord.radiologyTests.map((test, index) => (
-                              <span key={index} className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-full">
-                                {test}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  <div className="pt-3 border-t border-green-300">
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-gray-600">Payment Status:</span>
-                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${viewingRecord.paymentStatus === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        } `}>
-                        {viewingRecord.paymentStatus === 'Yes' ? 'Paid' : 'Unpaid'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="text-gray-600">Processed Date:</span>
-                    <div className="font-medium text-gray-900 mt-1">
-                      {viewingRecord.processedDate ? new Date(viewingRecord.processedDate).toLocaleString() : 'N/A'}
-                    </div>
-                  </div>
+              {viewingRecord.billImage && (
+                <div className="border rounded-lg overflow-hidden">
+                  <img src={viewingRecord.billImage} alt="Bill" className="w-full h-auto max-h-96 object-contain" />
+                  <button onClick={() => handleViewImage(viewingRecord.billImage)} className="w-full py-2 bg-green-50 text-green-600 text-sm">Full Screen</button>
                 </div>
-              </div>
-
-              {/* Bill Image */}
-              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <h3 className="mb-3 text-sm font-semibold text-gray-900">Bill Image</h3>
-                <div className="space-y-3">
-                  {viewingRecord.billImage ? (
-                    <>
-                      <img
-                        src={viewingRecord.billImage}
-                        alt="Bill"
-                        className="w-full max-h-96 object-contain rounded-lg border border-gray-300"
-                      />
-                      <button
-                        onClick={() => handleViewImage(viewingRecord.billImage)}
-                        className="w-full px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-                      >
-                        Open in Full Screen
-                      </button>
-                    </>
-                  ) : (
-                    <div className="text-center py-8">
-                      <FileText className="mx-auto w-12 h-12 text-gray-300 mb-2" />
-                      <p className="text-gray-600">No bill image available</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Close Button */}
-              <div className="flex justify-end">
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="px-6 py-2 font-medium text-white bg-green-600 rounded-lg transition-colors hover:bg-green-700"
-                >
-                  Close
-                </button>
-              </div>
+              )}
+              <div className="flex justify-end"><button onClick={() => setShowViewModal(false)} className="px-4 py-2 bg-green-600 text-white rounded-lg">Close</button></div>
             </div>
           </div>
         </div>
       )}
 
       <style>{`
-@keyframes scale-in {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        @keyframes progress {
-          from {
-            width: 100%;
-          }
-          to {
-            width: 0%;
-          }
-        }
-        
-        .animate-scale-in {
-          animation: scale-in 0.3s ease-out;
-        }
-        
-        .animate-progress {
-          animation: progress 3s linear forwards;
-        }
-`}</style>
+        @keyframes scale-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        @keyframes progress { from { width: 100%; } to { width: 0%; } }
+        .animate-scale-in { animation: scale-in 0.3s ease-out; }
+        .animate-progress { animation: progress 1s linear forwards; }
+      `}</style>
     </div>
   );
 };

@@ -432,6 +432,9 @@ const RMOTaskList = () => {
     const [completionOtTime, setCompletionOtTime] = useState('09:00');
     const [completionOtDescription, setCompletionOtDescription] = useState('');
 
+    const [userRole, setUserRole] = useState('');
+    const [userName, setUserName] = useState('');
+
     const tableRef = useRef(null);
     const refreshIntervalRef = useRef(null);
     const rmoInputRef = useRef(null);
@@ -473,6 +476,20 @@ const RMOTaskList = () => {
         return () => {
             document.head.removeChild(style);
         };
+    }, []);
+
+    // Load user role and name from localStorage
+    useEffect(() => {
+        const storedUser = localStorage.getItem('mis_user');
+        if (storedUser) {
+            try {
+                const user = JSON.parse(storedUser);
+                setUserRole(user.role || '');
+                setUserName(user.name || '');
+            } catch (error) {
+                console.error('Error parsing user from localStorage:', error);
+            }
+        }
     }, []);
 
     // Function to check if a task requires OT Information
@@ -710,9 +727,17 @@ const RMOTaskList = () => {
     const loadTasks = useCallback(async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
+
+            let query = supabase
                 .from('rmo_assign_task')
-                .select('*')
+                .select('*');
+
+            // Apply role-based filtering
+            if (userRole && userRole.toLowerCase().includes('rmo') && userName) {
+                query = query.ilike('assign_rmo', userName);
+            }
+
+            const { data, error } = await query
                 .order('timestamp', { ascending: false });
 
             if (error) throw error;
@@ -800,7 +825,7 @@ const RMOTaskList = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [userRole, userName]);
 
     // Handle bed selection
     const handleBedSelect = (bedInfo) => {
@@ -1003,6 +1028,7 @@ const RMOTaskList = () => {
         : predefinedTasks;
 
     useEffect(() => {
+        if (!userRole) return;
         loadTasks();
         loadPredefinedTasks();
         loadAvailableRmos();
@@ -1017,7 +1043,7 @@ const RMOTaskList = () => {
                 clearInterval(refreshIntervalRef.current);
             }
         };
-    }, [loadTasks, loadPredefinedTasks, loadAvailableRmos]);
+    }, [loadTasks, loadPredefinedTasks, loadAvailableRmos, userRole, userName]);
 
     // Load occupied beds when add task modal opens
     useEffect(() => {
@@ -1067,7 +1093,8 @@ const RMOTaskList = () => {
             const { error } = await supabase
                 .from('rmo_assign_task')
                 .update({
-                    actual1: newStatus === 'Completed' ? now : null
+                    actual1: newStatus === 'Completed' ? now : null,
+                    submitted_by: newStatus === 'Completed' ? userName : null
                 })
                 .eq('task_no', taskNo);
 
@@ -1107,6 +1134,7 @@ const RMOTaskList = () => {
                 actual1: now,
                 ot_information: completionOtType,
                 // ot_information_type: completionOtType // Remove if not needed
+                submitted_by: userName
             };
 
             // For surgical type, add additional fields and post to ot_information table
@@ -1145,7 +1173,8 @@ const RMOTaskList = () => {
                     // ot_information: completionOtDescription || null,
                     // ot_date: completionOtDate,
                     // ot_time: completionOtTime,
-                    // ot_description: completionOtDescription || null
+                    // ot_description: completionOtDescription || null,
+                    submitted_by: userName
                 };
 
                 // Insert into ot_information table

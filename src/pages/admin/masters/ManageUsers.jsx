@@ -44,7 +44,8 @@ import {
   Thermometer,
   AlertCircle,
   Package,
-  Calendar
+  Calendar,
+  Syringe
 } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
 import { useNotification } from '../../../contexts/NotificationContext';
@@ -117,8 +118,20 @@ const ManageUsers = () => {
 
       if (error) throw error;
 
+      // Get current user from local storage
+      const currentUser = JSON.parse(localStorage.getItem('mis_user'));
+      const currentUserRole = currentUser?.role;
+      const currentUserName = currentUser?.name;
+
+      let filteredData = data;
+
+      // Filter based on role: if not admin, only show own data
+      if (currentUserRole !== 'admin') {
+        filteredData = data.filter(user => user.name === currentUserName);
+      }
+
       // Parse pages from string to array for each user
-      const usersWithParsedPages = data.map(user => {
+      const usersWithParsedPages = filteredData.map(user => {
         let pages = [];
 
         if (user.pages) {
@@ -415,6 +428,7 @@ const ManageUsers = () => {
       case 'receptionist': return 'bg-cyan-100 text-cyan-800';
       case 'rmo': return 'bg-indigo-100 text-indigo-800';
       case 'ot': return 'bg-pink-100 text-pink-800'; // OT role color
+      case 'dressing staff': return 'bg-teal-100 text-teal-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -428,6 +442,7 @@ const ManageUsers = () => {
       case 'pharmacy': return <Pill size={14} />;
       case 'rmo': return <Activity size={14} />;
       case 'ot': return <Scissors size={14} />; // OT role icon
+      case 'dressing staff': return <Syringe size={14} />;
       default: return <User size={14} />;
     }
   };
@@ -459,7 +474,8 @@ const ManageUsers = () => {
     { value: 'pharmacy', label: 'Pharmacist', icon: <Pill size={16} /> },
     { value: 'receptionist', label: 'Receptionist', icon: <User size={16} /> },
     { value: 'rmo', label: 'RMO', icon: <Activity size={16} /> },
-    { value: 'ot', label: 'OT Staff', icon: <Scissors size={16} /> }, // New OT role
+    { value: 'ot', label: 'OT Staff', icon: <Scissors size={16} /> },
+    { value: 'dressing staff', label: 'Dressing Staff', icon: <Syringe size={16} /> },
   ];
 
   // Check if user has all pages access
@@ -489,65 +505,169 @@ const ManageUsers = () => {
   return (
     <div className="p-4 md:p-6">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="mb-4 md:mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
           <div>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg">
-                <Users size={24} className="text-white" />
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="p-1.5 md:p-2 bg-gradient-to-br from-green-500 to-green-600 rounded-lg">
+                <Users size={20} className="text-white md:w-6 md:h-6" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-                <p className="text-gray-600">Manage system users and their permissions</p>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-900">User Management</h1>
+                <p className="hidden md:block text-gray-600">Manage system users and their permissions</p>
               </div>
             </div>
           </div>
           <button
             onClick={handleAddUser}
-            className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all duration-200 shadow-md hover:shadow-lg"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-medium transition-all duration-200 shadow-md hover:shadow-lg text-sm md:text-base"
           >
-            <Plus size={20} />
+            <Plus size={18} className="md:w-5 md:h-5" />
             Add New User
           </button>
         </div>
       </div>
 
       {/* Search and Stats */}
-      <div className="mb-6 bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4">
+      <div className="mb-4 md:mb-6 bg-white rounded-xl border border-gray-200 p-3 md:p-4 shadow-sm">
+        <div className="flex flex-col md:flex-row gap-3 md:gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="text"
-                placeholder="Search users by name, email, or role..."
+                placeholder="Search users..."
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm md:text-base"
               />
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="bg-gray-50 px-4 py-2 rounded-lg">
-              <span className="text-sm text-gray-600">
-                <span className="font-semibold text-gray-900">{filteredUsers.length}</span> of{' '}
-                <span className="font-semibold text-gray-900">{users.length}</span> users
+          <div className="flex items-center justify-between md:justify-start gap-4">
+            <div className="bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+              <span className="text-xs md:text-sm text-gray-600">
+                <span className="font-bold text-gray-900">{filteredUsers.length}</span>/
+                <span className="font-bold text-gray-900">{users.length}</span> users
               </span>
             </div>
             <button
               onClick={fetchUsers}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-sm"
             >
-              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
               Refresh
             </button>
           </div>
         </div>
       </div>
 
-      {/* Users Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* Mobile View: Cards */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="bg-white p-12 text-center rounded-xl border border-gray-200 shadow-sm">
+            <RefreshCw className="animate-spin text-green-600 mx-auto" size={24} />
+            <p className="mt-2 text-gray-500 text-sm">Loading users...</p>
+          </div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="bg-white p-12 text-center rounded-xl border border-gray-200 shadow-sm">
+            <Users className="mx-auto text-gray-400" size={32} />
+            <p className="mt-2 text-gray-500 text-sm">No users found</p>
+          </div>
+        ) : (
+          filteredUsers.map((user) => (
+            <div key={user.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm p-3">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    {user.profile_image ? (
+                      <img
+                        src={user.profile_image}
+                        alt={user.name}
+                        className="w-10 h-10 rounded-full object-cover border border-gray-100 shadow-sm"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIyNCIgY3k9IjI0IiByPSIyNCIgZmlsbD0iI0VFRUVFRSIvPjxwYXRoIGQ9Ik0zMSAyMUMzMSAyNS40MTgzIDI4LjQxODMgMjggMjQgMjhDMTkuNTgxNyAyOCAxNyAyNS40MTgzIDE3IDIxQzE3IDE2LjU4MTcgMTkuNTgxNyAxNCAyNCAxNEMyOC40MTgzIDE0IDMxIDE2LjU4MTcgMzEgMjFaIiBmaWxsPSIjOTk5OTk5Ii8+PC9zdmc+';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
+                        <User size={18} className="text-blue-600" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-gray-900 text-sm leading-tight truncate">{user.name || user.user_name || 'No Name'}</h3>
+                    <p className="text-[10px] text-gray-500 font-medium">@{user.user_name || 'No Username'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleEditUser(user)}
+                    className="p-1.5 text-blue-600 bg-blue-50 rounded-lg"
+                    title="Edit"
+                  >
+                    <Edit size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteUser(user.id)}
+                    className="p-1.5 text-red-600 bg-red-50 rounded-lg"
+                    title="Delete"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 py-2.5 border-t border-gray-50 mt-1">
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase font-bold italic mb-1">Role</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tight ${getRoleColor(user.role)}`}>
+                      {user.role || 'N/A'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-gray-500 uppercase font-bold italic mb-1">Contact</p>
+                  <p className="text-[11px] text-gray-800 font-medium truncate">{user.email || 'No Email'}</p>
+                </div>
+              </div>
+
+              <div className="pt-2.5 border-t border-gray-50">
+                <p className="text-[10px] text-gray-500 uppercase font-bold italic mb-1.5">Access Control</p>
+                {hasAllPagesAccess(user.pages) ? (
+                  <div className="flex items-center gap-1.5 text-green-600 text-[10px] font-bold bg-green-50 px-2 py-1 rounded-md inline-flex">
+                    <CheckCircle size={12} />
+                    FULL ACCESS
+                  </div>
+                ) : user.pages && user.pages.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {user.pages.slice(0, 3).map((page) => {
+                      const pageInfo = getPageDisplayInfo(page);
+                      return (
+                        <span key={page} className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded border border-gray-100 text-[10px] font-medium">
+                          {pageInfo.label}
+                        </span>
+                      );
+                    })}
+                    {user.pages.length > 3 && (
+                      <span className="text-[9px] text-gray-400 font-bold self-center">
+                        +{user.pages.length - 3} MORE
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-gray-400 italic">No pages assigned</span>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop View: Table */}
+      <div className="hidden md:block bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -611,7 +731,8 @@ const ManageUsers = () => {
                           {user.role === 'rmo' ? 'RMO' :
                             user.role === 'nurse' ? 'Nurse' :
                               user.role === 'ot' ? 'OT Staff' :
-                                user.role || 'N/A'}
+                                user.role === 'dressing staff' ? 'Dressing Staff' :
+                                  user.role || 'N/A'}
                         </span>
                       </div>
                     </td>

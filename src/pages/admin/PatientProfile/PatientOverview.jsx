@@ -15,21 +15,21 @@ import supabase from '../../../SupabaseClient'; // Adjust path as needed
 const StatusBadge = ({ status }) => {
     const getColors = () => {
         if (status === 'Completed' || status === 'Active' || status === 'Approved & Dispensed') {
-            return 'bg-green-100 text-green-700 border-green-300';
+            return 'bg-green-50 text-green-700 border-green-200';
         } else if (status === 'Pending' || status === 'Pending Approval') {
-            return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+            return 'bg-yellow-50 text-yellow-700 border-yellow-200';
         } else if (status === 'In Progress') {
-            return 'bg-blue-100 text-blue-700 border-blue-300';
+            return 'bg-blue-50 text-blue-700 border-blue-200';
         } else if (status === 'Emergency' || status === 'Occupied') {
-            return 'bg-red-100 text-red-700 border-red-300';
+            return 'bg-red-50 text-red-700 border-red-200';
         } else if (status === 'Stable') {
-            return 'bg-emerald-100 text-emerald-700 border-emerald-300';
+            return 'bg-emerald-50 text-emerald-700 border-emerald-200';
         }
-        return 'bg-gray-100 text-gray-700 border-gray-300';
+        return 'bg-gray-50 text-gray-700 border-gray-200';
     };
 
     return (
-        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getColors()}`}>
+        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border shadow-sm ${getColors()}`}>
             {status}
         </span>
     );
@@ -40,29 +40,29 @@ const ExpandableSection = ({ title, icon: Icon, children, defaultOpen = false })
     const [isOpen, setIsOpen] = useState(defaultOpen);
 
     return (
-        <div className="bg-white rounded-lg shadow-md border border-gray-200">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                className="w-full px-3 md:px-6 py-2 md:py-3.5 flex items-center justify-between hover:bg-gray-50/50 transition-colors"
             >
-                <div className="flex items-center gap-3">
-                    <Icon className="w-5 h-5 text-blue-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+                <div className="flex items-center gap-2 md:gap-3">
+                    <Icon className="w-3.5 h-3.5 md:w-5 md:h-5 text-blue-600" />
+                    <h3 className="text-[13px] md:text-lg font-bold text-gray-800 uppercase tracking-tight">{title}</h3>
                 </div>
-                {isOpen ? <ChevronUp className="w-5 h-5 text-gray-600" /> : <ChevronDown className="w-5 h-5 text-gray-600" />}
+                {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
             </button>
-            {isOpen && <div className="px-6 py-4 border-t border-gray-200">{children}</div>}
+            {isOpen && <div className="px-2 md:px-6 py-2 md:py-4 border-t border-gray-50">{children}</div>}
         </div>
     );
 };
 
 // Information Grid Component
 const InfoGrid = ({ data }) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5 md:gap-4">
         {Object.entries(data).map(([key, value]) => (
-            <div key={key} className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 font-medium">{key}</p>
-                <p className="text-base font-semibold text-gray-900 mt-1">{value}</p>
+            <div key={key} className="bg-gray-50/30 p-2 md:p-4 rounded border border-gray-100 flex flex-col justify-center min-h-[44px]">
+                <p className="text-[9px] md:text-xs text-gray-500 font-medium uppercase tracking-wider truncate leading-none">{key}</p>
+                <p className="text-[11px] md:text-base font-bold text-gray-900 mt-1.5 truncate leading-none line-clamp-1">{value}</p>
             </div>
         ))}
     </div>
@@ -228,7 +228,7 @@ const PatientOverview = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-2 md:space-y-6">
             {/* Personal Information Section */}
             <ExpandableSection title="Personal Information" icon={User} defaultOpen={true}>
                 {loading ? (
@@ -251,8 +251,8 @@ const PatientOverview = () => {
                         }}
                     />
                 )}
-                <div className="mt-4 text-xs text-gray-500">
-                    <p>Phone and Emergency Contact fetched from patient admission records</p>
+                <div className="mt-2 text-[9px] text-gray-400 font-bold italic tracking-tighter">
+                    * SOURCE: ADMISSION RECORDS
                 </div>
             </ExpandableSection>
 
@@ -275,8 +275,8 @@ const PatientOverview = () => {
                         }}
                     />
                 )}
-                <div className="mt-4 text-xs text-gray-500">
-                    <p>Admission reason fetched from patient admission records</p>
+                <div className="mt-2 text-[9px] text-gray-400 font-bold italic tracking-tighter">
+                    * SOURCE: ADMISSION RECORDS
                 </div>
             </ExpandableSection>
 
@@ -291,7 +291,7 @@ const PatientOverview = () => {
                             'Bed Status': data.departmentInfo.bedStatus || 'N/A',
                         }}
                     />
-                    <div className="mt-4">
+                    <div className="mt-2 text-right">
                         <StatusBadge status={data.departmentInfo.bedStatus} />
                     </div>
                 </div>
@@ -300,13 +300,13 @@ const PatientOverview = () => {
             {/* Doctor Information Section */}
             <ExpandableSection title="Doctor Information" icon={Stethoscope} defaultOpen={true}>
                 <div className="space-y-6">
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                        <p className="text-sm text-gray-600 font-medium">Primary Doctor</p>
-                        <p className="text-base font-semibold text-gray-900 mt-1">
+                    <div className="bg-blue-50/30 p-2 md:p-3 rounded border border-blue-100/50">
+                        <p className="text-[9px] text-blue-500 font-medium uppercase tracking-wider leading-none">Primary Doctor</p>
+                        <p className="text-[13px] md:text-lg font-bold text-gray-900 mt-1.5 leading-none">
                             {data.doctorInfo.primaryDoctor}
                         </p>
                         <div className="flex items-center gap-2 mt-2">
-                            <span className="text-sm text-gray-500">{data.doctorInfo.specialty}</span>
+                            <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold uppercase tracking-widest">{data.doctorInfo.specialty}</span>
                         </div>
                     </div>
 
@@ -328,9 +328,9 @@ const PatientOverview = () => {
                     </div>
                 ) : vitalsData ? (
                     <div className="space-y-4">
-                        <div className="flex justify-between items-center mb-4">
-                            <p className="text-sm text-gray-600">
-                                Last Updated: {formatDate(vitalsData.lastUpdated)}
+                        <div className="flex justify-between items-center mb-2">
+                            <p className="text-[9px] text-gray-400 font-bold italic tracking-tighter">
+                                UPDATED: {formatDate(vitalsData.lastUpdated)}
                             </p>
                             <StatusBadge status="Recorded" />
                         </div>

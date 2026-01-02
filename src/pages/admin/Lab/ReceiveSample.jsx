@@ -157,9 +157,10 @@ const ReceiveSample = () => {
     }
 
     return (
-        <div className="flex flex-col h-screen bg-gray-50">
-            {/* Fixed Header */}
-            <div className="flex-none bg-white border-b border-gray-200">
+        <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
+            {/* Fixed Section: Header, Stats, Tabs & Filters */}
+            <div className="flex-none bg-white border-b border-gray-200 shrink-0">
+                {/* Header */}
                 <div className="px-4 py-3 sm:px-6">
                     <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
                         <div>
@@ -168,217 +169,227 @@ const ReceiveSample = () => {
                         </div>
                     </div>
                 </div>
+
+                <div className="px-3 sm:px-4">
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 gap-3 mb-4 md:grid-cols-3 lg:grid-cols-6 pt-2">
+                        {/* Total Path */}
+                        <div className="p-3 bg-white rounded-lg border border-green-200 shadow-sm sm:p-4">
+                            <div className="flex flex-col">
+                                <span className="text-xs font-medium text-gray-600 uppercase truncate">Total Path</span>
+                                <span className="text-lg font-bold text-green-600 mt-1 sm:text-l">{stats.totalPath}</span>
+                            </div>
+                        </div>
+                        {/* Total Rad */}
+                        <div className="p-3 bg-white rounded-lg border border-purple-200 shadow-sm sm:p-4">
+                            <div className="flex flex-col">
+                                <span className="text-xs font-medium text-gray-600 uppercase truncate">Total Rad</span>
+                                <span className="text-lg font-bold text-purple-600 mt-1 sm:text-l">{stats.totalRad}</span>
+                            </div>
+                        </div>
+                        {/* Comp Path */}
+                        <div className="p-3 bg-white rounded-lg border border-green-200 shadow-sm sm:p-4">
+                            <div className="flex flex-col">
+                                <span className="text-xs font-medium text-gray-600 uppercase truncate">Comp Path</span>
+                                <span className="text-lg font-bold text-green-600 mt-1 sm:text-l">{stats.compPath}</span>
+                            </div>
+                        </div>
+                        {/* Comp Rad */}
+                        <div className="p-3 bg-white rounded-lg border border-teal-200 shadow-sm sm:p-4">
+                            <div className="flex flex-col">
+                                <span className="text-xs font-medium text-gray-600 uppercase truncate">Comp Rad</span>
+                                <span className="text-lg font-bold text-teal-600 mt-1 sm:text-l">{stats.compRad}</span>
+                            </div>
+                        </div>
+                        {/* Pend Path */}
+                        <div className="p-3 bg-white rounded-lg border border-orange-200 shadow-sm sm:p-4">
+                            <div className="flex flex-col">
+                                <span className="text-xs font-medium text-gray-600 uppercase truncate">Pend Path</span>
+                                <span className="text-lg font-bold text-orange-600 mt-1 sm:text-l">{stats.pendPath}</span>
+                            </div>
+                        </div>
+                        {/* Pend Rad */}
+                        <div className="p-3 bg-white rounded-lg border border-red-200 shadow-sm sm:p-4">
+                            <div className="flex flex-col">
+                                <span className="text-xs font-medium text-gray-600 uppercase truncate">Pend Rad</span>
+                                <span className="text-lg font-bold text-red-600 mt-1 sm:text-l">{stats.pendRad}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Tabs & Filters */}
+                    <div className="border-b border-gray-200 mb-0">
+                        {/* Desktop Layout */}
+                        <div className="hidden lg:flex lg:items-center lg:justify-between pb-0">
+                            <nav className="flex gap-4 -mb-[1px]">
+                                <button
+                                    onClick={() => setActiveTab('pending')}
+                                    className={`px-6 py-3 text-base font-medium border-b-2 transition-colors ${activeTab === 'pending'
+                                        ? 'border-green-500 text-green-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    Pending ({filteredPending.length})
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('history')}
+                                    className={`px-6 py-3 text-base font-medium border-b-2 transition-colors ${activeTab === 'history'
+                                        ? 'border-green-500 text-green-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    History ({filteredHistory.length})
+                                </button>
+                            </nav>
+
+                            <div className="flex gap-3 items-center">
+                                <select
+                                    value={selectedPatient}
+                                    onChange={(e) => setSelectedPatient(e.target.value)}
+                                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm min-w-[180px]"
+                                >
+                                    <option value="">All Patients</option>
+                                    {patientNames.map(name => (
+                                        <option key={name} value={name}>{name}</option>
+                                    ))}
+                                </select>
+                                <input
+                                    type="date"
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                                />
+                                {(selectedPatient || selectedDate) && (
+                                    <button
+                                        onClick={() => { setSelectedPatient(''); setSelectedDate(''); }}
+                                        className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-sm font-medium whitespace-nowrap"
+                                    >
+                                        Clear Filters
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Mobile Layout */}
+                        <div className="lg:hidden flex flex-col gap-2 sm:gap-3 pb-2 sm:pb-3">
+                            <nav className="flex gap-2 sm:gap-4 -mb-[1px]">
+                                <button
+                                    onClick={() => setActiveTab('pending')}
+                                    className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-medium border-b-2 transition-colors ${activeTab === 'pending'
+                                        ? 'border-green-500 text-green-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    Pending ({filteredPending.length})
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('history')}
+                                    className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-medium border-b-2 transition-colors ${activeTab === 'history'
+                                        ? 'border-green-500 text-green-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    History ({filteredHistory.length})
+                                </button>
+                            </nav>
+                            <div className="flex flex-wrap gap-2">
+                                <select
+                                    value={selectedPatient}
+                                    onChange={(e) => setSelectedPatient(e.target.value)}
+                                    className="flex-1 min-w-[140px] px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs sm:text-sm"
+                                >
+                                    <option value="">All Patients</option>
+                                    {patientNames.map(name => (
+                                        <option key={name} value={name}>{name}</option>
+                                    ))}
+                                </select>
+                                <input
+                                    type="date"
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                    className="flex-1 min-w-[140px] px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs sm:text-sm"
+                                />
+                                {(selectedPatient || selectedDate) && (
+                                    <button
+                                        onClick={() => { setSelectedPatient(''); setSelectedDate(''); }}
+                                        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-xs sm:text-sm font-medium whitespace-nowrap"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto px-3 sm:px-4 pb-4">
-                {/* Stats Cards */}
-                <div className="grid grid-cols-2 gap-3 mb-4 md:grid-cols-3 lg:grid-cols-6 pt-4">
-                    {/* Total Path */}
-                    <div className="p-3 bg-white rounded-lg border border-green-200 shadow-sm sm:p-4">
-                        <div className="flex flex-col">
-                            <span className="text-xs font-medium text-gray-600 uppercase truncate">Total Path</span>
-                            <span className="text-lg font-bold text-green-600 mt-1 sm:text-l">{stats.totalPath}</span>
-                        </div>
-                    </div>
-                    {/* Total Rad */}
-                    <div className="p-3 bg-white rounded-lg border border-purple-200 shadow-sm sm:p-4">
-                        <div className="flex flex-col">
-                            <span className="text-xs font-medium text-gray-600 uppercase truncate">Total Rad</span>
-                            <span className="text-lg font-bold text-purple-600 mt-1 sm:text-l">{stats.totalRad}</span>
-                        </div>
-                    </div>
-                    {/* Comp Path */}
-                    <div className="p-3 bg-white rounded-lg border border-green-200 shadow-sm sm:p-4">
-                        <div className="flex flex-col">
-                            <span className="text-xs font-medium text-gray-600 uppercase truncate">Comp Path</span>
-                            <span className="text-lg font-bold text-green-600 mt-1 sm:text-l">{stats.compPath}</span>
-                        </div>
-                    </div>
-                    {/* Comp Rad */}
-                    <div className="p-3 bg-white rounded-lg border border-teal-200 shadow-sm sm:p-4">
-                        <div className="flex flex-col">
-                            <span className="text-xs font-medium text-gray-600 uppercase truncate">Comp Rad</span>
-                            <span className="text-lg font-bold text-teal-600 mt-1 sm:text-l">{stats.compRad}</span>
-                        </div>
-                    </div>
-                    {/* Pend Path */}
-                    <div className="p-3 bg-white rounded-lg border border-orange-200 shadow-sm sm:p-4">
-                        <div className="flex flex-col">
-                            <span className="text-xs font-medium text-gray-600 uppercase truncate">Pend Path</span>
-                            <span className="text-lg font-bold text-orange-600 mt-1 sm:text-l">{stats.pendPath}</span>
-                        </div>
-                    </div>
-                    {/* Pend Rad */}
-                    <div className="p-3 bg-white rounded-lg border border-red-200 shadow-sm sm:p-4">
-                        <div className="flex flex-col">
-                            <span className="text-xs font-medium text-gray-600 uppercase truncate">Pend Rad</span>
-                            <span className="text-lg font-bold text-red-600 mt-1 sm:text-l">{stats.pendRad}</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Tabs & Filters */}
-                <div className="border-b border-gray-200 mb-4">
-                    {/* Desktop Layout */}
-                    <div className="hidden lg:flex lg:items-center lg:justify-between pb-0">
-                        <nav className="flex gap-4 -mb-[1px]">
-                            <button
-                                onClick={() => setActiveTab('pending')}
-                                className={`px-6 py-3 text-base font-medium border-b-2 transition-colors ${activeTab === 'pending'
-                                    ? 'border-green-500 text-green-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                                    }`}
-                            >
-                                Pending ({filteredPending.length})
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('history')}
-                                className={`px-6 py-3 text-base font-medium border-b-2 transition-colors ${activeTab === 'history'
-                                    ? 'border-green-500 text-green-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                                    }`}
-                            >
-                                History ({filteredHistory.length})
-                            </button>
-                        </nav>
-
-                        <div className="flex gap-3 items-center">
-                            <select
-                                value={selectedPatient}
-                                onChange={(e) => setSelectedPatient(e.target.value)}
-                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm min-w-[180px]"
-                            >
-                                <option value="">All Patients</option>
-                                {patientNames.map(name => (
-                                    <option key={name} value={name}>{name}</option>
-                                ))}
-                            </select>
-                            <input
-                                type="date"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                            />
-                            {(selectedPatient || selectedDate) && (
-                                <button
-                                    onClick={() => { setSelectedPatient(''); setSelectedDate(''); }}
-                                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-sm font-medium whitespace-nowrap"
-                                >
-                                    Clear Filters
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Mobile Layout */}
-                    <div className="lg:hidden flex flex-col gap-2 sm:gap-3 pb-2 sm:pb-3">
-                        <nav className="flex gap-2 sm:gap-4 -mb-[1px]">
-                            <button
-                                onClick={() => setActiveTab('pending')}
-                                className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-medium border-b-2 transition-colors ${activeTab === 'pending'
-                                    ? 'border-green-500 text-green-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                                    }`}
-                            >
-                                Pending ({filteredPending.length})
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('history')}
-                                className={`px-3 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-medium border-b-2 transition-colors ${activeTab === 'history'
-                                    ? 'border-green-500 text-green-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                                    }`}
-                            >
-                                History ({filteredHistory.length})
-                            </button>
-                        </nav>
-                        <div className="flex flex-wrap gap-2">
-                            <select
-                                value={selectedPatient}
-                                onChange={(e) => setSelectedPatient(e.target.value)}
-                                className="flex-1 min-w-[140px] px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs sm:text-sm"
-                            >
-                                <option value="">All Patients</option>
-                                {patientNames.map(name => (
-                                    <option key={name} value={name}>{name}</option>
-                                ))}
-                            </select>
-                            <input
-                                type="date"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                                className="flex-1 min-w-[140px] px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-xs sm:text-sm"
-                            />
-                            {(selectedPatient || selectedDate) && (
-                                <button
-                                    onClick={() => { setSelectedPatient(''); setSelectedDate(''); }}
-                                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-xs sm:text-sm font-medium whitespace-nowrap"
-                                >
-                                    Clear
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
+            {/* Main Content Area - Scrollable */}
+            <div className="flex-1 overflow-hidden p-3 md:p-4">
                 {/* Content */}
                 {activeTab === 'pending' && (
-                    <>
+                    <div className="h-full flex flex-col">
                         {/* Desktop Table */}
-                        <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Lab No</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase min-w-[200px]">Reason For Visit</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Category</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Tests</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Planned</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {filteredPending.length > 0 ? (
-                                        filteredPending.map((record) => (
-                                            <tr key={record.id} className="hover:bg-gray-50">
-                                                <td className="px-4 py-3 text-sm whitespace-nowrap">
-                                                    <button
-                                                        onClick={() => handleReceiveSample(record)}
-                                                        className="px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700"
-                                                    >
-                                                        Receive
-                                                    </button>
-                                                </td>
-                                                <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.lab_no || '-'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patient_name}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phone_no || '-'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 max-w-[250px] whitespace-normal break-words">{record.reason_for_visit || '-'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                                                    {record.category === 'Pathology'
-                                                        ? (Array.isArray(record.pathology_tests) ? record.pathology_tests.join(', ') : record.pathology_tests)
-                                                        : (Array.isArray(record.radiology_tests) ? record.radiology_tests.join(', ') : record.radiology_tests)}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{formatDate(record.planned2)}</td>
-                                            </tr>
-                                        ))
-                                    ) : (
+                        <div className="hidden flex-1 overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm md:flex flex-col">
+                            <div className="overflow-auto flex-1">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50 sticky top-0 z-10">
                                         <tr>
-                                            <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
-                                                <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                                                <p className="text-lg font-medium text-gray-900">No pending samples</p>
-                                            </td>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Lab No</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase min-w-[200px]">Reason For Visit</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Category</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Tests</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Planned</th>
                                         </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {filteredPending.length > 0 ? (
+                                            filteredPending.map((record) => (
+                                                <tr key={record.id} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3 text-sm whitespace-nowrap">
+                                                        <button
+                                                            onClick={() => handleReceiveSample(record)}
+                                                            className="px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700"
+                                                        >
+                                                            Receive
+                                                        </button>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.lab_no || '-'}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patient_name}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phone_no || '-'}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900 max-w-[250px] whitespace-normal break-words">{record.reason_for_visit || '-'}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900">
+                                                        <div className="max-w-[200px] whitespace-normal break-words">
+                                                            {record.category === 'Pathology'
+                                                                ? (Array.isArray(record.pathology_tests) && record.pathology_tests.length > 0
+                                                                    ? record.pathology_tests.join(', ')
+                                                                    : record.pathology_tests || 'No tests')
+                                                                : (Array.isArray(record.radiology_tests) && record.radiology_tests.length > 0
+                                                                    ? record.radiology_tests.join(', ')
+                                                                    : record.radiology_tests || 'No tests')}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{formatDate(record.planned2)}</td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
+                                                    <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                                                    <p className="text-lg font-medium text-gray-900">No pending samples</p>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
                         {/* Mobile List */}
-                        <div className="space-y-3 md:hidden">
+                        <div className="space-y-3 md:hidden h-full overflow-auto pb-8">
                             {filteredPending.length > 0 ? (
                                 filteredPending.map((record) => (
                                     <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -416,58 +427,66 @@ const ReceiveSample = () => {
                                 </div>
                             )}
                         </div>
-                    </>
+                    </div>
                 )}
 
                 {activeTab === 'history' && (
-                    <>
+                    <div className="h-full flex flex-col">
                         {/* Desktop Table */}
-                        <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Lab No</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase min-w-[200px]">Reason For Visit</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Category</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Tests</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Planned</th>
-                                        <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Received</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {filteredHistory.length > 0 ? (
-                                        filteredHistory.map((record) => (
-                                            <tr key={record.id} className="hover:bg-gray-50">
-                                                <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.lab_no || '-'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patient_name}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phone_no || '-'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 max-w-[250px] whitespace-normal break-words">{record.reason_for_visit || '-'}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                                                    {record.category === 'Pathology'
-                                                        ? (Array.isArray(record.pathology_tests) ? record.pathology_tests.join(', ') : record.pathology_tests)
-                                                        : (Array.isArray(record.radiology_tests) ? record.radiology_tests.join(', ') : record.radiology_tests)}
-                                                </td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{formatDate(record.planned2)}</td>
-                                                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{formatDate(record.actual2)}</td>
-                                            </tr>
-                                        ))
-                                    ) : (
+                        <div className="hidden flex-1 overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm md:flex flex-col">
+                            <div className="overflow-auto flex-1">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50 sticky top-0 z-10">
                                         <tr>
-                                            <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
-                                                <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                                                <p className="text-lg font-medium text-gray-900">No history records</p>
-                                            </td>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Lab No</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase min-w-[200px]">Reason For Visit</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Category</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Tests</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Planned</th>
+                                            <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Received</th>
                                         </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {filteredHistory.length > 0 ? (
+                                            filteredHistory.map((record) => (
+                                                <tr key={record.id} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.lab_no || '-'}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patient_name}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phone_no || '-'}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900 max-w-[250px] whitespace-normal break-words">{record.reason_for_visit || '-'}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900">
+                                                        <div className="max-w-[200px] whitespace-normal break-words">
+                                                            {record.category === 'Pathology'
+                                                                ? (Array.isArray(record.pathology_tests) && record.pathology_tests.length > 0
+                                                                    ? record.pathology_tests.join(', ')
+                                                                    : record.pathology_tests || 'No tests')
+                                                                : (Array.isArray(record.radiology_tests) && record.radiology_tests.length > 0
+                                                                    ? record.radiology_tests.join(', ')
+                                                                    : record.radiology_tests || 'No tests')}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{formatDate(record.planned2)}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{formatDate(record.actual2)}</td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
+                                                    <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                                                    <p className="text-lg font-medium text-gray-900">No history records</p>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
                         {/* Mobile List */}
-                        <div className="space-y-3 md:hidden">
+                        <div className="space-y-3 md:hidden h-full overflow-auto pb-8">
                             {filteredHistory.length > 0 ? (
                                 filteredHistory.map((record) => (
                                     <div key={record.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -502,7 +521,7 @@ const ReceiveSample = () => {
                                 </div>
                             )}
                         </div>
-                    </>
+                    </div>
                 )}
             </div>
         </div>

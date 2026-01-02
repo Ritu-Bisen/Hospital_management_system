@@ -982,85 +982,30 @@ const PharmacyApproval = () => {
   const filteredHistoryIndents = applyFilters(historyIndents);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-6">
-
-        {/* Notification Popup logic handled by global NotificationProvider */}
-
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Pharmacy Approval</h1>
-          <p className="text-gray-600 mt-1">Review and approve pharmacy indent requests</p>
-        </div>
-
-        {/* Tabs and Submit Button in One Row */}
-        {/* Tabs and Filters Section - Responsive */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-gray-200 pb-4">
-          <div className="flex gap-4 w-full md:w-auto overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('pending')}
-              className={`pb-2 px-1 whitespace-nowrap ${activeTab === 'pending'
-                ? 'border-b-2 border-green-500 text-green-600 font-medium'
-                : 'text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              Pending ({filteredPendingIndents.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`pb-2 px-1 whitespace-nowrap ${activeTab === 'history'
-                ? 'border-b-2 border-green-500 text-green-600 font-medium'
-                : 'text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              History ({filteredHistoryIndents.length})
-            </button>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-            <select
-              value={selectedPatient}
-              onChange={(e) => setSelectedPatient(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
-            >
-              <option value="">All Patients</option>
-              {patientNames.map((name, index) => (
-                <option key={index} value={name}>{name}</option>
-              ))}
-            </select>
-
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
-            />
-
-            {(selectedPatient || selectedDate) && (
-              <button
-                onClick={() => {
-                  setSelectedPatient('');
-                  setSelectedDate('');
-                }}
-                className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm transition-colors"
-              >
-                Clear
-              </button>
-            )}
+    <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
+      {/* Fixed Section: Header, Tabs, and Filters */}
+      <div className="flex-none shrink-0 border-b bg-white">
+        <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+            <div>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">Pharmacy Approval</h1>
+              <p className="hidden sm:block text-sm text-gray-600 mt-0.5">Review and approve pharmacy indent requests</p>
+            </div>
 
             {/* Submit Button - Only if changes exist and in pending tab */}
             {activeTab === 'pending' && Object.keys(statusChanges).length > 0 && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full sm:w-auto">
                 <button
                   onClick={() => setStatusChanges({})}
-                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="flex-1 sm:flex-none px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
                   disabled={loading}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveStatusChanges}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
                   disabled={loading}
                 >
                   <Save className="w-4 h-4" />
@@ -1069,38 +1014,98 @@ const PharmacyApproval = () => {
               </div>
             )}
           </div>
-        </div>
 
-        {/* Loading State */}
-        {loading && (
-          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
-            <span className="text-blue-800 font-medium">Loading data...</span>
+          {/* Tabs and Filters Section - Compact */}
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
+            <div className="flex gap-4 w-full lg:w-auto border-b lg:border-none border-gray-100 pb-2 lg:pb-0 overflow-x-auto">
+              <button
+                onClick={() => setActiveTab('pending')}
+                className={`pb-2 lg:pb-0 px-1 whitespace-nowrap text-sm ${activeTab === 'pending'
+                  ? 'border-b-2 border-green-500 text-green-600 font-bold'
+                  : 'text-gray-500 hover:text-gray-700 font-medium'
+                  }`}
+              >
+                Pending ({filteredPendingIndents.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`pb-2 lg:pb-0 px-1 whitespace-nowrap text-sm ${activeTab === 'history'
+                  ? 'border-b-2 border-green-500 text-green-600 font-bold'
+                  : 'text-gray-500 hover:text-gray-700 font-medium'
+                  }`}
+              >
+                History ({filteredHistoryIndents.length})
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+              <select
+                value={selectedPatient}
+                onChange={(e) => setSelectedPatient(e.target.value)}
+                className="flex-1 lg:flex-none px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+              >
+                <option value="">All Patients</option>
+                {patientNames.map((name, index) => (
+                  <option key={index} value={name}>{name}</option>
+                ))}
+              </select>
+
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="flex-1 lg:flex-none px-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+              />
+
+              {(selectedPatient || selectedDate) && (
+                <button
+                  onClick={() => {
+                    setSelectedPatient('');
+                    setSelectedDate('');
+                  }}
+                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs font-medium transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
-        )}
+        </div>
+      </div>
 
-        {/* Pending Table */}
-        {activeTab === 'pending' && (
-          <>
-            <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead className="bg-green-600 text-white">
+      {/* Main Content Area - Scrollable */}
+      <div className="flex-1 overflow-hidden p-3 md:p-4">
+        <div className="max-w-7xl mx-auto h-full flex flex-col">
+          {/* Loading State */}
+          {loading && (
+            <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+              <span className="text-blue-800 font-medium">Loading data...</span>
+            </div>
+          )}
+
+          {/* Pending Section */}
+          {activeTab === 'pending' && (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Desktop Table - Scrollable Container */}
+              <div className="hidden md:block flex-1 overflow-auto bg-white rounded-lg border border-gray-200 shadow-sm">
+                <table className="min-w-full divide-y divide-gray-200 border-separate border-spacing-0">
+                  <thead className="bg-green-600 sticky top-0 z-10">
                     <tr>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Select</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Status</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Indent No</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Admission No</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Patient Name</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">UHID</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Staff Name</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Diagnosis</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Request Type</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Planned</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Actions</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Select</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Status</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Indent No</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Admission No</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Patient Name</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">UHID</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Staff Name</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Diagnosis</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Request Type</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Planned</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 bg-white">
                     {filteredPendingIndents.length > 0 ? (
                       filteredPendingIndents.map((indent) => (
                         <tr key={indent.id} className="hover:bg-gray-50">
@@ -1194,131 +1199,130 @@ const PharmacyApproval = () => {
                   </tbody>
                 </table>
               </div>
-            </div>
 
-            {/* Mobile Card View for Pending */}
-            <div className="md:hidden space-y-4">
-              {filteredPendingIndents.length > 0 ? (
-                filteredPendingIndents.map((indent) => (
-                  <div key={indent.id} className="bg-white rounded-lg shadow p-4 space-y-3">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={!!statusChanges[indent.id]}
-                          onChange={(e) => {
-                            if (!e.target.checked) {
-                              const newChanges = { ...statusChanges };
-                              delete newChanges[indent.id];
-                              setStatusChanges(newChanges);
-                            } else {
-                              handleStatusChange(indent.id, indent.indentNumber, 'Approved');
-                            }
-                          }}
-                          className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+              {/* Mobile Card View for Pending - Scrollable Container */}
+              <div className="md:hidden flex-1 overflow-auto space-y-4">
+                {filteredPendingIndents.length > 0 ? (
+                  filteredPendingIndents.map((indent) => (
+                    <div key={indent.id} className="bg-white rounded-lg shadow p-4 space-y-3">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!!statusChanges[indent.id]}
+                            onChange={(e) => {
+                              if (!e.target.checked) {
+                                const newChanges = { ...statusChanges };
+                                delete newChanges[indent.id];
+                                setStatusChanges(newChanges);
+                              } else {
+                                handleStatusChange(indent.id, indent.indentNumber, 'Approved');
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                            disabled={loading}
+                          />
+                          <div>
+                            <span className="text-green-700 font-semibold">{indent.indentNumber}</span>
+                            <p className="text-xs text-gray-500 mt-0.5">{indent.admissionNumber}</p>
+                          </div>
+                        </div>
+                        <select
+                          value={statusChanges[indent.id]?.status || ''}
+                          onChange={(e) => handleStatusChange(indent.id, indent.indentNumber, e.target.value)}
+                          className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-24"
                           disabled={loading}
-                        />
-                        <div>
-                          <span className="text-green-700 font-semibold">{indent.indentNumber}</span>
-                          <p className="text-xs text-gray-500 mt-0.5">{indent.admissionNumber}</p>
+                        >
+                          <option value="">Status</option>
+                          <option value="Approved">Approve</option>
+                          <option value="Rejected">Reject</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Patient:</span>
+                          <span className="font-medium text-gray-900">{indent.patientName}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Diagnosis:</span>
+                          <span className="font-medium text-gray-900 text-right truncate max-w-[150px]">{indent.diagnosis}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Planned:</span>
+                          <span className="font-medium text-gray-900">
+                            {indent.planned1 ? new Date(indent.planned1).toLocaleString('en-GB', {
+                              hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short'
+                            }) : '-'}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {indent.requestTypes.medicineSlip && (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Medicine</span>
+                          )}
+                          {indent.requestTypes.investigation && (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Investigation</span>
+                          )}
+                          {indent.requestTypes.package && (
+                            <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">Package</span>
+                          )}
+                          {indent.requestTypes.nonPackage && (
+                            <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded">Non-Package</span>
+                          )}
                         </div>
                       </div>
-                      <select
-                        value={statusChanges[indent.id]?.status || ''}
-                        onChange={(e) => handleStatusChange(indent.id, indent.indentNumber, e.target.value)}
-                        className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-green-500 w-24"
-                        disabled={loading}
-                      >
-                        <option value="">Status</option>
-                        <option value="Approved">Approve</option>
-                        <option value="Rejected">Reject</option>
-                      </select>
-                    </div>
 
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Patient:</span>
-                        <span className="font-medium text-gray-900">{indent.patientName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Diagnosis:</span>
-                        <span className="font-medium text-gray-900 text-right truncate max-w-[150px]">{indent.diagnosis}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Planned:</span>
-                        <span className="font-medium text-gray-900">
-                          {indent.planned1 ? new Date(indent.planned1).toLocaleString('en-GB', {
-                            hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short'
-                          }) : '-'}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {indent.requestTypes.medicineSlip && (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Medicine</span>
-                        )}
-                        {indent.requestTypes.investigation && (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Investigation</span>
-                        )}
-                        {indent.requestTypes.package && (
-                          <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">Package</span>
-                        )}
-                        {indent.requestTypes.nonPackage && (
-                          <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded">Non-Package</span>
-                        )}
+                      <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+                        <button
+                          onClick={() => handleView(indent)}
+                          className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors flex-1 flex justify-center"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEdit(indent)}
+                          className="p-2 bg-amber-100 text-amber-600 rounded-lg hover:bg-amber-200 transition-colors flex-1 flex justify-center"
+                          title="Edit Indent"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
-                      <button
-                        onClick={() => handleView(indent)}
-                        className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors flex-1 flex justify-center"
-                        title="View Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleEdit(indent)}
-                        className="p-2 bg-amber-100 text-amber-600 rounded-lg hover:bg-amber-200 transition-colors flex-1 flex justify-center"
-                        title="Edit Indent"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 bg-white rounded-lg shadow">
+                    <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                    <p className="text-gray-500 font-medium">No pending indents</p>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8 bg-white rounded-lg shadow">
-                  <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                  <p className="text-gray-500 font-medium">No pending indents</p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </>
-        )}
+          )}
 
-        {/* History Table */}
-        {activeTab === 'history' && (
-          <>
-            <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead className="bg-green-600 text-white">
+          {/* History Section */}
+          {activeTab === 'history' && (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Desktop Table - Scrollable Container */}
+              <div className="hidden md:block flex-1 overflow-auto bg-white rounded-lg border border-gray-200 shadow-sm">
+                <table className="min-w-full divide-y divide-gray-200 border-separate border-spacing-0">
+                  <thead className="bg-green-600 sticky top-0 z-10">
                     <tr>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Indent No</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Admission No</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Patient Name</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">UHID</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Staff Name</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Diagnosis</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Request Type</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Status</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Planned</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Actual</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold">Actions</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Indent No</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Admission No</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Patient Name</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">UHID</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Staff Name</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Diagnosis</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Request Type</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Status</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Planned</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Actual</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-white bg-green-600">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 bg-white">
                     {filteredHistoryIndents.length > 0 ? (
                       filteredHistoryIndents.map((indent) => (
                         <tr key={indent.id} className="hover:bg-gray-50">
@@ -1401,659 +1405,659 @@ const PharmacyApproval = () => {
                   </tbody>
                 </table>
               </div>
-            </div>
 
-            {/* Mobile Card View for History */}
-            <div className="md:hidden space-y-4">
-              {filteredHistoryIndents.length > 0 ? (
-                filteredHistoryIndents.map((indent) => (
-                  <div key={indent.id} className="bg-white rounded-lg shadow p-4 space-y-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <span className="text-green-700 font-semibold">{indent.indentNumber}</span>
-                        <p className="text-xs text-gray-500 mt-0.5">{indent.admissionNumber}</p>
-                      </div>
-                      {indent.status === 'approved' ? (
-                        <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
-                          Approved
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">
-                          Rejected
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Patient:</span>
-                        <span className="font-medium text-gray-900">{indent.patientName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Planned:</span>
-                        <span className="font-medium text-gray-900">
-                          {indent.planned1 ? new Date(indent.planned1).toLocaleString('en-GB', {
-                            hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short'
-                          }) : '-'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Actual:</span>
-                        <span className="font-medium text-gray-900">
-                          {indent.actual1 ? new Date(indent.actual1).toLocaleString('en-GB', {
-                            hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short'
-                          }) : '-'}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {indent.requestTypes.medicineSlip && (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Medicine</span>
-                        )}
-                        {indent.requestTypes.investigation && (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Investigation</span>
-                        )}
-                        {indent.requestTypes.package && (
-                          <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">Package</span>
-                        )}
-                        {indent.requestTypes.nonPackage && (
-                          <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded">Non-Package</span>
+              {/* Mobile Card View for History - Scrollable Container */}
+              <div className="md:hidden flex-1 overflow-auto space-y-4">
+                {filteredHistoryIndents.length > 0 ? (
+                  filteredHistoryIndents.map((indent) => (
+                    <div key={indent.id} className="bg-white rounded-lg shadow p-4 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-green-700 font-semibold">{indent.indentNumber}</span>
+                          <p className="text-xs text-gray-500 mt-0.5">{indent.admissionNumber}</p>
+                        </div>
+                        {indent.status === 'approved' ? (
+                          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                            Approved
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">
+                            Rejected
+                          </span>
                         )}
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
-                      <button
-                        onClick={() => handleView(indent)}
-                        className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors flex-1 flex justify-center"
-                        title="View Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {indent.status === 'approved' && (indent.slipImage || indent.slipImageUrl) && (
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Patient:</span>
+                          <span className="font-medium text-gray-900">{indent.patientName}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Planned:</span>
+                          <span className="font-medium text-gray-900">
+                            {indent.planned1 ? new Date(indent.planned1).toLocaleString('en-GB', {
+                              hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short'
+                            }) : '-'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Actual:</span>
+                          <span className="font-medium text-gray-900">
+                            {indent.actual1 ? new Date(indent.actual1).toLocaleString('en-GB', {
+                              hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short'
+                            }) : '-'}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {indent.requestTypes.medicineSlip && (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Medicine</span>
+                          )}
+                          {indent.requestTypes.investigation && (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Investigation</span>
+                          )}
+                          {indent.requestTypes.package && (
+                            <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">Package</span>
+                          )}
+                          {indent.requestTypes.nonPackage && (
+                            <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded">Non-Package</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
                         <button
-                          onClick={() => handleViewSlip(indent)}
+                          onClick={() => handleView(indent)}
                           className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors flex-1 flex justify-center"
-                          title="View Slip"
+                          title="View Details"
                         >
-                          <FileText className="w-4 h-4" />
+                          <Eye className="w-4 h-4" />
                         </button>
-                      )}
+                        {indent.status === 'approved' && (indent.slipImage || indent.slipImageUrl) && (
+                          <button
+                            onClick={() => handleViewSlip(indent)}
+                            className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors flex-1 flex justify-center"
+                            title="View Slip"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 bg-white rounded-lg shadow">
+                    <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                    <p className="text-gray-500 font-medium">No history yet</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      {
+        editModal && editFormData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-amber-600 text-white px-6 py-4 flex justify-between items-center">
+                <h2 className="text-xl font-bold">Edit Indent - {editFormData.indentNumber}</h2>
+                <button
+                  onClick={() => {
+                    setEditModal(false);
+                    setEditFormData(null);
+                  }}
+                  className="text-white hover:bg-amber-700 rounded-full p-1"
+                  disabled={loading}
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-6">
+                {/* Patient Information */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Patient Information</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500">Admission Number</p>
+                      <p className="font-medium">{editFormData.admissionNumber}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Patient Name</p>
+                      <p className="font-medium">{editFormData.patientName}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">UHID Number</p>
+                      <p className="font-medium">{editFormData.uhidNumber}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Diagnosis <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="diagnosis"
+                        value={editFormData.diagnosis}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        placeholder="Enter diagnosis"
+                        disabled={loading}
+                      />
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8 bg-white rounded-lg shadow">
-                  <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                  <p className="text-gray-500 font-medium">No history yet</p>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* Edit Modal */}
-        {
-          editModal && editFormData && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="sticky top-0 bg-amber-600 text-white px-6 py-4 flex justify-between items-center">
-                  <h2 className="text-xl font-bold">Edit Indent - {editFormData.indentNumber}</h2>
-                  <button
-                    onClick={() => {
-                      setEditModal(false);
-                      setEditFormData(null);
-                    }}
-                    className="text-white hover:bg-amber-700 rounded-full p-1"
-                    disabled={loading}
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
                 </div>
 
-                <div className="p-6">
-                  {/* Patient Information */}
+                {/* Medicines Section */}
+                {editFormData.requestTypes.medicineSlip && (
                   <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Patient Information</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-500">Admission Number</p>
-                        <p className="font-medium">{editFormData.admissionNumber}</p>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Medicines</h3>
+                    </div>
+
+                    <div className="space-y-3 mb-4">
+                      {editFormData.medicines.map((medicine, index) => (
+                        <div key={medicine.id} className="flex gap-3 items-end">
+                          <div className="w-8 h-10 flex items-center justify-center bg-green-600 text-white rounded font-semibold">
+                            {index + 1}
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Medicine Name</label>
+                            <MedicineDropdown
+                              medicine={medicine}
+                              onUpdate={updateMedicine}
+                              index={index}
+                              loading={loading}
+                            />
+                          </div>
+                          <div className="w-32">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={medicine.quantity}
+                              onChange={(e) => updateMedicine(medicine.id, 'quantity', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                              placeholder="0"
+                              disabled={loading}
+                            />
+                          </div>
+                          <button
+                            onClick={() => removeMedicine(medicine.id)}
+                            className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg h-10 disabled:bg-red-300"
+                            disabled={loading}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={addMedicine}
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm w-full justify-center disabled:bg-green-300"
+                      disabled={loading}
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Medicine
+                    </button>
+                  </div>
+                )}
+
+                {/* Investigation Advice Section */}
+                {editFormData.requestTypes.investigation && editFormData.investigationAdvice && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Investigation Advice</h3>
+
+                    <div className="space-y-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Priority *</label>
+                          <select
+                            name="priority"
+                            value={editFormData.investigationAdvice.priority}
+                            onChange={handleInvestigationAdviceChange}
+                            className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                            disabled={loading}
+                          >
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Pathology & Radiology *</label>
+                          <select
+                            name="adviceCategory"
+                            value={editFormData.investigationAdvice.adviceCategory}
+                            onChange={handleInvestigationAdviceChange}
+                            className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                            disabled={loading}
+                          >
+                            <option value="">Select Category</option>
+                            <option value="Pathology">Pathology</option>
+                            <option value="Radiology">Radiology</option>
+                          </select>
+                        </div>
                       </div>
+
+                      {/* Pathology Tests */}
+                      {editFormData.investigationAdvice.adviceCategory === 'Pathology' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Select Pathology Tests * ({editFormData.investigationAdvice.pathologyTests.length} selected)
+                          </label>
+                          <div className="p-4 max-h-60 overflow-y-auto bg-white rounded-lg border border-gray-300">
+                            {pathologyTests.length > 0 ? (
+                              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                                {pathologyTests.map((test) => (
+                                  <label key={test} className="flex items-start gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={editFormData.investigationAdvice.pathologyTests.includes(test)}
+                                      onChange={() => handleAdviceCheckboxChange(test, 'pathology')}
+                                      className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                      disabled={loading}
+                                    />
+                                    <span className="text-sm text-gray-700">{test}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-center text-gray-500 py-8">
+                                <p>Loading pathology tests...</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Radiology Section */}
+                      {editFormData.investigationAdvice.adviceCategory === 'Radiology' && (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Radiology Type *</label>
+                            <select
+                              name="radiologyType"
+                              value={editFormData.investigationAdvice.radiologyType}
+                              onChange={handleInvestigationAdviceChange}
+                              className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                              disabled={loading}
+                            >
+                              <option value="">Select Type</option>
+                              <option value="X-ray">X-ray</option>
+                              <option value="CT-scan">CT Scan</option>
+                              <option value="USG">USG</option>
+                            </select>
+                          </div>
+
+                          {editFormData.investigationAdvice.radiologyType && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Select {editFormData.investigationAdvice.radiologyType} Tests * ({editFormData.investigationAdvice.radiologyTests.length} selected)
+                              </label>
+                              <div className="p-4 max-h-60 overflow-y-auto bg-white rounded-lg border border-gray-300">
+                                {(() => {
+                                  const tests = getRadiologyTests();
+                                  return tests.length > 0 ? (
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                      {tests.map((test) => (
+                                        <label key={test} className="flex items-start gap-2 cursor-pointer">
+                                          <input
+                                            type="checkbox"
+                                            checked={editFormData.investigationAdvice.radiologyTests.includes(test)}
+                                            onChange={() => handleAdviceCheckboxChange(test, 'radiology')}
+                                            className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                            disabled={loading}
+                                          />
+                                          <span className="text-sm text-gray-700">{test}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-center text-gray-500 py-8">
+                                      <p>Loading {editFormData.investigationAdvice.radiologyType} tests...</p>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Remarks */}
                       <div>
-                        <p className="text-sm text-gray-500">Patient Name</p>
-                        <p className="font-medium">{editFormData.patientName}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">UHID Number</p>
-                        <p className="font-medium">{editFormData.uhidNumber}</p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Diagnosis <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          name="diagnosis"
-                          value={editFormData.diagnosis}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                          placeholder="Enter diagnosis"
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                        <textarea
+                          name="remarks"
+                          value={editFormData.investigationAdvice.remarks}
+                          onChange={handleInvestigationAdviceChange}
+                          rows="3"
+                          placeholder="Add any additional notes or instructions..."
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
                           disabled={loading}
                         />
                       </div>
                     </div>
                   </div>
+                )}
 
-                  {/* Medicines Section */}
-                  {editFormData.requestTypes.medicineSlip && (
-                    <div className="mb-6">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Medicines</h3>
-                      </div>
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3 pt-6 border-t">
+                  <button
+                    onClick={() => {
+                      setEditModal(false);
+                      setEditFormData(null);
+                    }}
+                    className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium disabled:bg-gray-100"
+                    disabled={loading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:bg-green-300"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Save Changes
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
 
-                      <div className="space-y-3 mb-4">
-                        {editFormData.medicines.map((medicine, index) => (
-                          <div key={medicine.id} className="flex gap-3 items-end">
-                            <div className="w-8 h-10 flex items-center justify-center bg-green-600 text-white rounded font-semibold">
-                              {index + 1}
-                            </div>
-                            <div className="flex-1">
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Medicine Name</label>
-                              <MedicineDropdown
-                                medicine={medicine}
-                                onUpdate={updateMedicine}
-                                index={index}
-                                loading={loading}
-                              />
-                            </div>
-                            <div className="w-32">
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                              <input
-                                type="number"
-                                min="1"
-                                value={medicine.quantity}
-                                onChange={(e) => updateMedicine(medicine.id, 'quantity', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                                placeholder="0"
-                                disabled={loading}
-                              />
-                            </div>
-                            <button
-                              onClick={() => removeMedicine(medicine.id)}
-                              className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg h-10 disabled:bg-red-300"
-                              disabled={loading}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+      {/* View Details Modal */}
+      {
+        viewModal && selectedIndent && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-green-600 text-white px-6 py-4 flex justify-between items-center">
+                <h2 className="text-xl font-bold">Indent Details - {selectedIndent.indentNumber}</h2>
+                <button
+                  onClick={() => {
+                    setViewModal(false);
+                    setSelectedIndent(null);
+                  }}
+                  className="text-white hover:bg-green-700 rounded-full p-1"
+                  disabled={loading}
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
 
-                      <button
-                        onClick={addMedicine}
-                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm w-full justify-center disabled:bg-green-300"
-                        disabled={loading}
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add Medicine
-                      </button>
+              <div className="p-6">
+                {/* Patient Information */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Patient Information</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-500">Admission Number</p>
+                      <p className="font-medium">{selectedIndent.admissionNumber}</p>
                     </div>
-                  )}
+                    <div>
+                      <p className="text-sm text-gray-500">Patient Name</p>
+                      <p className="font-medium">{selectedIndent.patientName}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">UHID Number</p>
+                      <p className="font-medium">{selectedIndent.uhidNumber}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Age</p>
+                      <p className="font-medium">{selectedIndent.age}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Gender</p>
+                      <p className="font-medium">{selectedIndent.gender}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Category</p>
+                      <p className="font-medium">{selectedIndent.category}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Room</p>
+                      <p className="font-medium">{selectedIndent.room}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Ward Location</p>
+                      <p className="font-medium">{selectedIndent.wardLocation}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Staff Name</p>
+                      <p className="font-medium">{selectedIndent.staffName}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Consultant Name</p>
+                      <p className="font-medium">{selectedIndent.consultantName}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Diagnosis</p>
+                      <p className="font-medium">{selectedIndent.diagnosis}</p>
+                    </div>
+                  </div>
+                </div>
 
-                  {/* Investigation Advice Section */}
-                  {editFormData.requestTypes.investigation && editFormData.investigationAdvice && (
-                    <div className="mb-6">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Investigation Advice</h3>
+                {/* Request Types */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Request Types</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedIndent.requestTypes.medicineSlip && (
+                      <span className="px-3 py-2 bg-green-100 text-green-700 text-sm rounded-lg font-medium">Medicine Slip</span>
+                    )}
+                    {selectedIndent.requestTypes.investigation && (
+                      <span className="px-3 py-2 bg-green-100 text-green-700 text-sm rounded-lg font-medium">Investigation</span>
+                    )}
+                    {selectedIndent.requestTypes.package && (
+                      <span className="px-3 py-2 bg-purple-100 text-purple-700 text-sm rounded-lg font-medium">Package</span>
+                    )}
+                    {selectedIndent.requestTypes.nonPackage && (
+                      <span className="px-3 py-2 bg-orange-100 text-orange-700 text-sm rounded-lg font-medium">Non-Package</span>
+                    )}
+                  </div>
+                </div>
 
-                      <div className="space-y-4 p-4 bg-green-50 rounded-lg border border-green-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Priority *</label>
-                            <select
-                              name="priority"
-                              value={editFormData.investigationAdvice.priority}
-                              onChange={handleInvestigationAdviceChange}
-                              className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-                              disabled={loading}
-                            >
-                              <option value="High">High</option>
-                              <option value="Medium">Medium</option>
-                              <option value="Low">Low</option>
-                            </select>
-                          </div>
+                {/* Medicines */}
+                {selectedIndent.requestTypes.medicineSlip && selectedIndent.medicines.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Medicines</h3>
+                    <div className="bg-gray-50 rounded-lg overflow-hidden">
+                      <table className="min-w-full">
+                        <thead className="bg-green-600 text-white">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-sm font-semibold">#</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold">Medicine Name</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold">Quantity</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 bg-white">
+                          {selectedIndent.medicines.map((medicine, index) => (
+                            <tr key={medicine.id || index}>
+                              <td className="px-4 py-3 text-sm">{index + 1}</td>
+                              <td className="px-4 py-3 text-sm font-medium">{medicine.name}</td>
+                              <td className="px-4 py-3 text-sm">{medicine.quantity}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Pathology & Radiology *</label>
-                            <select
-                              name="adviceCategory"
-                              value={editFormData.investigationAdvice.adviceCategory}
-                              onChange={handleInvestigationAdviceChange}
-                              className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-                              disabled={loading}
-                            >
-                              <option value="">Select Category</option>
-                              <option value="Pathology">Pathology</option>
-                              <option value="Radiology">Radiology</option>
-                            </select>
-                          </div>
+                {/* Investigation Advice */}
+                {selectedIndent.requestTypes.investigation && selectedIndent.investigationAdvice && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Investigation Advice</h3>
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="space-y-3 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Priority:</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${selectedIndent.investigationAdvice.priority === 'High' ? 'bg-red-100 text-red-700' :
+                            selectedIndent.investigationAdvice.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>
+                            {selectedIndent.investigationAdvice.priority}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Category:</span>
+                          <div className="font-medium text-gray-900 mt-1">{selectedIndent.investigationAdvice.adviceCategory}</div>
                         </div>
 
-                        {/* Pathology Tests */}
-                        {editFormData.investigationAdvice.adviceCategory === 'Pathology' && (
+                        {selectedIndent.investigationAdvice.adviceCategory === 'Pathology' && selectedIndent.investigationAdvice.pathologyTests?.length > 0 && (
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Select Pathology Tests * ({editFormData.investigationAdvice.pathologyTests.length} selected)
-                            </label>
-                            <div className="p-4 max-h-60 overflow-y-auto bg-white rounded-lg border border-gray-300">
-                              {pathologyTests.length > 0 ? (
-                                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-                                  {pathologyTests.map((test) => (
-                                    <label key={test} className="flex items-start gap-2 cursor-pointer">
-                                      <input
-                                        type="checkbox"
-                                        checked={editFormData.investigationAdvice.pathologyTests.includes(test)}
-                                        onChange={() => handleAdviceCheckboxChange(test, 'pathology')}
-                                        className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                                        disabled={loading}
-                                      />
-                                      <span className="text-sm text-gray-700">{test}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="text-center text-gray-500 py-8">
-                                  <p>Loading pathology tests...</p>
-                                </div>
-                              )}
+                            <span className="text-gray-600">Pathology Tests ({selectedIndent.investigationAdvice.pathologyTests.length}):</span>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {selectedIndent.investigationAdvice.pathologyTests.map((test, index) => (
+                                <span key={index} className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
+                                  {test}
+                                </span>
+                              ))}
                             </div>
                           </div>
                         )}
 
-                        {/* Radiology Section */}
-                        {editFormData.investigationAdvice.adviceCategory === 'Radiology' && (
+                        {selectedIndent.investigationAdvice.adviceCategory === 'Radiology' && (
                           <>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Radiology Type *</label>
-                              <select
-                                name="radiologyType"
-                                value={editFormData.investigationAdvice.radiologyType}
-                                onChange={handleInvestigationAdviceChange}
-                                className="w-full px-3 py-2 bg-white rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-                                disabled={loading}
-                              >
-                                <option value="">Select Type</option>
-                                <option value="X-ray">X-ray</option>
-                                <option value="CT-scan">CT Scan</option>
-                                <option value="USG">USG</option>
-                              </select>
+                              <span className="text-gray-600">Radiology Type:</span>
+                              <div className="font-medium text-gray-900 mt-1">{selectedIndent.investigationAdvice.radiologyType}</div>
                             </div>
-
-                            {editFormData.investigationAdvice.radiologyType && (
+                            {selectedIndent.investigationAdvice.radiologyTests?.length > 0 && (
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  Select {editFormData.investigationAdvice.radiologyType} Tests * ({editFormData.investigationAdvice.radiologyTests.length} selected)
-                                </label>
-                                <div className="p-4 max-h-60 overflow-y-auto bg-white rounded-lg border border-gray-300">
-                                  {(() => {
-                                    const tests = getRadiologyTests();
-                                    return tests.length > 0 ? (
-                                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                                        {tests.map((test) => (
-                                          <label key={test} className="flex items-start gap-2 cursor-pointer">
-                                            <input
-                                              type="checkbox"
-                                              checked={editFormData.investigationAdvice.radiologyTests.includes(test)}
-                                              onChange={() => handleAdviceCheckboxChange(test, 'radiology')}
-                                              className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                                              disabled={loading}
-                                            />
-                                            <span className="text-sm text-gray-700">{test}</span>
-                                          </label>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <div className="text-center text-gray-500 py-8">
-                                        <p>Loading {editFormData.investigationAdvice.radiologyType} tests...</p>
-                                      </div>
-                                    );
-                                  })()}
+                                <span className="text-gray-600">Tests ({selectedIndent.investigationAdvice.radiologyTests.length}):</span>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {selectedIndent.investigationAdvice.radiologyTests.map((test, index) => (
+                                    <span key={index} className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-full">
+                                      {test}
+                                    </span>
+                                  ))}
                                 </div>
                               </div>
                             )}
                           </>
                         )}
 
-                        {/* Remarks */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                          <textarea
-                            name="remarks"
-                            value={editFormData.investigationAdvice.remarks}
-                            onChange={handleInvestigationAdviceChange}
-                            rows="3"
-                            placeholder="Add any additional notes or instructions..."
-                            className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
-                            disabled={loading}
-                          />
-                        </div>
+                        {selectedIndent.investigationAdvice.remarks && (
+                          <div>
+                            <span className="text-gray-600">Remarks:</span>
+                            <div className="font-medium text-gray-900 mt-1 p-2 bg-white rounded border border-gray-200">
+                              {selectedIndent.investigationAdvice.remarks}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex justify-end gap-3 pt-6 border-t">
-                    <button
-                      onClick={() => {
-                        setEditModal(false);
-                        setEditFormData(null);
-                      }}
-                      className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium disabled:bg-gray-100"
-                      disabled={loading}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSaveEdit}
-                      className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:bg-green-300"
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-4 h-4" />
-                          Save Changes
-                        </>
-                      )}
-                    </button>
                   </div>
-                </div>
-              </div>
-            </div>
-          )
-        }
+                )}
 
-        {/* View Details Modal */}
-        {
-          viewModal && selectedIndent && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="sticky top-0 bg-green-600 text-white px-6 py-4 flex justify-between items-center">
-                  <h2 className="text-xl font-bold">Indent Details - {selectedIndent.indentNumber}</h2>
+                {/* Status */}
+                {selectedIndent.status && selectedIndent.status !== 'pending' && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Status</h3>
+                    <div className="flex items-center gap-4">
+                      <span className={`px-4 py-2 rounded-lg font-medium ${selectedIndent.status === 'approved'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700'
+                        }`}>
+                        {selectedIndent.status === 'approved' ? 'Approved' : 'Rejected'}
+                      </span>
+                      {selectedIndent.approvedAt && (
+                        <span className="text-sm text-gray-500">
+                          on {new Date(selectedIndent.approvedAt).toLocaleString()}
+                        </span>
+                      )}
+                      {selectedIndent.rejectedAt && (
+                        <span className="text-sm text-gray-500">
+                          on {new Date(selectedIndent.rejectedAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-6 border-t">
                   <button
                     onClick={() => {
                       setViewModal(false);
                       setSelectedIndent(null);
                     }}
-                    className="text-white hover:bg-green-700 rounded-full p-1"
-                    disabled={loading}
+                    className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium"
                   >
-                    <X className="w-6 h-6" />
+                    Close
                   </button>
-                </div>
-
-                <div className="p-6">
-                  {/* Patient Information */}
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Patient Information</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-500">Admission Number</p>
-                        <p className="font-medium">{selectedIndent.admissionNumber}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Patient Name</p>
-                        <p className="font-medium">{selectedIndent.patientName}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">UHID Number</p>
-                        <p className="font-medium">{selectedIndent.uhidNumber}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Age</p>
-                        <p className="font-medium">{selectedIndent.age}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Gender</p>
-                        <p className="font-medium">{selectedIndent.gender}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Category</p>
-                        <p className="font-medium">{selectedIndent.category}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Room</p>
-                        <p className="font-medium">{selectedIndent.room}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Ward Location</p>
-                        <p className="font-medium">{selectedIndent.wardLocation}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Staff Name</p>
-                        <p className="font-medium">{selectedIndent.staffName}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Consultant Name</p>
-                        <p className="font-medium">{selectedIndent.consultantName}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Diagnosis</p>
-                        <p className="font-medium">{selectedIndent.diagnosis}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Request Types */}
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Request Types</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedIndent.requestTypes.medicineSlip && (
-                        <span className="px-3 py-2 bg-green-100 text-green-700 text-sm rounded-lg font-medium">Medicine Slip</span>
-                      )}
-                      {selectedIndent.requestTypes.investigation && (
-                        <span className="px-3 py-2 bg-green-100 text-green-700 text-sm rounded-lg font-medium">Investigation</span>
-                      )}
-                      {selectedIndent.requestTypes.package && (
-                        <span className="px-3 py-2 bg-purple-100 text-purple-700 text-sm rounded-lg font-medium">Package</span>
-                      )}
-                      {selectedIndent.requestTypes.nonPackage && (
-                        <span className="px-3 py-2 bg-orange-100 text-orange-700 text-sm rounded-lg font-medium">Non-Package</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Medicines */}
-                  {selectedIndent.requestTypes.medicineSlip && selectedIndent.medicines.length > 0 && (
-                    <div className="mb-6">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Medicines</h3>
-                      <div className="bg-gray-50 rounded-lg overflow-hidden">
-                        <table className="min-w-full">
-                          <thead className="bg-green-600 text-white">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-sm font-semibold">#</th>
-                              <th className="px-4 py-3 text-left text-sm font-semibold">Medicine Name</th>
-                              <th className="px-4 py-3 text-left text-sm font-semibold">Quantity</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-200 bg-white">
-                            {selectedIndent.medicines.map((medicine, index) => (
-                              <tr key={medicine.id || index}>
-                                <td className="px-4 py-3 text-sm">{index + 1}</td>
-                                <td className="px-4 py-3 text-sm font-medium">{medicine.name}</td>
-                                <td className="px-4 py-3 text-sm">{medicine.quantity}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Investigation Advice */}
-                  {selectedIndent.requestTypes.investigation && selectedIndent.investigationAdvice && (
-                    <div className="mb-6">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Investigation Advice</h3>
-                      <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                        <div className="space-y-3 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Priority:</span>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${selectedIndent.investigationAdvice.priority === 'High' ? 'bg-red-100 text-red-700' :
-                              selectedIndent.investigationAdvice.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-green-100 text-green-700'
-                              }`}>
-                              {selectedIndent.investigationAdvice.priority}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-gray-600">Category:</span>
-                            <div className="font-medium text-gray-900 mt-1">{selectedIndent.investigationAdvice.adviceCategory}</div>
-                          </div>
-
-                          {selectedIndent.investigationAdvice.adviceCategory === 'Pathology' && selectedIndent.investigationAdvice.pathologyTests?.length > 0 && (
-                            <div>
-                              <span className="text-gray-600">Pathology Tests ({selectedIndent.investigationAdvice.pathologyTests.length}):</span>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {selectedIndent.investigationAdvice.pathologyTests.map((test, index) => (
-                                  <span key={index} className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
-                                    {test}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {selectedIndent.investigationAdvice.adviceCategory === 'Radiology' && (
-                            <>
-                              <div>
-                                <span className="text-gray-600">Radiology Type:</span>
-                                <div className="font-medium text-gray-900 mt-1">{selectedIndent.investigationAdvice.radiologyType}</div>
-                              </div>
-                              {selectedIndent.investigationAdvice.radiologyTests?.length > 0 && (
-                                <div>
-                                  <span className="text-gray-600">Tests ({selectedIndent.investigationAdvice.radiologyTests.length}):</span>
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    {selectedIndent.investigationAdvice.radiologyTests.map((test, index) => (
-                                      <span key={index} className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-full">
-                                        {test}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          )}
-
-                          {selectedIndent.investigationAdvice.remarks && (
-                            <div>
-                              <span className="text-gray-600">Remarks:</span>
-                              <div className="font-medium text-gray-900 mt-1 p-2 bg-white rounded border border-gray-200">
-                                {selectedIndent.investigationAdvice.remarks}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Status */}
-                  {selectedIndent.status && selectedIndent.status !== 'pending' && (
-                    <div className="mb-6">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Status</h3>
-                      <div className="flex items-center gap-4">
-                        <span className={`px-4 py-2 rounded-lg font-medium ${selectedIndent.status === 'approved'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                          }`}>
-                          {selectedIndent.status === 'approved' ? 'Approved' : 'Rejected'}
-                        </span>
-                        {selectedIndent.approvedAt && (
-                          <span className="text-sm text-gray-500">
-                            on {new Date(selectedIndent.approvedAt).toLocaleString()}
-                          </span>
-                        )}
-                        {selectedIndent.rejectedAt && (
-                          <span className="text-sm text-gray-500">
-                            on {new Date(selectedIndent.rejectedAt).toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex justify-end pt-6 border-t">
-                    <button
-                      onClick={() => {
-                        setViewModal(false);
-                        setSelectedIndent(null);
-                      }}
-                      className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium"
-                    >
-                      Close
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
-          )
-        }
+          </div>
+        )
+      }
 
-        {/* Slip View Modal */}
-        {
-          slipModal && selectedIndent && (selectedIndent.slipImage || selectedIndent.slipImageUrl) && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="sticky top-0 bg-green-600 text-white px-6 py-4 flex justify-between items-center">
-                  <h2 className="text-xl font-bold">Pharmacy Slip - {selectedIndent.indentNumber}</h2>
+      {/* Slip View Modal */}
+      {
+        slipModal && selectedIndent && (selectedIndent.slipImage || selectedIndent.slipImageUrl) && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-green-600 text-white px-6 py-4 flex justify-between items-center">
+                <h2 className="text-xl font-bold">Pharmacy Slip - {selectedIndent.indentNumber}</h2>
+                <button
+                  onClick={() => {
+                    setSlipModal(false);
+                    setSelectedIndent(null);
+                  }}
+                  className="text-white hover:bg-green-700 rounded-full p-1"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-6">
+                <div className="bg-gray-100 p-4 rounded-lg mb-4">
+                  <img
+                    src={selectedIndent.slipImageUrl || selectedIndent.slipImage}
+                    alt="Pharmacy Slip"
+                    className="w-full rounded border border-gray-300"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <button
+                    onClick={() => downloadSlip(selectedIndent)}
+                    className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download Slip
+                  </button>
                   <button
                     onClick={() => {
                       setSlipModal(false);
                       setSelectedIndent(null);
                     }}
-                    className="text-white hover:bg-green-700 rounded-full p-1"
+                    className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium"
                   >
-                    <X className="w-6 h-6" />
+                    Close
                   </button>
-                </div>
-
-                <div className="p-6">
-                  <div className="bg-gray-100 p-4 rounded-lg mb-4">
-                    <img
-                      src={selectedIndent.slipImageUrl || selectedIndent.slipImage}
-                      alt="Pharmacy Slip"
-                      className="w-full rounded border border-gray-300"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-4 border-t">
-                    <button
-                      onClick={() => downloadSlip(selectedIndent)}
-                      className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download Slip
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSlipModal(false);
-                        setSelectedIndent(null);
-                      }}
-                      className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium"
-                    >
-                      Close
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
-          )
-        }
-      </div>
+          </div>
+        )
+      }
     </div>
   );
 };

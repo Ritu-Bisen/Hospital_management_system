@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Eye, FileText, Upload, Check } from 'lucide-react';
+import { X, Eye, FileText, Upload, Check, Download } from 'lucide-react';
 import supabase from '../../../SupabaseClient';
 import { useNotification } from '../../../contexts/NotificationContext';
 
@@ -22,7 +22,8 @@ const Pathology = () => {
 
   const [formData, setFormData] = useState({
     report: null,
-    remarks: ''
+    remarks: '',
+    fileType: null // 'image' or 'pdf'
   });
 
   useEffect(() => {
@@ -165,8 +166,19 @@ const Pathology = () => {
   const handleReportChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Check file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
         setModalError('File size should be less than 5MB');
+        return;
+      }
+
+      // Check file type
+      const fileType = file.type;
+      const isImage = fileType.startsWith('image/');
+      const isPDF = fileType === 'application/pdf';
+
+      if (!isImage && !isPDF) {
+        setModalError('Please upload an image or PDF file');
         return;
       }
 
@@ -174,7 +186,8 @@ const Pathology = () => {
       reader.onloadend = () => {
         setFormData(prev => ({
           ...prev,
-          report: reader.result
+          report: reader.result,
+          fileType: isPDF ? 'pdf' : 'image'
         }));
         setReportPreview(reader.result);
       };
@@ -206,14 +219,15 @@ const Pathology = () => {
         uint8Array[i] = binaryData.charCodeAt(i);
       }
 
-      const blob = new Blob([uint8Array], { type: 'image/jpeg' });
+      const blob = new Blob([uint8Array], { type: formData.fileType === 'pdf' ? 'application/pdf' : 'image/jpeg' });
 
-      // Upload report image to Supabase Storage
-      const fileName = `pathology_report_${selectedRecord.id}_${Date.now()}.jpg`;
+      // Upload report to Supabase Storage
+      const fileExtension = formData.fileType === 'pdf' ? 'pdf' : 'jpg';
+      const fileName = `pathology_report_${selectedRecord.id}_${Date.now()}.${fileExtension}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('pathology_reports')
         .upload(fileName, blob, {
-          contentType: 'image/jpeg',
+          contentType: formData.fileType === 'pdf' ? 'application/pdf' : 'image/jpeg',
           upsert: true
         });
 
@@ -277,15 +291,24 @@ const Pathology = () => {
       return;
     }
 
-    const newWindow = window.open();
-    newWindow.document.write(`
-      <html>
-        <head><title>Pathology Report</title></head>
-        <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;">
-          <img src="${reportUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
-        </body>
-      </html>
-    `);
+    // Check if it's a PDF
+    const isPdf = reportUrl.toLowerCase().includes('.pdf');
+
+    if (isPdf) {
+      // For PDFs, just open in new tab - browser's built-in viewer handles it best
+      window.open(reportUrl, '_blank');
+    } else {
+      // For images, show specialized viewer
+      const newWindow = window.open();
+      newWindow.document.write(`
+        <html>
+          <head><title>Pathology Report</title></head>
+          <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;">
+            <img src="${reportUrl}" style="max-width:100%;max-height:100vh;object-fit:contain;" />
+          </body>
+        </html>
+      `);
+    }
   };
 
   // Apply filters to records
@@ -878,11 +901,11 @@ const Pathology = () => {
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block mb-1 text-sm font-medium text-gray-700">Upload Report *</label>
+                    <label className="block mb-1 text-sm font-medium text-gray-700">Upload Report (Image or PDF) *</label>
                     <div className="mt-1">
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,application/pdf"
                         onChange={handleReportChange}
                         className="hidden"
                         id="report-upload"
@@ -893,22 +916,35 @@ const Pathology = () => {
                       >
                         {reportPreview ? (
                           <div className="text-center">
-                            <img
-                              src={reportPreview}
-                              alt="Report preview"
-                              className="max-h-40 mb-2 rounded"
-                            />
-                            <p className="text-sm text-green-600 font-medium flex items-center justify-center gap-1">
-                              <Check className="w-4 h-4" />
-                              Report uploaded successfully
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">Click to change</p>
+                            {formData.fileType === 'pdf' ? (
+                              <div className="flex flex-col items-center">
+                                <FileText className="w-16 h-16 text-red-600 mb-2" />
+                                <p className="text-sm text-green-600 font-medium flex items-center justify-center gap-1">
+                                  <Check className="w-4 h-4" />
+                                  PDF uploaded successfully
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">Click to change</p>
+                              </div>
+                            ) : (
+                              <>
+                                <img
+                                  src={reportPreview}
+                                  alt="Report preview"
+                                  className="max-h-40 mb-2 rounded"
+                                />
+                                <p className="text-sm text-green-600 font-medium flex items-center justify-center gap-1">
+                                  <Check className="w-4 h-4" />
+                                  Report uploaded successfully
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">Click to change</p>
+                              </>
+                            )}
                           </div>
                         ) : (
                           <div className="text-center">
                             <Upload className="mx-auto w-12 h-12 text-gray-400 mb-2" />
                             <p className="text-sm text-gray-600">Click to upload report</p>
-                            <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</p>
+                            <p className="text-xs text-gray-500 mt-1">PNG, JPG, PDF up to 5MB</p>
                           </div>
                         )}
                       </label>
@@ -1031,21 +1067,40 @@ const Pathology = () => {
                 </div>
 
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h3 className="mb-3 text-sm font-semibold text-gray-900">Report Image</h3>
+                  <h3 className="mb-3 text-sm font-semibold text-gray-900">Report File</h3>
                   <div className="space-y-3">
                     {viewingRecord.pathologyReport ? (
                       <>
-                        <img
-                          src={viewingRecord.pathologyReport}
-                          alt="Report"
-                          className="w-full max-h-96 object-contain rounded-lg border border-gray-300"
-                        />
-                        <button
-                          onClick={() => handleViewReport(viewingRecord.pathologyReport)}
-                          className="w-full px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-                        >
-                          Open in Full Screen
-                        </button>
+                        {viewingRecord.pathologyReport.toLowerCase().includes('.pdf') ? (
+                          <iframe
+                            src={viewingRecord.pathologyReport}
+                            title="Report PDF"
+                            className="w-full h-96 rounded-lg border border-gray-300"
+                          />
+                        ) : (
+                          <img
+                            src={viewingRecord.pathologyReport}
+                            alt="Report"
+                            className="w-full max-h-96 object-contain rounded-lg border border-gray-300"
+                          />
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleViewReport(viewingRecord.pathologyReport)}
+                            className="flex-1 px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Eye className="w-4 h-4" />
+                            Open in Full Screen
+                          </button>
+                          <a
+                            href={viewingRecord.pathologyReport}
+                            download
+                            className="flex-1 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Download className="w-4 h-4" />
+                            Download
+                          </a>
+                        </div>
                       </>
                     ) : (
                       <div className="text-center py-8">

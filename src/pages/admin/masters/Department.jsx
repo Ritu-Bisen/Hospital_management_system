@@ -182,29 +182,29 @@ const Department = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Department Management</h1>
-          <p className="text-gray-600 mt-1">Manage hospital departments</p>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-800">Department Management</h1>
+          <p className="hidden md:block text-gray-600 mt-1">Manage hospital departments</p>
         </div>
         <button
           onClick={() => openModal()}
-          className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+          className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-sm md:text-base"
         >
-          <Plus size={20} />
+          <Plus size={18} className="md:w-5 md:h-5" />
           Add New Department
         </button>
       </div>
 
       {/* Search Bar */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
         <input
           type="text"
           placeholder="Search departments..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm md:text-base"
         />
       </div>
 
@@ -249,8 +249,49 @@ const Department = () => {
         </div>
       </div> */}
 
-      {/* Department List with Scrollable Area */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+      {/* Mobile View: Cards */}
+      <div className="md:hidden space-y-3">
+        {filteredDepartments.length === 0 ? (
+          <div className="bg-white p-8 text-center text-gray-500 border border-gray-200 rounded-lg text-sm">
+            {searchTerm ? 'No departments found matching your search' : 'No departments found. Add your first department!'}
+          </div>
+        ) : (
+          filteredDepartments.map((dept, index) => (
+            <div key={dept.id} className="bg-white border border-gray-200 rounded-lg shadow-sm p-3">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
+                    <Building size={16} className="text-gray-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-sm leading-tight">{dept.department || 'N/A'}</h3>
+                    <p className="text-[10px] text-gray-500">ID: #{index + 1}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openModal(dept)}
+                    className="p-1.5 text-blue-600 bg-blue-50 rounded-md"
+                    title="Edit"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => deleteDepartment(dept.id)}
+                    className="p-1.5 text-red-600 bg-red-50 rounded-md"
+                    title="Delete"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop View: Table */}
+      <div className="hidden md:block bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto" style={{ maxHeight: '500px' }}>
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50 sticky top-0 z-10">
@@ -261,9 +302,6 @@ const Department = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Department Name
                 </th>
-                {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Created On
-                </th> */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -292,9 +330,6 @@ const Department = () => {
                         </div>
                       </div>
                     </td>
-                    {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(dept.created_at)}
-                    </td> */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center gap-2">
                         <button
@@ -321,16 +356,16 @@ const Department = () => {
         </div>
       </div>
 
-      {/* Quick Add Form (Alternative to modal) */}
-      <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
-        <h3 className="text-lg font-medium text-gray-800 mb-3">Quick Add Department</h3>
+      {/* Quick Add Form */}
+      <div className="bg-white p-3 md:p-4 rounded-lg shadow border border-gray-200">
+        <h3 className="text-base md:text-lg font-medium text-gray-800 mb-2 md:mb-3">Quick Add Department</h3>
         <div className="flex gap-2">
           <input
             type="text"
             value={formData.department}
             onChange={(e) => setFormData({ department: e.target.value })}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            placeholder="Enter new department name"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm md:text-base"
+            placeholder="Enter department name"
           />
           <button
             onClick={() => {
@@ -343,7 +378,7 @@ const Department = () => {
                 }
               }
             }}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center min-w-[44px]"
           >
             <Plus size={20} />
           </button>

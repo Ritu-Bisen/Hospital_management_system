@@ -65,6 +65,9 @@ const TaskList = () => {
         rr: ''
     });
 
+    const [userRole, setUserRole] = useState('');
+    const [userName, setUserName] = useState('');
+
     const tableRef = useRef(null);
     const refreshIntervalRef = useRef(null);
     const nurseInputRef = useRef(null);
@@ -144,6 +147,20 @@ const TaskList = () => {
         return () => {
             document.head.removeChild(style);
         };
+    }, []);
+
+    // Load user role and name from localStorage
+    useEffect(() => {
+        const storedUser = localStorage.getItem('mis_user');
+        if (storedUser) {
+            try {
+                const user = JSON.parse(storedUser);
+                setUserRole(user.role || '');
+                setUserName(user.name || '');
+            } catch (error) {
+                console.error('Error parsing user from localStorage:', error);
+            }
+        }
     }, []);
 
 
@@ -377,9 +394,17 @@ const TaskList = () => {
     const loadTasks = useCallback(async (showLoading = true) => {
         try {
             if (showLoading) setLoading(true);
-            const { data, error } = await supabase
+
+            let query = supabase
                 .from('nurse_assign_task')
-                .select('*')
+                .select('*');
+
+            // Apply role-based filtering
+            if (userRole && (userRole.toLowerCase().includes('nurse') || userRole.toLowerCase().includes('ot')) && userName) {
+                query = query.ilike('assign_nurse', userName);
+            }
+
+            const { data, error } = await query
                 .order('timestamp', { ascending: false })
                 .order('id', { ascending: false });
 
@@ -452,7 +477,7 @@ const TaskList = () => {
         } finally {
             if (showLoading) setLoading(false);
         }
-    }, []);
+    }, [userRole, userName]);
 
     // Handle bed selection
     const handleBedSelect = (bedInfo) => {
@@ -620,6 +645,7 @@ const TaskList = () => {
         : predefinedTasks;
 
     useEffect(() => {
+        if (!userRole) return;
         loadTasks(true); // Initial load with spinner
         loadPredefinedTasks();
         loadAvailableNurses();
@@ -634,7 +660,7 @@ const TaskList = () => {
                 clearInterval(refreshIntervalRef.current);
             }
         };
-    }, [loadTasks, loadPredefinedTasks, loadAvailableNurses]);
+    }, [loadTasks, loadPredefinedTasks, loadAvailableNurses, userRole, userName]);
 
     // Load occupied beds when add task modal opens
     useEffect(() => {
@@ -682,7 +708,8 @@ const TaskList = () => {
             const { error } = await supabase
                 .from('nurse_assign_task')
                 .update({
-                    actual1: newStatus === 'Completed' ? now : null
+                    actual1: newStatus === 'Completed' ? now : null,
+                    submitted_by: newStatus === 'Completed' ? userName : null
                 })
                 .eq('task_no', taskNo);
 
@@ -731,7 +758,8 @@ const TaskList = () => {
                 .from('nurse_assign_task')
                 .update({
                     check_up: vitalsData,
-                    actual1: now
+                    actual1: now,
+                    submitted_by: userName
                 })
                 .eq('task_no', selectedVitalsTask.taskId);
 
@@ -1777,29 +1805,29 @@ const TaskList = () => {
 
             <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col min-w-0">
                 {/* Header with Add Task Button - Fixed at top */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 w-full overflow-hidden">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 md:gap-4 mb-3 md:mb-6 w-full overflow-hidden">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                            <ClipboardList className="w-8 h-8 text-blue-600" />
+                        <h1 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                            <ClipboardList className="w-6 h-6 md:w-8 md:h-8 text-blue-600" />
                             Nurse Tasks
                         </h1>
-                        <p className="text-gray-500 text-sm mt-1">Manage and track patient care tasks</p>
+                        <p className="text-gray-500 text-sm mt-1 hidden md:block">Manage and track patient care tasks</p>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <div className="flex bg-white rounded-lg p-1 shadow-sm border border-gray-200">
+                    <div className="flex items-center justify-between md:justify-end gap-2 md:gap-4 w-full md:w-auto">
+                        <div className="flex bg-white rounded-lg p-0.5 md:p-1 shadow-sm border border-gray-200">
                             <button
                                 onClick={() => setActiveTab('Pending')}
-                                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'Pending'
+                                className={`px-2.5 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition-all ${activeTab === 'Pending'
                                     ? 'bg-blue-100 text-blue-700 shadow-sm'
                                     : 'text-gray-600 hover:bg-gray-50'
                                     }`}
                             >
-                                Pending Tasks
+                                Pending
                             </button>
                             <button
                                 onClick={() => setActiveTab('History')}
-                                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'History'
+                                className={`px-2.5 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition-all ${activeTab === 'History'
                                     ? 'bg-blue-100 text-blue-700 shadow-sm'
                                     : 'text-gray-600 hover:bg-gray-50'
                                     }`}
@@ -1811,7 +1839,7 @@ const TaskList = () => {
                         {/* Add Task Button */}
                         <button
                             onClick={() => setShowAddTaskModal(true)}
-                            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 shadow-sm"
+                            className="inline-flex items-center gap-1 md:gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-1.5 px-3 md:py-2 md:px-4 rounded-lg transition-colors duration-200 shadow-sm text-sm"
                         >
                             <Plus className="w-4 h-4" />
                             Add Task
@@ -1820,24 +1848,24 @@ const TaskList = () => {
                 </div>
 
                 {/* Filters - Fixed below header */}
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-4 mb-6">
+                <div className="bg-white p-2 md:p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-2 md:gap-4 mb-3 md:mb-6">
                     <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
                         <input
                             type="text"
-                            placeholder="Search by Task ID, Patient Name, IPD No..."
+                            placeholder="Search tasks..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                            className="w-full pl-9 md:pl-10 pr-4 py-1.5 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                         />
                     </div>
-                    <div className="relative w-full md:w-64">
-                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <div className="relative w-full md:w-48">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
                         <input
                             type="date"
                             value={filterDate}
                             onChange={(e) => setFilterDate(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                            className="w-full pl-9 md:pl-10 pr-4 py-1.5 md:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                         />
                     </div>
                 </div>

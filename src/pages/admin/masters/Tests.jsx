@@ -274,23 +274,23 @@ const Tests = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Tests Management</h1>
-          <p className="text-gray-600 mt-1">Manage hospital investigation tests</p>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-800">Tests Management</h1>
+          <p className="hidden md:block text-gray-600 mt-1">Manage hospital investigation tests</p>
         </div>
         <button
           onClick={() => openModal()}
-          className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+          className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-sm md:text-base"
         >
-          <Plus size={20} />
+          <Plus size={18} className="md:w-5 md:h-5" />
           Add New Test
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8 overflow-x-auto">
+      <div className="border-b border-gray-200 -mx-4 px-4 md:mx-0 md:px-0">
+        <nav className="-mb-px flex space-x-4 md:space-x-8 overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -299,17 +299,17 @@ const Tests = () => {
                 setSearchTerm('');
               }}
               className={`
-                whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm
+                whitespace-nowrap py-2.5 md:py-3 px-1 border-b-2 font-bold text-xs md:text-sm uppercase tracking-wider transition-all
                 ${activeTab === tab.id
-                  ? 'border-green-500 text-green-600'
+                  ? 'border-green-600 text-green-700'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }
               `}
             >
               {tab.name}
-              <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${activeTab === tab.id
-                ? 'bg-green-100 text-green-800'
-                : 'bg-gray-100 text-gray-600'
+              <span className={`ml-2 px-1.5 py-0.5 text-[10px] rounded-full font-bold ${activeTab === tab.id
+                ? 'bg-green-100 text-green-800 border border-green-200'
+                : 'bg-gray-100 text-gray-600 border border-gray-200'
                 }`}>
                 {tabCounts[tab.id] || 0}
               </span>
@@ -322,18 +322,77 @@ const Tests = () => {
 
       {/* Search Bar */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
         <input
           type="text"
-          placeholder={`Search ${activeTab} tests by name or price...`}
+          placeholder={`Search ${activeTab}...`}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm md:text-base"
         />
       </div>
 
-      {/* Fixed Height Scrollable Table */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+      {/* Mobile View: Cards */}
+      <div className="md:hidden space-y-3">
+        {filteredTests.length === 0 ? (
+          <div className="bg-white p-8 text-center text-gray-500 border border-gray-200 rounded-lg text-sm">
+            {searchTerm
+              ? `No ${activeTab} tests found matching your search`
+              : `No ${activeTab} tests found.`}
+          </div>
+        ) : (
+          filteredTests.map((test) => (
+            <div key={test.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm p-3">
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
+                    <FlaskConical size={16} className="text-gray-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-sm leading-tight">{test.name || 'N/A'}</h3>
+                    <p className="text-[10px] text-gray-500 uppercase font-bold mt-0.5">ID: #{test.id}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openModal(test)}
+                    className="p-1.5 text-blue-600 bg-blue-50 rounded-md"
+                    title="Edit"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => deleteTest(test.id)}
+                    className="p-1.5 text-red-600 bg-red-50 rounded-md"
+                    title="Delete"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center py-2 border-t border-gray-50 mt-2">
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase font-bold italic">Price</p>
+                  <div className="flex items-center gap-1">
+                    <IndianRupee size={12} className="text-green-600" />
+                    <span className="text-sm font-bold text-green-700">{formatPrice(test.price)}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-gray-500 uppercase font-bold italic">Category</p>
+                  <span className={`inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full mt-0.5 ${getTypeBadgeColor(test.type)}`}>
+                    {test.type}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop View: Table */}
+      <div className="hidden md:block bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto" style={{ maxHeight: '500px' }}>
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50 sticky top-0 z-10">

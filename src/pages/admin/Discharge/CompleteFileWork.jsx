@@ -243,27 +243,27 @@ const CompleteFileWork = () => {
   const isUploading = Object.values(uploadingRecords).some(val => val);
 
   return (
-    <div className="p-3 space-y-4 md:p-6 bg-white min-h-screen">
+    <div className="p-2 space-y-3 md:p-6 md:space-y-4 bg-white min-h-screen">
       {/* Header */}
-      <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-2 justify-between items-start sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
+          <h1 className="text-xl font-bold text-gray-900 md:text-3xl">
             Complete File Work
           </h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="hidden mt-1 text-sm text-gray-600 sm:block">
             Manage file work completion for RMO initiated patients
           </p>
         </div>
         <div className="flex items-center gap-2">
           {isLoading && (
-            <div className="text-sm text-gray-600 flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="text-xs text-gray-600 flex items-center gap-1.5 md:text-sm md:gap-2">
+              <div className="w-3.5 h-3.5 border-2 border-green-600 border-t-transparent rounded-full animate-spin md:w-4 md:h-4"></div>
               Loading...
             </div>
           )}
           <button
             onClick={loadData}
-            className="px-3 py-1.5 text-sm text-green-600 bg-green-50 rounded-lg hover:bg-green-100"
+            className="px-2.5 py-1.5 text-xs text-green-600 bg-green-50 rounded-lg hover:bg-green-100 md:px-3 md:text-sm"
           >
             Refresh
           </button>
@@ -271,20 +271,20 @@ const CompleteFileWork = () => {
       </div>
 
       {/* Tabs and Submit Button Row */}
-      <div className="flex justify-between items-center border-b border-gray-200">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center border-b border-gray-200">
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'pending'
+            className={`px-3 py-1.5 font-medium text-xs md:text-sm transition-colors relative ${activeTab === 'pending'
               ? 'text-green-600 border-b-2 border-green-600'
               : 'text-gray-600 hover:text-gray-900'
               }`}
           >
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 md:w-4 md:h-4" />
               Pending
               {pendingRecords.length > 0 && (
-                <span className="px-2 py-0.5 text-xs bg-red-100 text-red-600 rounded-full">
+                <span className="px-1.5 py-0.5 text-[10px] bg-red-100 text-red-600 rounded-full">
                   {pendingRecords.length}
                 </span>
               )}
@@ -292,16 +292,16 @@ const CompleteFileWork = () => {
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'history'
+            className={`px-3 py-1.5 font-medium text-xs md:text-sm transition-colors relative ${activeTab === 'history'
               ? 'text-green-600 border-b-2 border-green-600'
               : 'text-gray-600 hover:text-gray-900'
               }`}
           >
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4" />
+            <div className="flex items-center gap-1.5">
+              <CheckCircle className="w-3.5 h-3.5 md:w-4 md:h-4" />
               History
               {historyRecords.length > 0 && (
-                <span className="px-2 py-0.5 text-xs bg-green-100 text-green-600 rounded-full">
+                <span className="px-1.5 py-0.5 text-[10px] bg-green-100 text-green-600 rounded-full">
                   {historyRecords.length}
                 </span>
               )}
@@ -314,19 +314,19 @@ const CompleteFileWork = () => {
           <button
             onClick={handleSubmit}
             disabled={!isAnyRecordSelected || isUploading}
-            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg shadow-sm font-medium transition-all mb-[-2px] ${isAnyRecordSelected && !isUploading
+            className={`w-full mt-2 md:w-auto md:mt-0 flex items-center justify-center gap-2 px-4 py-2 md:px-6 md:py-2.5 text-sm md:text-base text-white rounded-lg shadow-sm font-medium transition-all md:mb-[-2px] ${isAnyRecordSelected && !isUploading
               ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
               : 'bg-gray-400 cursor-not-allowed opacity-60'
               }`}
           >
             {isUploading ? (
               <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 Saving...
               </>
             ) : (
               <>
-                <FileCheck className="w-5 h-5" />
+                <FileCheck className="w-4 h-4 md:w-5 md:h-5" />
                 Submit
               </>
             )}

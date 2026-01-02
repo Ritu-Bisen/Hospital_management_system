@@ -224,14 +224,14 @@ const DischargeBill = () => {
 
 
   return (
-    <div className="p-3 space-y-4 md:p-6 bg-white min-h-screen">
+    <div className="p-2 space-y-3 md:p-6 md:space-y-4 bg-white min-h-screen">
       {/* Header */}
-      <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-2 justify-between items-start sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
+          <h1 className="text-xl font-bold text-gray-900 md:text-3xl">
             Discharge Bill
           </h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="hidden mt-1 text-sm text-gray-600 sm:block">
             Process discharge bills after authority approval
           </p>
         </div>
@@ -239,16 +239,16 @@ const DischargeBill = () => {
       <div className="flex gap-2 border-b border-gray-200">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'pending'
+          className={`px-3 py-1.5 font-medium text-xs md:text-sm transition-colors relative ${activeTab === 'pending'
             ? 'text-green-600 border-b-2 border-green-600'
             : 'text-gray-600 hover:text-gray-900'
             }`}
         >
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4" />
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 md:w-4 md:h-4" />
             Pending
             {pendingRecords.length > 0 && (
-              <span className="px-2 py-0.5 text-xs bg-red-100 text-red-600 rounded-full">
+              <span className="px-1.5 py-0.5 text-[10px] bg-red-100 text-red-600 rounded-full">
                 {pendingRecords.length}
               </span>
             )}
@@ -256,16 +256,16 @@ const DischargeBill = () => {
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'history'
+          className={`px-3 py-1.5 font-medium text-xs md:text-sm transition-colors relative ${activeTab === 'history'
             ? 'text-green-600 border-b-2 border-green-600'
             : 'text-gray-600 hover:text-gray-900'
             }`}
         >
-          <div className="flex items-center gap-2">
-            <CheckCircle className="w-4 h-4" />
+          <div className="flex items-center gap-1.5">
+            <CheckCircle className="w-3.5 h-3.5 md:w-4 md:h-4" />
             History
             {historyRecords.length > 0 && (
-              <span className="px-2 py-0.5 text-xs bg-green-100 text-green-600 rounded-full">
+              <span className="px-1.5 py-0.5 text-[10px] bg-green-100 text-green-600 rounded-full">
                 {historyRecords.length}
               </span>
             )}
@@ -382,21 +382,21 @@ const DischargeBill = () => {
           </div>
 
           {/* Mobile Cards - Pending */}
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-2 md:hidden">
             {pendingRecords.length > 0 ? (
               pendingRecords.map((record) => (
-                <div key={record.id} className="p-4 bg-white rounded-lg border shadow-sm">
-                  <div className="flex justify-between items-start mb-3">
+                <div key={record.id} className="p-3 bg-white rounded-lg border shadow-sm">
+                  <div className="flex justify-between items-start mb-2">
                     <div>
-                      <div className="text-sm font-medium text-green-600">{record.admission_no}</div>
-                      <div className="font-semibold">{record.patient_name}</div>
+                      <div className="text-xs font-medium text-green-600">{record.admission_no}</div>
+                      <div className="text-sm font-semibold">{record.patient_name}</div>
                     </div>
-                    <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">
+                    <span className="px-1.5 py-0.5 text-[10px] bg-green-100 text-green-700 rounded-full">
                       Pending
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs my-3">
+                  <div className="grid grid-cols-2 gap-1.5 text-[11px] my-2">
                     <div><span className="text-gray-600">Dept:</span> <strong>{record.department}</strong></div>
                     <div><span className="text-gray-600">Consultant:</span> {record.consultant_name || 'N/A'}</div>
                     <div><span className="text-gray-600">Staff:</span> {record.staff_name}</div>
@@ -411,17 +411,17 @@ const DischargeBill = () => {
 
                   <button
                     onClick={() => handleOpenBillModal(record)}
-                    className="w-full mt-3 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded hover:bg-green-700"
+                    className="w-full mt-2 px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700"
                     disabled={isSubmitting}
                   >
                     Add Bill Information
                   </button>
 
                   {record.summary_report_image && (
-                    <div className="mt-3 text-right">
+                    <div className="mt-2 text-right">
                       <button
                         onClick={() => openImageViewer(record.summary_report_image)}
-                        className="text-xs text-green-600 underline"
+                        className="text-[10px] text-green-600 underline"
                         disabled={isSubmitting}
                       >
                         View Summary Report →
@@ -431,9 +431,9 @@ const DischargeBill = () => {
                 </div>
               ))
             ) : (
-              <div className="p-8 text-center bg-white rounded-lg border">
-                <Clock className="mx-auto mb-4 w-12 h-12 text-gray-300" />
-                <p className="font-medium">No pending bills</p>
+              <div className="p-6 text-center bg-white rounded-lg border">
+                <Clock className="mx-auto mb-3 w-10 h-10 text-gray-300" />
+                <p className="text-sm font-medium">No pending bills</p>
               </div>
             )}
           </div>
@@ -544,22 +544,22 @@ const DischargeBill = () => {
           </div>
 
           {/* Mobile History Cards */}
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-2 md:hidden">
             {historyRecords.map((record) => (
-              <div key={record.id} className="p-4 bg-white rounded-lg border">
+              <div key={record.id} className="p-3 bg-white rounded-lg border">
                 <div className="flex justify-between">
                   <div>
-                    <div className="text-sm font-medium text-green-600">{record.admission_no}</div>
-                    <div className="font-semibold">{record.patient_name}</div>
+                    <div className="text-xs font-medium text-green-600">{record.admission_no}</div>
+                    <div className="text-sm font-semibold">{record.patient_name}</div>
                   </div>
-                  <span className={`px-2 py-1 text-xs rounded-full ${record.delay5 === 'On Time' || !record.delay5
+                  <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${record.delay5 === 'On Time' || !record.delay5
                     ? 'bg-green-100 text-green-700'
                     : 'bg-red-100 text-red-700'
                     }`}>
                     {record.delay5 || 'N/A'}
                   </span>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
                   <div>Dept: <strong>{record.department}</strong></div>
                   <div>Consultant: {record.consultant_name || 'N/A'}</div>
                   <div>Staff: {record.staff_name}</div>
@@ -569,8 +569,8 @@ const DischargeBill = () => {
                   <div>Bill Status: <strong className={record.bill_status === 'Yes' ? 'text-green-700' : 'text-red-700'}>{record.bill_status}</strong></div>
                 </div>
                 {record.bill_image && (
-                  <div className="mt-3 text-right">
-                    <button onClick={() => openImageViewer(record.bill_image)} className="text-xs text-green-600 underline">
+                  <div className="mt-2 text-right">
+                    <button onClick={() => openImageViewer(record.bill_image)} className="text-[10px] text-green-600 underline">
                       View Bill Image →
                     </button>
                   </div>

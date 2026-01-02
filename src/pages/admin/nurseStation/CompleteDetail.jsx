@@ -147,26 +147,26 @@ const CompleteDetail = ({ nurseName, onClose }) => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-7xl rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
                 {/* Header */}
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-blue-50 to-blue-100">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                            <User className="w-6 h-6" />
+                <div className="p-3 md:p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-blue-50 to-blue-100">
+                    <div className="flex items-center gap-2 md:gap-3">
+                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                            <User className="w-5 h-5 md:w-6 md:h-6" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-gray-800">Task Details for {nurseName}</h2>
-                            <p className="text-sm text-gray-600">Complete task history and performance</p>
+                            <h2 className="text-lg md:text-xl font-bold text-gray-800">Task Details for {nurseName}</h2>
+                            <p className="hidden md:block text-sm text-gray-600">Complete task history and performance</p>
                         </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                        className="inline-flex items-center gap-1 md:gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs md:text-sm font-medium transition-colors"
                     >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Dashboard
+                        <ArrowLeft className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                        <span className="md:inline">Back</span>
                     </button>
                 </div>
 
-                <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-4 md:space-y-6">
                     {error ? (
                         <div className="text-center py-8">
                             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
@@ -181,103 +181,179 @@ const CompleteDetail = ({ nurseName, onClose }) => {
                     ) : (
                         <>
                             {/* Summary Cards */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                                    <div className="flex items-center gap-3">
-                                        <ClipboardList className="w-8 h-8 text-blue-600" />
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                                <div className="bg-blue-50 p-3 md:p-4 rounded-lg border border-blue-200">
+                                    <div className="flex items-center gap-2 md:gap-3">
+                                        <ClipboardList className="w-5 h-5 md:w-8 md:h-8 text-blue-600" />
                                         <div>
-                                            <p className="text-sm font-medium text-gray-500">Total Tasks</p>
-                                            <h3 className="text-2xl font-bold text-gray-900">{summary.totalTasks}</h3>
+                                            <p className="text-[10px] md:text-sm font-medium text-gray-500 uppercase md:normal-case">Total</p>
+                                            <h3 className="text-lg md:text-2xl font-bold text-gray-900">{summary.totalTasks}</h3>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                                    <div className="flex items-center gap-3">
-                                        <CheckCircle className="w-8 h-8 text-green-600" />
+                                <div className="bg-green-50 p-3 md:p-4 rounded-lg border border-green-200">
+                                    <div className="flex items-center gap-2 md:gap-3">
+                                        <CheckCircle className="w-5 h-5 md:w-8 md:h-8 text-green-600" />
                                         <div>
-                                            <p className="text-sm font-medium text-gray-500">Completed</p>
-                                            <h3 className="text-2xl font-bold text-gray-900">{summary.completed}</h3>
+                                            <p className="text-[10px] md:text-sm font-medium text-gray-500 uppercase md:normal-case">Done</p>
+                                            <h3 className="text-lg md:text-2xl font-bold text-gray-900">{summary.completed}</h3>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                                    <div className="flex items-center gap-3">
-                                        <AlertCircle className="w-8 h-8 text-orange-600" />
+                                <div className="bg-orange-50 p-3 md:p-4 rounded-lg border border-orange-200">
+                                    <div className="flex items-center gap-2 md:gap-3">
+                                        <AlertCircle className="w-5 h-5 md:w-8 md:h-8 text-orange-600" />
                                         <div>
-                                            <p className="text-sm font-medium text-gray-500">Pending</p>
-                                            <h3 className="text-2xl font-bold text-gray-900">{summary.pending}</h3>
+                                            <p className="text-[10px] md:text-sm font-medium text-gray-500 uppercase md:normal-case">Pending</p>
+                                            <h3 className="text-lg md:text-2xl font-bold text-gray-900">{summary.pending}</h3>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                                    <div className="flex items-center gap-3">
-                                        <Award className="w-8 h-8 text-purple-600" />
+                                <div className="bg-purple-50 p-3 md:p-4 rounded-lg border border-purple-200">
+                                    <div className="flex items-center gap-2 md:gap-3">
+                                        <Award className="w-5 h-5 md:w-8 md:h-8 text-purple-600" />
                                         <div>
-                                            <p className="text-sm font-medium text-gray-500">Completion Rate</p>
-                                            <h3 className="text-2xl font-bold text-gray-900">{summary.completionRate}%</h3>
+                                            <p className="text-[10px] md:text-sm font-medium text-gray-500 uppercase md:normal-case">Rate</p>
+                                            <h3 className="text-lg md:text-2xl font-bold text-gray-900">{summary.completionRate}%</h3>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Performance Chart */}
-                            <div className="bg-white p-4 rounded-lg border border-gray-200">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                                        <TrendingUp className="w-5 h-5 text-blue-600" />
+                            <div className="bg-white p-3 md:p-4 rounded-lg border border-gray-200">
+                                <div className="flex justify-between items-center mb-3 md:mb-4">
+                                    <h3 className="text-sm md:text-lg font-bold text-gray-800 flex items-center gap-2">
+                                        <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
                                         Performance Overview
                                     </h3>
-                                    <span className={`px-3 py-1 rounded-full text-sm font-bold border ${getStatusColor('Completed').replace('bg-', 'bg-opacity-20 ')}`}>
-                                        {summary.completionRate}% Success Rate
+                                    <span className={`px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[10px] md:text-sm font-bold border ${getStatusColor('Completed').replace('bg-', 'bg-opacity-20 ')}`}>
+                                        {summary.completionRate}%
                                     </span>
                                 </div>
-                                <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-2 md:h-4 bg-gray-100 rounded-full overflow-hidden">
                                     <div
                                         className="h-full rounded-full bg-gradient-to-r from-green-500 to-blue-500"
                                         style={{ width: `${summary.completionRate}%` }}
                                     ></div>
                                 </div>
-                                <div className="flex justify-between mt-2 text-sm text-gray-600">
-                                    <span>0%</span>
-                                    <span>50%</span>
-                                    <span>100%</span>
-                                </div>
                             </div>
 
                             {/* Filter Buttons */}
-                            <div className="bg-white p-4 rounded-lg border border-gray-200">
-                                <div className="flex justify-between items-center">
-                                    <h3 className="text-lg font-bold text-gray-800">Task Filters</h3>
-                                    <div className="text-sm text-gray-600">
-                                        Showing {filteredTasks.length} of {nurseTasks.length} tasks
+                            <div className="bg-white p-3 md:p-4 rounded-lg border border-gray-200">
+                                <div className="flex justify-between items-center mb-2 md:mb-0">
+                                    <h3 className="text-sm md:text-lg font-bold text-gray-800">Task Filters</h3>
+                                    <div className="text-[10px] md:text-sm text-gray-600">
+                                        {filteredTasks.length} / {nurseTasks.length}
                                     </div>
                                 </div>
-                                <div className="flex gap-2 mt-3">
+                                <div className="flex gap-1.5 md:gap-2 mt-1 md:mt-3">
                                     <button
                                         onClick={() => setActiveFilter('all')}
-                                        className={getFilterButtonClass('all')}
+                                        className="px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-blue-600 active:text-white"
+                                        style={activeFilter === 'all' ? { backgroundColor: '#2563eb', color: 'white' } : {}}
                                     >
-                                        All Tasks ({nurseTasks.length})
+                                        All
                                     </button>
                                     <button
                                         onClick={() => setActiveFilter('completed')}
-                                        className={getFilterButtonClass('completed')}
+                                        className="px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-blue-600 active:text-white"
+                                        style={activeFilter === 'completed' ? { backgroundColor: '#2563eb', color: 'white' } : {}}
                                     >
-                                        <CheckCircle className="w-4 h-4 inline mr-1" />
-                                        Completed ({summary.completed})
+                                        Done
                                     </button>
                                     <button
                                         onClick={() => setActiveFilter('pending')}
-                                        className={getFilterButtonClass('pending')}
+                                        className="px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-blue-600 active:text-white"
+                                        style={activeFilter === 'pending' ? { backgroundColor: '#2563eb', color: 'white' } : {}}
                                     >
-                                        <AlertCircle className="w-4 h-4 inline mr-1" />
-                                        Pending ({summary.pending})
+                                        Pending
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Simple Tasks Table */}
-                            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                            {/* Mobile View: Cards */}
+                            <div className="md:hidden space-y-3">
+                                {filteredTasks.length === 0 ? (
+                                    <div className="bg-white p-8 text-center text-gray-500 border border-gray-200 rounded-lg">
+                                        No {activeFilter === 'all' ? '' : activeFilter} tasks found for {nurseName}
+                                    </div>
+                                ) : (
+                                    filteredTasks.map((task) => (
+                                        <div key={task.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                                            <div className="p-2 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
+                                                <div className="pl-1">
+                                                    <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{task.taskId}</div>
+                                                    <div className="font-bold text-gray-900 text-sm leading-tight">{task.taskName}</div>
+                                                </div>
+                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${getStatusColor(task.status)} mr-1 mt-1`}>
+                                                    {task.status}
+                                                </span>
+                                            </div>
+
+                                            <div className="p-2 space-y-2">
+                                                <div className="flex items-center justify-between px-1">
+                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${getShiftColor(task.shift)}`}>
+                                                        {task.shift}
+                                                    </span>
+                                                    <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                                                        <Calendar className="w-3 h-3" />
+                                                        {task.startDate}
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-blue-50/50 rounded-md p-2 space-y-1">
+                                                    <div className="flex justify-between items-center text-xs">
+                                                        <div className="flex items-center gap-1.5 text-gray-500">
+                                                            <User className="w-3 h-3" />
+                                                            Patient
+                                                        </div>
+                                                        <div className="font-bold text-gray-900 text-[11px]">{task.patientName}</div>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-xs">
+                                                        <div className="flex items-center gap-1.5 text-gray-500">
+                                                            <Bed className="w-3 h-3" />
+                                                            Bed / IPD
+                                                        </div>
+                                                        <div className="text-gray-700 text-[10px]">{task.bedNo} / {task.ipdNumber}</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="bg-gray-50 p-1.5 rounded">
+                                                        <div className="text-[9px] font-bold text-gray-400 uppercase">Planned</div>
+                                                        <div className="text-[10px] font-medium text-gray-700">
+                                                            <div>{task.planned1Date}</div>
+                                                            <div className="text-blue-600">{task.planned1Time}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-green-50/50 p-1.5 rounded">
+                                                        <div className="text-[9px] font-bold text-gray-400 uppercase">Actual</div>
+                                                        <div className="text-[10px] font-medium text-green-700">
+                                                            <div>{task.actual1Date}</div>
+                                                            <div className="text-green-600">{task.actual1Time}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="pt-1.5 border-t border-gray-100 px-1">
+                                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500 overflow-hidden whitespace-nowrap text-ellipsis">
+                                                        <Home className="w-3 h-3 flex-shrink-0" />
+                                                        <span className="font-medium text-gray-700">{task.patientLocation}</span>
+                                                        <span>•</span>
+                                                        <span>{task.wardType}</span>
+                                                        <span>•</span>
+                                                        <span>{task.room}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* Desktop View: Table */}
+                            <div className="hidden md:block bg-white border border-gray-200 rounded-lg overflow-hidden">
                                 <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                                     <h3 className="text-lg font-bold text-gray-800">
                                         {activeFilter === 'all' ? 'All Tasks' :

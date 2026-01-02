@@ -186,39 +186,34 @@ const ConcernAuthority = () => {
   const isAnySelected = Object.values(selectedRecords).some((v) => v);
 
   return (
-    <div className="p-3 space-y-4 md:p-6 bg-white min-h-screen">
+    <div className="p-2 space-y-3 md:p-6 md:space-y-4 bg-white min-h-screen">
       {/* Header */}
-      <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-2 justify-between items-start sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
+          <h1 className="text-xl font-bold text-gray-900 md:text-3xl">
             Concern Authority
           </h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="hidden mt-1 text-sm text-gray-600 sm:block">
             Final approval for work file after Concern Department review
           </p>
         </div>
-        {/* {isLoading && (
-          <div className="text-sm text-gray-500 animate-pulse">
-            Loading...
-          </div>
-        )} */}
       </div>
 
       {/* Tabs & Submit Button */}
-      <div className="flex justify-between items-center border-b border-gray-200">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center border-b border-gray-200">
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'pending'
+            className={`px-3 py-1.5 font-medium text-xs md:text-sm transition-colors relative ${activeTab === 'pending'
               ? 'text-green-600 border-b-2 border-green-600'
               : 'text-gray-600 hover:text-gray-900'
               }`}
           >
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 md:w-4 md:h-4" />
               Pending
               {pendingRecords.length > 0 && (
-                <span className="px-2 py-0.5 text-xs bg-red-100 text-red-600 rounded-full">
+                <span className="px-1.5 py-0.5 text-[10px] bg-red-100 text-red-600 rounded-full">
                   {pendingRecords.length}
                 </span>
               )}
@@ -226,16 +221,16 @@ const ConcernAuthority = () => {
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 font-medium text-sm transition-colors relative ${activeTab === 'history'
+            className={`px-3 py-1.5 font-medium text-xs md:text-sm transition-colors relative ${activeTab === 'history'
               ? 'text-green-600 border-b-2 border-green-600'
               : 'text-gray-600 hover:text-gray-900'
               }`}
           >
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4" />
+            <div className="flex items-center gap-1.5">
+              <CheckCircle className="w-3.5 h-3.5 md:w-4 md:h-4" />
               History
               {historyRecords.length > 0 && (
-                <span className="px-2 py-0.5 text-xs bg-green-100 text-green-600 rounded-full">
+                <span className="px-1.5 py-0.5 text-[10px] bg-green-100 text-green-600 rounded-full">
                   {historyRecords.length}
                 </span>
               )}
@@ -246,14 +241,14 @@ const ConcernAuthority = () => {
         {activeTab === 'pending' && (
           <button
             onClick={handleSubmit}
-            disabled={!isAnySelected || isSubmitting} // Use isSubmitting instead of isLoading
-            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-lg shadow-sm font-medium transition-all mb-[-2px] ${isAnySelected && !isSubmitting
+            disabled={!isAnySelected || isSubmitting}
+            className={`w-full mt-2 md:w-auto md:mt-0 flex items-center justify-center gap-2 px-4 py-2 md:px-6 md:py-2.5 text-sm md:text-base text-white rounded-lg shadow-sm font-medium transition-all md:mb-[-2px] ${isAnySelected && !isSubmitting
               ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
               : 'bg-gray-400 cursor-not-allowed opacity-60'
               }`}
           >
-            <Building2 className="w-5 h-5" />
-            {isSubmitting ? 'Processing...' : 'Submit'} {/* Use isSubmitting here */}
+            <Building2 className="w-4 h-4 md:w-5 md:h-5" />
+            {isSubmitting ? 'Processing...' : 'Submit'}
           </button>
         )}
       </div>

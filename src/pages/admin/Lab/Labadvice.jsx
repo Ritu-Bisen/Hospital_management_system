@@ -407,301 +407,305 @@ const LabAdvice = () => {
   };
 
   return (
-    <div className="p-3 space-y-4 md:p-6 bg-gray-50 min-h-screen">
-      {/* Loading Overlay */}
-      {isLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-            <p className="text-gray-700">Loading data...</p>
+    <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
+      {/* Header and Tabs - Fixed at top */}
+      <div className="flex-none bg-white border-b border-gray-200 shrink-0 shadow-sm z-10">
+        <div className="px-4 py-2 sm:px-6 border-b border-gray-100">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 md:text-3xl leading-tight">Lab Advice</h1>
+              <p className="hidden mt-0.5 text-xs text-gray-600 sm:block">Manage pathology and radiology requests</p>
+            </div>
           </div>
         </div>
-      )}
 
-      <div className="flex flex-col gap-3 justify-between items-start sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Lab Advice</h1>
-          <p className="mt-1 text-sm text-gray-600">Manage pathology and radiology requests</p>
+        {/* Tabs - More compact */}
+        <div className="px-3 sm:px-4 py-2">
+          <div className="flex gap-2 p-1 bg-gray-50 rounded-lg border border-gray-200">
+            <button
+              onClick={() => setActiveTab('pending')}
+              className={`flex-1 px-4 py-2 text-sm font-bold rounded-lg transition-all shadow-sm ${activeTab === 'pending'
+                ? 'bg-green-600 text-white'
+                : 'text-gray-600 hover:bg-gray-200'
+                }`}
+            >
+              PENDING ({pendingAdvices.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`flex-1 px-4 py-2 text-sm font-bold rounded-lg transition-all shadow-sm ${activeTab === 'history'
+                ? 'bg-green-600 text-white'
+                : 'text-gray-600 hover:bg-gray-200'
+                }`}
+            >
+              HISTORY ({historyAdvices.length})
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-white rounded-lg border border-gray-200 shadow-sm">
-        <button
-          onClick={() => setActiveTab('pending')}
-          className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'pending'
-            ? 'bg-green-600 text-white'
-            : 'text-gray-600 hover:bg-gray-100'
-            }`}
-        >
-          Pending ({pendingAdvices.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'history'
-            ? 'bg-green-600 text-white'
-            : 'text-gray-600 hover:bg-gray-100'
-            }`}
-        >
-          History ({historyAdvices.length})
-        </button>
+      {/* Main Content Area - Scrollable */}
+      <div className="flex-1 overflow-hidden p-3 md:p-6 pt-4 md:pt-4">
+
+        {activeTab === 'pending' && (
+          <>
+            {/* Desktop Table */}
+            <div className="hidden h-full flex-col bg-white rounded-lg border border-gray-200 shadow-sm md:flex overflow-hidden">
+              <div className="overflow-auto flex-1">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Admission No</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone Number</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Consultant Dr.</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Refer By Dr.</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Father/Husband</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Reason For Visit</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Age</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Gender</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Bed No.</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Location</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Ward Type</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Room</th>
+                      <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Department</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {pendingAdvices.length > 0 ? (
+                      pendingAdvices.map((patient) => (
+                        <tr key={patient.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm whitespace-nowrap">
+                            <button
+                              onClick={() => handleActionClick(patient)}
+                              disabled={isLoading}
+                              className="px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700 disabled:bg-gray-400"
+                            >
+                              Process
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{patient.admission_no}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.patientName}</td>
+
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.phoneNumber}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.consultantDr}</td>
+
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.referByDr}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.fatherHusband || 'N/A'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{patient.reasonForVisit}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.age}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.gender}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.bedNo}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.location}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.wardType}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.room}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.department || 'N/A'}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="15" className="px-4 py-8 text-center text-gray-500">
+                          <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                          <p className="text-lg font-medium text-gray-900">No pending lab advices</p>
+                          <p className="text-sm text-gray-600">Patients with planned1 not null and actual1 null will appear here</p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden h-full overflow-auto space-y-3 pb-4">
+              {pendingAdvices.length > 0 ? (
+                pendingAdvices.map((patient) => (
+                  <div key={patient.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <div className="text-xs font-medium text-green-600 mb-1">{patient.admission_no}</div>
+                        <h3 className="text-sm font-semibold text-gray-900">{patient.patientName}</h3>
+                      </div>
+                      <button
+                        onClick={() => handleActionClick(patient)}
+                        disabled={isLoading}
+                        className="flex-shrink-0 px-3 py-1.5 text-xs text-white bg-green-600 rounded-lg shadow-sm disabled:bg-gray-400"
+                      >
+                        Process
+                      </button>
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Phone:</span>
+                        <span className="font-medium text-gray-900">{patient.phoneNumber}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Age/Gender:</span>
+                        <span className="font-medium text-gray-900">{patient.age} / {patient.gender}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Bed/Location:</span>
+                        <span className="font-medium text-gray-900">{patient.bedNo} / {patient.location}</span>
+                      </div>
+                      <div className="pt-2 mt-2 border-t border-gray-100">
+                        <span className="text-gray-600">Reason:</span>
+                        <p className="mt-1 text-sm text-gray-900">{patient.reasonForVisit}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                  <p className="text-sm font-medium text-gray-900">No pending lab advices</p>
+                  <p className="text-xs text-gray-600 mt-1">Patients with planned1 not null and actual1 null will appear here</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* History Section */}
+        {activeTab === 'history' && (
+          <>
+            {/* Desktop Table */}
+            <div className="hidden h-full flex-col bg-white rounded-lg border border-gray-200 shadow-sm md:flex overflow-hidden">
+              <div className="overflow-auto flex-1">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Lab No</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Timestamp</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Reason For Visit</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Age</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Bed No.</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Location</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Priority</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Category</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Pathology Tests</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Radiology Tests</th>
+                      <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Action</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {historyAdvices.length > 0 ? (
+                      historyAdvices.map((record) => (
+                        <tr key={record.adviceId} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                            {record.timestamp ? new Date(record.timestamp).toLocaleString('en-GB', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              day: '2-digit',
+                              month: 'short'
+                            }) : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-purple-600 whitespace-nowrap">{record.admission_no}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td>
+                          <td className="px-4 py-3 text-sm whitespace-nowrap">
+                            <span
+                              className={`px-2 py-1 text-xs font-semibold rounded-full ${record.priority === 'High'
+                                ? 'bg-red-100 text-red-700'
+                                : record.priority === 'Medium'
+                                  ? 'bg-yellow-100 text-yellow-700'
+                                  : 'bg-green-100 text-green-700'
+                                }`}
+                            >
+                              {record.priority}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                            {record.category === 'Pathology' && record.pathologyTests?.length > 0
+                              ? record.pathologyTests.slice(0, 2).join(', ') +
+                              (record.pathologyTests?.length > 2 ? '...' : '')
+                              : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                            {record.category === 'Radiology' && record.radiologyTests?.length > 0
+                              ? record.radiologyTests.slice(0, 2).join(', ') +
+                              (record.radiologyTests?.length > 2 ? '...' : '')
+                              : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm whitespace-nowrap">
+                            <button
+                              onClick={() => handleViewClick(record)}
+                              className="flex gap-1 items-center px-3 py-1.5 text-green-600 bg-green-50 rounded-lg shadow-sm hover:bg-green-100"
+                            >
+                              <Eye className="w-4 h-4" />
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="14" className="px-4 py-8 text-center text-gray-500">
+                          <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                          <p className="text-lg font-medium text-gray-900">No lab history records</p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden h-full overflow-auto space-y-3 pb-4">
+              {historyAdvices.length > 0 ? (
+                historyAdvices.map((record) => (
+                  <div key={record.adviceId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo}</div>
+                        <div className="text-xs font-medium text-purple-600 mb-1">{record.admission_no}</div>
+                        <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
+                        <div className="text-xs text-gray-500 mt-1">{record.phoneNumber}</div>
+                      </div>
+                      <button
+                        onClick={() => handleViewClick(record)}
+                        className="flex-shrink-0 px-3 py-1.5 text-xs text-green-600 bg-green-50 rounded-lg"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="text-xs space-y-1">
+                      <div><span className="text-gray-600">Reason:</span> {record.reasonForVisit}</div>
+                      <div><span className="text-gray-600">Age:</span> {record.age}</div>
+                      <div><span className="text-gray-600">Bed/Location:</span> {record.bedNo} / {record.location}</div>
+                      <div><span className="text-gray-600">Priority:</span> {record.priority}</div>
+                      <div><span className="text-gray-600">Category:</span> {record.category}</div>
+                      {record.category === 'Pathology' && record.pathologyTests?.length > 0 && (
+                        <div><span className="text-gray-600">Pathology:</span> {record.pathologyTests.slice(0, 2).join(', ')}{record.pathologyTests.length > 2 ? '...' : ''}</div>
+                      )}
+                      {record.category === 'Radiology' && record.radiologyTests?.length > 0 && (
+                        <div><span className="text-gray-600">Radiology:</span> {record.radiologyTests.slice(0, 2).join(', ')}{record.radiologyTests.length > 2 ? '...' : ''}</div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
+                  <p className="text-sm font-medium text-gray-900">No lab history records</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
-
-      {/* Pending Section */}
-      {activeTab === 'pending' && (
-        <>
-          {/* Desktop Table */}
-          <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Action</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Admission No</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Patient Name</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Phone Number</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Consultant Dr.</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Refer By Dr.</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Father/Husband</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Reason For Visit</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Age</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Gender</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Bed No.</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Location</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Ward Type</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Room</th>
-                  <th className="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Department</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {pendingAdvices.length > 0 ? (
-                  pendingAdvices.map((patient) => (
-                    <tr key={patient.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <button
-                          onClick={() => handleActionClick(patient)}
-                          disabled={isLoading}
-                          className="px-3 py-1.5 text-white bg-green-600 rounded-lg shadow-sm hover:bg-green-700 disabled:bg-gray-400"
-                        >
-                          Process
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{patient.admission_no}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.patientName}</td>
-
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.phoneNumber}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.consultantDr}</td>
-
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.referByDr}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.fatherHusband || 'N/A'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{patient.reasonForVisit}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.age}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.gender}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.bedNo}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.location}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.wardType}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.room}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{patient.department || 'N/A'}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
-                      <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                      <p className="text-lg font-medium text-gray-900">No pending lab advices</p>
-                      <p className="text-sm text-gray-600">Patients with planned1 not null and actual1 null will appear here</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Card View */}
-          <div className="space-y-3 md:hidden">
-            {pendingAdvices.length > 0 ? (
-              pendingAdvices.map((patient) => (
-                <div key={patient.id} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{patient.admission_no}</div>
-                      <h3 className="text-sm font-semibold text-gray-900">{patient.patientName}</h3>
-                    </div>
-                    <button
-                      onClick={() => handleActionClick(patient)}
-                      disabled={isLoading}
-                      className="flex-shrink-0 px-3 py-1.5 text-xs text-white bg-green-600 rounded-lg shadow-sm disabled:bg-gray-400"
-                    >
-                      Process
-                    </button>
-                  </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Phone:</span>
-                      <span className="font-medium text-gray-900">{patient.phoneNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Age/Gender:</span>
-                      <span className="font-medium text-gray-900">{patient.age} / {patient.gender}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Bed/Location:</span>
-                      <span className="font-medium text-gray-900">{patient.bedNo} / {patient.location}</span>
-                    </div>
-                    <div className="pt-2 mt-2 border-t border-gray-100">
-                      <span className="text-gray-600">Reason:</span>
-                      <p className="mt-1 text-sm text-gray-900">{patient.reasonForVisit}</p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
-                <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                <p className="text-sm font-medium text-gray-900">No pending lab advices</p>
-                <p className="text-xs text-gray-600 mt-1">Patients with planned1 not null and actual1 null will appear here</p>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* History Section */}
-      {activeTab === 'history' && (
-        <>
-          {/* Desktop Table */}
-          <div className="hidden overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm md:block">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Lab No</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Timestamp</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Admission No</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Patient Name</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Phone Number</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Reason For Visit</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Age</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Bed No.</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Location</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Priority</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Category</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Pathology Tests</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Radiology Tests</th>
-                  <th className="px-4 py-3 text-xs font-medium text-left text-gray-500 uppercase">Action</th>
-                </tr>
-              </thead>
-
-              <tbody className="bg-white divide-y divide-gray-200">
-                {historyAdvices.length > 0 ? (
-                  historyAdvices.map((record) => (
-                    <tr key={record.adviceId} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-green-600 whitespace-nowrap">{record.adviceNo}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                        {record.timestamp ? new Date(record.timestamp).toLocaleString('en-GB', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          day: '2-digit',
-                          month: 'short'
-                        }) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-purple-600 whitespace-nowrap">{record.admission_no}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.patientName}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.phoneNumber}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">{record.reasonForVisit}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.age}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.bedNo}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.location}</td>
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <span
-                          className={`px-2 py-1 text-xs font-semibold rounded-full ${record.priority === 'High'
-                            ? 'bg-red-100 text-red-700'
-                            : record.priority === 'Medium'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-green-100 text-green-700'
-                            }`}
-                        >
-                          {record.priority}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.category}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                        {record.category === 'Pathology' && record.pathologyTests?.length > 0
-                          ? record.pathologyTests.slice(0, 2).join(', ') +
-                          (record.pathologyTests?.length > 2 ? '...' : '')
-                          : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                        {record.category === 'Radiology' && record.radiologyTests?.length > 0
-                          ? record.radiologyTests.slice(0, 2).join(', ') +
-                          (record.radiologyTests?.length > 2 ? '...' : '')
-                          : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <button
-                          onClick={() => handleViewClick(record)}
-                          className="flex gap-1 items-center px-3 py-1.5 text-green-600 bg-green-50 rounded-lg shadow-sm hover:bg-green-100"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="13" className="px-4 py-8 text-center text-gray-500">
-                      <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                      <p className="text-lg font-medium text-gray-900">No lab history records</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Card View */}
-          <div className="space-y-3 md:hidden">
-            {historyAdvices.length > 0 ? (
-              historyAdvices.map((record) => (
-                <div key={record.adviceId} className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <div className="text-xs font-medium text-green-600 mb-1">{record.adviceNo}</div>
-                      <div className="text-xs font-medium text-purple-600 mb-1">{record.admission_no}</div>
-                      <h3 className="text-sm font-semibold text-gray-900">{record.patientName}</h3>
-                      <div className="text-xs text-gray-500 mt-1">{record.phoneNumber}</div>
-                    </div>
-                    <button
-                      onClick={() => handleViewClick(record)}
-                      className="flex-shrink-0 px-3 py-1.5 text-xs text-green-600 bg-green-50 rounded-lg"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="text-xs space-y-1">
-                    <div><span className="text-gray-600">Reason:</span> {record.reasonForVisit}</div>
-                    <div><span className="text-gray-600">Age:</span> {record.age}</div>
-                    <div><span className="text-gray-600">Bed/Location:</span> {record.bedNo} / {record.location}</div>
-                    <div><span className="text-gray-600">Priority:</span> {record.priority}</div>
-                    <div><span className="text-gray-600">Category:</span> {record.category}</div>
-                    {record.category === 'Pathology' && record.pathologyTests?.length > 0 && (
-                      <div><span className="text-gray-600">Pathology:</span> {record.pathologyTests.slice(0, 2).join(', ')}{record.pathologyTests.length > 2 ? '...' : ''}</div>
-                    )}
-                    {record.category === 'Radiology' && record.radiologyTests?.length > 0 && (
-                      <div><span className="text-gray-600">Radiology:</span> {record.radiologyTests.slice(0, 2).join(', ')}{record.radiologyTests.length > 2 ? '...' : ''}</div>
-                    )}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
-                <FileText className="mx-auto mb-2 w-12 h-12 text-gray-300" />
-                <p className="text-sm font-medium text-gray-900">No lab history records</p>
-              </div>
-            )}
-          </div>
-        </>
-      )}
 
       {/* Modal for Processing Lab Advice */}
       {showModal && selectedPatient && (
