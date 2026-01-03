@@ -146,8 +146,8 @@ const Admission = () => {
 
   // Submit new patient to Supabase
   const handleSubmit = async () => {
-    if (!formData.patientName || !formData.phoneNumber || !formData.attenderName ||
-      !formData.attenderMobile || !formData.reasonForVisit || !formData.dateOfBirth) {
+    if (!formData.patientName || !formData.phoneNumber || !formData.attenderName
+      || !formData.reasonForVisit || !formData.dateOfBirth) {
       setModalError('Please fill all required fields marked with *');
       return;
     }
